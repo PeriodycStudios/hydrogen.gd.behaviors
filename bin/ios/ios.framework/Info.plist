@@ -7,13 +7,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleExecutable</key>
-	<string>libEXTENSION-NAME.ios.template_release.arm64</string>
+	<string>libhydrogen.gd.behaviors.ios.template_release.arm64</string>
 	<key>CFBundleName</key>
-	<string>Godot Template Cpp</string>
+	<string>Hydrogen Godot Behaviors</string>
 	<key>CFBundleDisplayName</key>
-	<string>Godot Template Cpp</string>
+	<string>Hydrogen Godot Behavior Trees</string>
 	<key>CFBundleIdentifier</key>
-	<string>org.godot.godot-template-cpp</string>
+	<string>org.periodyc.hydrogen.gd.behaviors</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>Unlicensed</string>
 	<key>CFBundleVersion</key>
