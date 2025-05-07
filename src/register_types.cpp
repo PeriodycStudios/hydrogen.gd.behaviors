@@ -1,6 +1,4 @@
 #include "register_types.h"
-#include "behavior_server.hpp"
-#include "blackboard.hpp"
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
@@ -8,9 +6,13 @@
 
 #include <godot_cpp/classes/engine.hpp>
 
+#include "behavior_server.hpp"
+#include "blackboard.hpp"
+
 using namespace godot;
 
 static HydrogenBehaviorServer *behavior_server = NULL;
+class HydrogenBlackboard;
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
@@ -21,7 +23,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	behavior_server = memnew(HydrogenBehaviorServer);
 	behavior_server->init();
 
-	GDREGISTER_CLASS(HydrogenBehaviorServer);
+//	GDREGISTER_CLASS(HydrogenBehaviorServer);
 
 	Engine::get_singleton()->register_singleton("HydrogenBehaviorServer", HydrogenBehaviorServer::get_singleton());
 

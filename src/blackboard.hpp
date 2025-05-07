@@ -5,35 +5,37 @@
 #ifndef BLACKBOARD_HPP
 #define BLACKBOARD_HPP
 
-#include <godot_cpp/core/object.hpp>
-#include <godot_cpp/classes/resource.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/variant.hpp>
+
+#include "hydrogen_rid.hpp"
 
 using namespace godot;
 
-struct HydrogenBlackboardEntry {
-  RID self;
+class HydrogenBlackboardEntryTableBase : HydrogenRid {};
 
-  public:
-	_FORCE_INLINE_ void set_self(const RID &p_self) { self = p_self; }
-	_FORCE_INLINE_ RID get_self() const { return self; }
+template<typename V>
+class HydrogenBlackboardEntryTable : HydrogenBlackboardEntryTableBase {
+	HashMap<StringName, V> entries;
 };
 
-class HydrogenBlackboard {
-  RID self;
+class HydrogenBlackboard : public HydrogenRid {
+
+	RID_PtrOwner<HydrogenBlackboardEntryTableBase> entries_owner;
+	HashMap<Variant::Type, HydrogenBlackboardEntryTableBase *> entries;
+	HashMap<StringName, HydrogenBlackboardEntryTableBase *> name_to_table;
 
   public:
-	_FORCE_INLINE_ void set_self(const RID &p_self) { self = p_self; }
-	_FORCE_INLINE_ RID get_self() const { return self; }
+	HydrogenBlackboard() = default;
+	~HydrogenBlackboard() = default;
+
+	bool clear_entry(const StringName& p_name);
+	_FORCE_INLINE_ bool has_entry(const StringName& p_name) const {
+		return name_to_table.has(p_name);
+	}
 };
-
-// class HydrogenBlackboardPort : public Object {
-//   GDCLASS(HydrogenBlackboardPort, Object);
-// };
-//
-// class HydrogenBlackboard : public Resource {
-//   GDCLASS(HydrogenBlackboard, Resource);
-//
-// };
-
 
 #endif //BLACKBOARD_H

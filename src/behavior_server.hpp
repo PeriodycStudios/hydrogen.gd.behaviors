@@ -20,7 +20,7 @@ protected:
 public:
     static HydrogenBehaviorServer *get_singleton() { return singleton; };
 
-    HydrogenBehaviorServer(){
+    HydrogenBehaviorServer() {
 		singleton = this;
     };
 
