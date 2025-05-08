@@ -4,33 +4,62 @@
 
 #include "blackboard.hpp"
 
-void HydrogenBlackboard::set_value(const StringName &p_name, const Variant &p_value) {
-	entries_owner[p_name] = p_value;
+namespace Hydrogen {
+
+// template<typename V, EnableIf<is_variant_type<V>::value, V> = true>
+// Vector2i static get_variant_type_key() {
+// 	static Vector2i key = Vector2i(
+// 		GetTypeInfo<V>::VARIANT_TYPE,
+// 		GDEXTENSION_VARIANT_TYPE_VARIANT_MAX + GetTypeInfo<V>::METADATA);
+//
+// 	return key;
+// }
+
+template <typename V>
+Variant BlackboardEntryTable<V>::get_variant(const StringName &p_name) const {
+	return Variant();
 }
 
-Variant HydrogenBlackboard::get_value(const StringName &p_name) {
-	Variant* value_ptr = entries_owner.getptr(p_name);
-	return value_ptr != nullptr ? *value_ptr : Variant();
+
+
+bool Blackboard::validate_parent(Blackboard *p_parent) {
+	return false;
 }
 
-bool HydrogenBlackboard::clear_entry(const StringName &p_name) {
-	return entries_owner.erase(p_name);
+Blackboard::Blackboard() :
+		parent(nullptr) {}
+
+Blackboard::Blackboard(Blackboard *p_parent) :
+		parent(p_parent) {}
+
+Blackboard::~Blackboard() {
 }
 
-bool HydrogenBlackboard::has_entry(const StringName &p_name) {
-	return entries_owner.has(p_name);
+template <typename T>
+typename EnableIf<is_variant_type<T>::value, T>::type Blackboard::get_entry(const StringName &p_name) const {
+	return {};
 }
 
-Vector<Pair<StringName, Variant>> HydrogenBlackboard::get_entries() const {
-
-	Vector<Pair<StringName, Variant>> entry_pairs = Vector<Pair<StringName, Variant>>();
-	entry_pairs.resize(entries_owner.size());
-	int i = 0;
-	Pair<StringName, Variant>* entry_pair_ptr = entry_pairs.ptrw();
-	for (const auto& entry : entries_owner) {
-		entry_pair_ptr[i] = Pair(entry.key, entry.value);
-		i++;
-	}
-
-	return entry_pairs;
+template <typename T, EnableIf<is_variant_type<T>::value, T>>
+void Blackboard::set_entry(const StringName &p_name, const T &p_value) {
 }
+
+template<>
+Variant Blackboard::get_entry<Variant>(const StringName &p_name) const {
+	return Variant();
+}
+
+void Blackboard::set_entry(const StringName &p_name, const Variant &p_value) {
+
+}
+
+
+bool Blackboard::erase_entry(const StringName &p_name) {
+	return false;
+}
+
+bool Blackboard::has_entry(const StringName &p_name, bool check_parents) const {
+	return false;
+}
+
+} //namespace Hydrogen

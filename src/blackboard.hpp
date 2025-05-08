@@ -5,37 +5,78 @@
 #ifndef BLACKBOARD_HPP
 #define BLACKBOARD_HPP
 
+#include "hydrogen_rid.hpp"
 #include <godot_cpp/classes/ref_counted.hpp>
-#include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
-#include "hydrogen_rid.hpp"
-
 using namespace godot;
 
-class HydrogenBlackboardEntryTableBase : HydrogenRid {};
+namespace Hydrogen {
 
-template<typename V>
-class HydrogenBlackboardEntryTable : HydrogenBlackboardEntryTableBase {
+class BlackboardEntryTableBase : HydrogenRid {
+public:
+	virtual ~BlackboardEntryTableBase() {}
+	virtual Variant get_variant(const StringName &p_name) const = 0;
+};
+
+template <typename V>
+class BlackboardEntryTable final : BlackboardEntryTableBase {
 	HashMap<StringName, V> entries;
+
+	virtual Variant get_variant(const StringName &p_name) const;
 };
 
-class HydrogenBlackboard : public HydrogenRid {
+template <typename T, typename = void>
+struct is_variant_type : std::false_type {};
 
-	RID_PtrOwner<HydrogenBlackboardEntryTableBase> entries_owner;
-	HashMap<Variant::Type, HydrogenBlackboardEntryTableBase *> entries;
-	HashMap<StringName, HydrogenBlackboardEntryTableBase *> name_to_table;
+template<typename T>
+struct is_variant_type<T, std::void_t<decltype(GetTypeInfo<T>::get_class_info)>> : std::true_type {};
 
-  public:
-	HydrogenBlackboard() = default;
-	~HydrogenBlackboard() = default;
+class Blackboard final : public HydrogenRid {
+	RID_PtrOwner<BlackboardEntryTableBase> entries_owner;
+	HashMap<Vector2i, BlackboardEntryTableBase *> entries;
+	HashMap<StringName, BlackboardEntryTableBase *> name_to_table;
+	Blackboard *parent;
 
-	bool clear_entry(const StringName& p_name);
-	_FORCE_INLINE_ bool has_entry(const StringName& p_name) const {
-		return name_to_table.has(p_name);
+	bool validate_parent(Blackboard *p_parent);
+
+
+
+public:
+	Blackboard();
+	explicit Blackboard(Blackboard *p_parent);
+	~Blackboard();
+
+	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
+		if (validate_parent(p_parent)) {
+			parent = p_parent;
+			return true;
+		}
+		return false;
 	}
+
+	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
+
+	template <typename T>
+	typename EnableIf<is_variant_type<T>::value, T>::type get_entry(const StringName &p_name) const;
+
+	template <typename T, EnableIf<is_variant_type<T>::value, T> = true>
+	void set_entry(const StringName &p_name, const T &p_value);
+
+	Variant get_entry(const StringName &p_name) const;
+
+	void set_entry(const StringName &p_name, const Variant &p_value);
+
+	bool erase_entry(const StringName &p_name);
+
+	bool has_entry(const StringName &p_name, bool check_parents = true) const;
 };
+
+
+
+} //namespace Hydrogen
 
 #endif //BLACKBOARD_H

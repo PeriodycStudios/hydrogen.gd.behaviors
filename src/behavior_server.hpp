@@ -9,7 +9,7 @@
 
 using namespace godot;
 
-class HydrogenBehaviorServer : public Object {
+class HydrogenBehaviorServer final : public Object {
     GDCLASS(HydrogenBehaviorServer, Object);
 
     static HydrogenBehaviorServer *singleton;
