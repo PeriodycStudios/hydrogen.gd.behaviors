@@ -10,34 +10,35 @@
 #include "blackboard.hpp"
 
 using namespace godot;
+using namespace hydrogen;
 
-static HydrogenBehaviorServer *behavior_server = NULL;
+static BehaviorServer *behavior_server = NULL;
 class HydrogenBlackboard;
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SERVERS) {
+	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
 
-	behavior_server = memnew(HydrogenBehaviorServer);
+	behavior_server = memnew(BehaviorServer);
 	behavior_server->init();
 
 //	GDREGISTER_CLASS(HydrogenBehaviorServer);
 
-	Engine::get_singleton()->register_singleton("HydrogenBehaviorServer", HydrogenBehaviorServer::get_singleton());
+	Engine::get_singleton()->register_singleton("HydrogenBehaviorServer", BehaviorServer::get_singleton());
 
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
-	if (p_level != MODULE_INITIALIZATION_LEVEL_SERVERS) {
+	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
 
 	Engine::get_singleton()->unregister_singleton("HydrogenBehaviorServer");
 
-	HydrogenBehaviorServer::get_singleton()->finish();
-	memdelete(HydrogenBehaviorServer::get_singleton());
+	BehaviorServer::get_singleton()->finish();
+	memdelete(BehaviorServer::get_singleton());
 }
 
 extern "C"
@@ -48,7 +49,7 @@ extern "C"
 		GDExtensionBinding::InitObject init_obj(p_get_proc_address, p_library, r_initialization);
 		init_obj.register_initializer(initialize_gdextension_types);
 		init_obj.register_terminator(uninitialize_gdextension_types);
-		init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SERVERS);
+		init_obj.set_minimum_library_initialization_level(MODULE_INITIALIZATION_LEVEL_SCENE);
 
 		return init_obj.init();
 	}

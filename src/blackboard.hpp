@@ -14,11 +14,11 @@
 
 using namespace godot;
 
-namespace Hydrogen {
+namespace hydrogen {
 
 class BlackboardEntryTableBase : HydrogenRid {
 public:
-	virtual ~BlackboardEntryTableBase() {}
+	virtual ~BlackboardEntryTableBase() = default;
 	virtual Variant get_variant(const StringName &p_name) const = 0;
 };
 
@@ -26,14 +26,18 @@ template <typename V>
 class BlackboardEntryTable final : BlackboardEntryTableBase {
 	HashMap<StringName, V> entries;
 
-	virtual Variant get_variant(const StringName &p_name) const;
+	Variant get_variant(const StringName &p_name) const override;
 };
+
+namespace detail {
 
 template <typename T, typename = void>
 struct is_variant_type : std::false_type {};
 
 template<typename T>
 struct is_variant_type<T, std::void_t<decltype(GetTypeInfo<T>::get_class_info)>> : std::true_type {};
+
+}
 
 class Blackboard final : public HydrogenRid {
 	RID_PtrOwner<BlackboardEntryTableBase> entries_owner;
@@ -42,8 +46,6 @@ class Blackboard final : public HydrogenRid {
 	Blackboard *parent;
 
 	bool validate_parent(Blackboard *p_parent);
-
-
 
 public:
 	Blackboard();
@@ -61,12 +63,10 @@ public:
 	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
 
 	template <typename T>
-	typename EnableIf<is_variant_type<T>::value, T>::type get_entry(const StringName &p_name) const;
+	typename EnableIf<detail::is_variant_type<T>::value, T>::type get_entry(const StringName &p_name) const;
 
-	template <typename T, EnableIf<is_variant_type<T>::value, T> = true>
+	template <typename T, EnableIf<detail::is_variant_type<T>::value, T> = true>
 	void set_entry(const StringName &p_name, const T &p_value);
-
-	Variant get_entry(const StringName &p_name) const;
 
 	void set_entry(const StringName &p_name, const Variant &p_value);
 
@@ -75,8 +75,10 @@ public:
 	bool has_entry(const StringName &p_name, bool check_parents = true) const;
 };
 
+template <>
+Variant Blackboard::get_entry<Variant>(const StringName &p_name) const;
 
 
-} //namespace Hydrogen
+} //namespace hydrogen
 
 #endif //BLACKBOARD_H

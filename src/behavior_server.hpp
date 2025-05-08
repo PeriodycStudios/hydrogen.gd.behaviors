@@ -9,30 +9,32 @@
 
 using namespace godot;
 
-class HydrogenBehaviorServer final : public Object {
-    GDCLASS(HydrogenBehaviorServer, Object);
+namespace hydrogen {
 
-    static HydrogenBehaviorServer *singleton;
+class BehaviorServer final : public Object {
+	GDCLASS(BehaviorServer, Object);
+
+	static BehaviorServer *singleton;
 
 protected:
-    static void _bind_methods() {}
+	static void _bind_methods() {}
 
 public:
-    static HydrogenBehaviorServer *get_singleton() { return singleton; };
+	static BehaviorServer *get_singleton() { return singleton; };
 
-    HydrogenBehaviorServer() {
+	BehaviorServer() {
 		singleton = this;
-    };
+	};
 
-    ~HydrogenBehaviorServer() {
+	~BehaviorServer() {
 		singleton = nullptr;
-    };
+	};
 
-    void free(RID p_object) {};
+	void free(RID p_object) {};
 
-    void set_active(bool p_active) {};
+	void set_active(bool p_active) {};
 
-    RID blackboard_create() { return {}; };
+	RID blackboard_create() { return {}; };
 	RID behavior_tree_create() { return {}; };
 	RID state_machine_create() { return {}; };
 	RID agent_create() { return {}; };
@@ -40,6 +42,8 @@ public:
 	void init() {};
 	void finish() {};
 };
+
+}
 
 class _HydrogenBehaviorServer : public Object {
 	GDCLASS(_HydrogenBehaviorServer, Object);

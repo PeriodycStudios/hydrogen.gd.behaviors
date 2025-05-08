@@ -4,7 +4,7 @@
 
 #include "blackboard.hpp"
 
-namespace Hydrogen {
+namespace hydrogen {
 
 // template<typename V, EnableIf<is_variant_type<V>::value, V> = true>
 // Vector2i static get_variant_type_key() {
@@ -36,23 +36,21 @@ Blackboard::~Blackboard() {
 }
 
 template <typename T>
-typename EnableIf<is_variant_type<T>::value, T>::type Blackboard::get_entry(const StringName &p_name) const {
+typename EnableIf<detail::is_variant_type<T>::value, T>::type Blackboard::get_entry(const StringName &p_name) const {
 	return {};
 }
-
-template <typename T, EnableIf<is_variant_type<T>::value, T>>
+template <typename T, EnableIf<detail::is_variant_type<T>::value, T>>
 void Blackboard::set_entry(const StringName &p_name, const T &p_value) {
 }
 
 template<>
 Variant Blackboard::get_entry<Variant>(const StringName &p_name) const {
-	return Variant();
+	return {};
 }
 
 void Blackboard::set_entry(const StringName &p_name, const Variant &p_value) {
 
 }
-
 
 bool Blackboard::erase_entry(const StringName &p_name) {
 	return false;
