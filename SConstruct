@@ -4,6 +4,17 @@ import sys
 
 from methods import print_error
 
+def check_submodule(dir_name):
+    if os.path.isdir(dir_name):
+        if os.listdir(dir_name):
+            return
+
+    err_msg = str.format("""{} is not available within this folder, as Git submodules haven't been initialized.
+    Run the following command to download {}:
+
+         git submodule update --init --recursive""", dir_name)
+    sys.exit(1)
+
 
 libname = "hydrogen.gd.behaviors"
 projectdir = "demo"
@@ -14,29 +25,39 @@ customs = ["custom.py"]
 customs = [os.path.abspath(path) for path in customs]
 
 opts = Variables(customs, ARGUMENTS)
-opts.Update(localEnv)
 
+opts.Add(BoolVariable("tests", "Build tests", False))
+
+opts.Update(localEnv)
 Help(opts.GenerateHelpText(localEnv))
 
 env = localEnv.Clone()
 
-submodule_initialized = False
-dir_name = 'godot-cpp'
-if os.path.isdir(dir_name):
-    if os.listdir(dir_name):
-        submodule_initialized = True
-
-if not submodule_initialized:
-    print_error("""godot-cpp is not available within this folder, as Git submodules haven't been initialized.
-Run the following command to download godot-cpp:
-
-    git submodule update --init --recursive""")
-    sys.exit(1)
-
+check_submodule('godot-cpp')
 env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
+
+if env["tests"]:
+    check_submodule('doctest')
+
+    env.Append(CPPDEFINES=["TESTS_ENABLED"])
+
+    # We must disable the THREAD_LOCAL entirely in doctest to prevent crashes on debugging
+    # Since we link with /MT thread_local is always expired when the header is used
+    # So the debugger crashes the engine and it causes weird errors
+    # Explained in https://github.com/onqtam/doctest/issues/401
+    if env["platform"] == "windows":
+        env.Append(CPPDEFINES=[("DOCTEST_THREAD_LOCAL", "")])
+
+    if env["disable_exceptions"]:
+        env.Append(CPPDEFINES=["DOCTEST_CONFIG_NO_EXCEPTIONS_BUT_WITH_ALL_ASSERTS"])
+
+    env.Append(CPPPATH=[
+        "doctest/doctest/",
+        "tests/"])
+    sources += Glob("tests/*.cpp")
 
 if env["target"] in ["editor", "template_debug"]:
     try:

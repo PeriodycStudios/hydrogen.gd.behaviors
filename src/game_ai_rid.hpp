@@ -2,14 +2,14 @@
 // Created by tkey on 5/6/25.
 //
 
-#ifndef HYDROGENRID_H
-#define HYDROGENRID_H
+#ifndef GAME_AI_RID_H
+#define GAME_AI_RID_H
 
 #include <godot_cpp/variant/rid.hpp>
 
 using namespace godot;
 
-class HydrogenRid {
+class GameAIRid {
 	RID self;
 
 	public:
@@ -17,4 +17,4 @@ class HydrogenRid {
 		_FORCE_INLINE_ RID get_self() const { return self; }
 };
 
-#endif //HYDROGENRID_H
+#endif //GAME_AI_RID_H

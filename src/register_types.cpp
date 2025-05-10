@@ -6,14 +6,34 @@
 
 #include <godot_cpp/classes/engine.hpp>
 
-#include "behavior_server.hpp"
-#include "blackboard.hpp"
+#include "game_ai_blackboard.hpp"
+#include "game_ai_server.hpp"
+
+#ifdef TESTS_ENABLED
+#include "tests.hpp"
+#endif
 
 using namespace godot;
 using namespace hydrogen;
 
-static BehaviorServer *behavior_server = NULL;
+static bool has_tests_enabled() {
+#ifdef TESTS_ENABLED
+	return tests::k_test_baz.a == 42;
+#else
+	return false;
+#endif
+
+}
+
+static GameAIServer *game_ai_server = NULL;
+static _GameAIServer *_game_ai_server = NULL;
 class HydrogenBlackboard;
+
+const String k_server_name = "GameAIServer";
+
+#define CLEAN_MEM_DELETE(x) \
+	memdelete(x);			\
+	x = nullptr;			\
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
@@ -21,12 +41,13 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 		return;
 	}
 
-	behavior_server = memnew(BehaviorServer);
-	behavior_server->init();
+	game_ai_server = memnew(GameAIServer);
+	game_ai_server->init();
 
-//	GDREGISTER_CLASS(HydrogenBehaviorServer);
+	_game_ai_server = memnew(_GameAIServer);
 
-	Engine::get_singleton()->register_singleton("HydrogenBehaviorServer", BehaviorServer::get_singleton());
+	GDREGISTER_CLASS(_GameAIServer);
+	Engine::get_singleton()->register_singleton(k_server_name, _GameAIServer::get_singleton());
 
 }
 
@@ -35,10 +56,19 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	Engine::get_singleton()->unregister_singleton("HydrogenBehaviorServer");
+	Engine::get_singleton()->unregister_singleton(k_server_name);
 
-	BehaviorServer::get_singleton()->finish();
-	memdelete(BehaviorServer::get_singleton());
+	if (game_ai_server) {
+		game_ai_server->finish();
+		CLEAN_MEM_DELETE(game_ai_server);
+	}
+
+	GameAIServer::get_singleton()->finish();
+	memdelete(GameAIServer::get_singleton());
+
+	if (_game_ai_server) {
+		CLEAN_MEM_DELETE(_game_ai_server);
+	}
 }
 
 extern "C"
