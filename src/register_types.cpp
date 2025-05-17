@@ -16,15 +16,6 @@
 using namespace godot;
 using namespace hydrogen;
 
-static bool has_tests_enabled() {
-#ifdef TESTS_ENABLED
-	return tests::k_test_baz.a == 42;
-#else
-	return false;
-#endif
-
-}
-
 static GameAIServer *game_ai_server = NULL;
 static _GameAIServer *_game_ai_server = NULL;
 class HydrogenBlackboard;

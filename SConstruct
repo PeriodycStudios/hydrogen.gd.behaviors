@@ -39,7 +39,9 @@ env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
 
-if env["tests"]:
+env.tests = env["tests"]
+
+if env.tests:
     check_submodule('doctest')
 
     env.Append(CPPDEFINES=["TESTS_ENABLED"])
