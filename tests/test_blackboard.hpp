@@ -5,8 +5,8 @@
 #ifndef TEST_BLACKBOARD_HPP
 #define TEST_BLACKBOARD_HPP
 
+#include "blackboard.hpp"
 #include <doctest.h>
-#include "game_ai_blackboard.hpp"
 
 namespace hydrogen {
 namespace test {

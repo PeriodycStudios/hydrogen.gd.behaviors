@@ -11,22 +11,22 @@ using namespace godot;
 
 namespace hydrogen {
 
-class GameAIServer final : public Object {
-	GDCLASS(GameAIServer, Object);
+class BehaviorServer final : public Object {
+	GDCLASS(BehaviorServer, Object);
 
-	static GameAIServer *singleton;
+	static BehaviorServer *singleton;
 
 protected:
 	static void _bind_methods() {}
 
 public:
-	static GameAIServer *get_singleton() { return singleton; };
+	static BehaviorServer *get_singleton() { return singleton; };
 
-	GameAIServer() {
+	BehaviorServer() {
 		singleton = this;
 	};
 
-	~GameAIServer() {
+	~BehaviorServer() override {
 		singleton = nullptr;
 	};
 
@@ -45,22 +45,22 @@ public:
 
 }
 
-class _GameAIServer : public Object {
-	GDCLASS(_GameAIServer, Object);
+class _BehaviorServer : public Object {
+	GDCLASS(_BehaviorServer, Object);
 
-	static _GameAIServer *singleton;
+	static _BehaviorServer *singleton;
 
 protected:
 	static void _bind_methods() {}
 
 public:
-	static _GameAIServer *get_singleton() { return singleton; };
+	static _BehaviorServer *get_singleton() { return singleton; };
 
-	_GameAIServer() {
+	_BehaviorServer() {
 		singleton = this;
 	};
 
-	~_GameAIServer() {
+	~_BehaviorServer() override {
 		singleton = nullptr;
 	};
 };

@@ -9,7 +9,7 @@
 
 using namespace godot;
 
-class GameAIRid {
+class RidData {
 	RID self;
 
 	public:

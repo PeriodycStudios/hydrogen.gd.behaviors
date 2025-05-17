@@ -5,28 +5,22 @@
 #ifndef GAME_AI_BLACKBOARD_HPP
 #define GAME_AI_BLACKBOARD_HPP
 
-#include "game_ai_rid.hpp"
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
+#include "blackboard_storage_type.hpp"
+#include "rid_data.hpp"
+
 using namespace godot;
 
 namespace hydrogen {
 
-namespace detail {
-template <typename T, typename = void>
-	struct is_variant_type : std::false_type {};
+class Blackboard final : public RidData {
 
-template<typename T>
-struct is_variant_type<T, std::void_t<decltype(GetTypeInfo<T>::get_class_info)>> : std::true_type {};
-}
-
-class GameAIBlackboard final : public GameAIRid {
-
-	class EntryTableBase : GameAIRid {
+	class EntryTableBase : RidData {
 	public:
 		virtual ~EntryTableBase() = default;
 		virtual Variant get_variant(const StringName &p_name) const = 0;
@@ -39,21 +33,19 @@ class GameAIBlackboard final : public GameAIRid {
 		Variant get_variant(const StringName &p_name) const override;
 	};
 
-
-
 	RID_PtrOwner<EntryTableBase> entries_owner;
 	HashMap<Vector2i, EntryTableBase *> entries;
 	HashMap<StringName, EntryTableBase *> name_to_table;
-	GameAIBlackboard *parent;
+	Blackboard *parent;
 
-	bool validate_parent(GameAIBlackboard *p_parent);
+	bool validate_parent(Blackboard *p_parent);
 
 public:
-	GameAIBlackboard();
-	explicit GameAIBlackboard(GameAIBlackboard *p_parent);
-	~GameAIBlackboard();
+	Blackboard();
+	explicit Blackboard(Blackboard *p_parent);
+	~Blackboard();
 
-	_FORCE_INLINE_ bool set_parent(GameAIBlackboard *p_parent) {
+	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
 		if (validate_parent(p_parent)) {
 			parent = p_parent;
 			return true;
@@ -61,15 +53,13 @@ public:
 		return false;
 	}
 
-	_FORCE_INLINE_ GameAIBlackboard *get_parent() const { return parent; }
+	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
 
 	template <typename T>
-	typename EnableIf<detail::is_variant_type<T>::value, T>::type get_entry(const StringName &p_name) const;
+	typename EnableIf<blackboard_storage_type<T>::value, T>::type get_entry(const StringName &p_name) const;
 
-	template <typename T, EnableIf<detail::is_variant_type<T>::value, T> = true>
-	void set_entry(const StringName &p_name, const T &p_value);
-
-	void set_entry(const StringName &p_name, const Variant &p_value);
+	template <typename T>
+	void set_entry(const StringName &p_name, const typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_value);
 
 	bool erase_entry(const StringName &p_name);
 
@@ -77,7 +67,12 @@ public:
 };
 
 template <>
-Variant GameAIBlackboard::get_entry<Variant>(const StringName &p_name) const;
+Variant Blackboard::get_entry<Variant>(const StringName &p_name) const;
+
+template <>
+void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value);
+
+
 
 
 } //namespace hydrogen

@@ -1,4 +1,4 @@
-#include "register_types.h"
+#include "register_types.hpp"
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
@@ -6,8 +6,8 @@
 
 #include <godot_cpp/classes/engine.hpp>
 
-#include "game_ai_blackboard.hpp"
-#include "game_ai_server.hpp"
+#include "behavior_server.hpp"
+#include "blackboard.hpp"
 
 #ifdef TESTS_ENABLED
 #include "tests.hpp"
@@ -16,15 +16,15 @@
 using namespace godot;
 using namespace hydrogen;
 
-static GameAIServer *game_ai_server = NULL;
-static _GameAIServer *_game_ai_server = NULL;
+static BehaviorServer *behavior_server = nullptr;
+static _BehaviorServer *_behavior_server = nullptr;
 class HydrogenBlackboard;
 
 const String k_server_name = "GameAIServer";
 
 #define CLEAN_MEM_DELETE(x) \
 	memdelete(x);			\
-	x = nullptr;			\
+	(x) = nullptr;			\
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
@@ -32,13 +32,13 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 		return;
 	}
 
-	game_ai_server = memnew(GameAIServer);
-	game_ai_server->init();
+	behavior_server = memnew(BehaviorServer);
+	behavior_server->init();
 
-	_game_ai_server = memnew(_GameAIServer);
+	_behavior_server = memnew(_BehaviorServer);
 
-	GDREGISTER_CLASS(_GameAIServer);
-	Engine::get_singleton()->register_singleton(k_server_name, _GameAIServer::get_singleton());
+	GDREGISTER_CLASS(_BehaviorServer);
+	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
 
 }
 
@@ -49,16 +49,16 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 
 	Engine::get_singleton()->unregister_singleton(k_server_name);
 
-	if (game_ai_server) {
-		game_ai_server->finish();
-		CLEAN_MEM_DELETE(game_ai_server);
+	if (behavior_server) {
+		behavior_server->finish();
+		CLEAN_MEM_DELETE(behavior_server);
 	}
 
-	GameAIServer::get_singleton()->finish();
-	memdelete(GameAIServer::get_singleton());
+	BehaviorServer::get_singleton()->finish();
+	memdelete(BehaviorServer::get_singleton());
 
-	if (_game_ai_server) {
-		CLEAN_MEM_DELETE(_game_ai_server);
+	if (_behavior_server) {
+		CLEAN_MEM_DELETE(_behavior_server);
 	}
 }
 
