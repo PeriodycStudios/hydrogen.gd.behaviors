@@ -20,8 +20,7 @@ struct blackboard_storage_type : std::false_type {};
 static Vector2i get_type_key() {									\
 																	\
 	constexpr int32_t variant_t = GetTypeInfo<type>::VARIANT_TYPE;	\
-	constexpr int32_t metadata = GetTypeInfo<type>::METADATA		\
-		+ GDEXTENSION_VARIANT_TYPE_VARIANT_MAX;						\
+	constexpr int32_t metadata = GetTypeInfo<type>::METADATA;		\
 																	\
 	static Vector2i key = {variant_t, metadata};					\
 	return key;														\
@@ -103,6 +102,13 @@ struct blackboard_storage_type<const T*, typename EnableIf<
 template<typename T>
 struct blackboard_storage_type<
 	Ref<T>, typename EnableIf<TypeInherits<RefCounted, T>::value>::type
+> : std::true_type {
+	GET_TYPE_KEY(Ref<T>)
+};
+
+template<typename T>
+struct blackboard_storage_type<
+	const Ref<T>&, typename EnableIf<TypeInherits<RefCounted, T>::value>::type
 > : std::true_type {
 	GET_TYPE_KEY(Ref<T>)
 };

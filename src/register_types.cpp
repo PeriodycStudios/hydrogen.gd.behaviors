@@ -20,7 +20,7 @@ static BehaviorServer *behavior_server = nullptr;
 static _BehaviorServer *_behavior_server = nullptr;
 class HydrogenBlackboard;
 
-const String k_server_name = "GameAIServer";
+const String k_server_name = "HydrogenBehaviorServer";
 
 #define CLEAN_MEM_DELETE(x) \
 	memdelete(x);			\
@@ -31,6 +31,8 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+
+	Blackboard::init_create_functions();
 
 	behavior_server = memnew(BehaviorServer);
 	behavior_server->init();

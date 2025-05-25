@@ -14,35 +14,68 @@
 #include "blackboard_storage_type.hpp"
 #include "rid_data.hpp"
 
+#include <functional>
+
 using namespace godot;
 
 namespace hydrogen {
 
 class Blackboard final : public RidData {
 
-	class EntryTableBase : RidData {
-	public:
-		virtual ~EntryTableBase() = default;
-		virtual Variant get_variant(const StringName &p_name) const = 0;
+	struct EntryBase : RidData {
+
+		virtual ~EntryBase() = default;
+		virtual Variant as_variant() const = 0;
+
+		virtual Vector2i get_type_key() const;
+		virtual void set_from(const Variant &p_value);
 	};
 
-	template <typename V>
-	class EntryTable final : EntryTableBase {
-		HashMap<StringName, V> entries;
+	template<typename T>
+	struct Entry final : EntryBase {
+		T value;
+		Variant as_variant() const override {
+			return Variant(value);
+		}
 
-		Variant get_variant(const StringName &p_name) const override;
+		Vector2i get_type_key() const override {
+			return blackboard_storage_type<T>::get_type_key();
+		}
+
+		void set_from(const Variant &p_value) override {
+			value = p_value;
+		}
+
+		explicit Entry(const typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_value) :
+				value(value) {}
+		explicit Entry(const Variant &p_value) : value(p_value) {}
 	};
 
-	RID_PtrOwner<EntryTableBase> entries_owner;
-	HashMap<Vector2i, EntryTableBase *> entries;
-	HashMap<StringName, EntryTableBase *> name_to_table;
+	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<String, EntryBase*> &p_entries)> entry_factory;
+
+	static HashMap<Vector2i, entry_factory> factories;
+
+	RID_PtrOwner<EntryBase> entries_owner;
+	HashMap<StringName, EntryBase*> entries;
+
 	Blackboard *parent;
 
-	bool validate_parent(Blackboard *p_parent);
+	template<typename T>
+	static EntryBase* create_entry(const StringName &p_name,
+		RID_PtrOwner<EntryBase> &p_owner,
+		HashMap<StringName, EntryBase*> &p_entries);
+
+	template<typename T>
+	static void register_create();
+
+	bool validate_parent(const Blackboard *p_parent) const;
+	void free_entry(const HashMap<StringName, EntryBase *>::Iterator &iter);
 
 public:
+
+	static void init_create_functions();
+
 	Blackboard();
-	explicit Blackboard(Blackboard *p_parent);
 	~Blackboard();
 
 	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
@@ -56,18 +89,20 @@ public:
 	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
 
 	template <typename T>
-	typename EnableIf<blackboard_storage_type<T>::value, T>::type get_entry(const StringName &p_name) const;
+	bool get_entry(const StringName &p_name, typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_out_result,  bool p_check_parents = true) const;
+
+	Variant get_entry(const StringName &p_name, bool p_check_parents = true) const;
 
 	template <typename T>
 	void set_entry(const StringName &p_name, const typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_value);
 
 	bool erase_entry(const StringName &p_name);
 
-	bool has_entry(const StringName &p_name, bool check_parents = true) const;
+	bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
 };
 
 template <>
-Variant Blackboard::get_entry<Variant>(const StringName &p_name) const;
+bool Blackboard::get_entry<Variant>(const StringName &p_name, Variant &p_out_result, bool p_check_parents) const;
 
 template <>
 void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value);
