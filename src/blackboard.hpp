@@ -31,7 +31,10 @@ class Blackboard final : public RidData {
 		virtual void set_from(const Variant &p_value);
 	};
 
-	template<typename T>
+	template<typename T, typename = void>
+	struct Entry : EntryBase {};
+
+	template<typename T, typename EnableIf<blackboard_storage_type<T>::value>::type>
 	struct Entry final : EntryBase {
 		T value;
 		Variant as_variant() const override {
@@ -53,12 +56,13 @@ class Blackboard final : public RidData {
 
 	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<String, EntryBase*> &p_entries)> entry_factory;
 
-	static HashMap<Vector2i, entry_factory> factories;
+	static HashMap<StringName, entry_factory> factories;
 
 	RID_PtrOwner<EntryBase> entries_owner;
 	HashMap<StringName, EntryBase*> entries;
 
 	Blackboard *parent;
+
 
 	template<typename T>
 	static EntryBase* create_entry(const StringName &p_name,
@@ -91,8 +95,6 @@ public:
 	template <typename T>
 	bool get_entry(const StringName &p_name, typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_out_result,  bool p_check_parents = true) const;
 
-	Variant get_entry(const StringName &p_name, bool p_check_parents = true) const;
-
 	template <typename T>
 	void set_entry(const StringName &p_name, const typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_value);
 
@@ -106,8 +108,6 @@ bool Blackboard::get_entry<Variant>(const StringName &p_name, Variant &p_out_res
 
 template <>
 void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value);
-
-
 
 
 } //namespace hydrogen

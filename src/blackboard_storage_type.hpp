@@ -16,21 +16,26 @@ namespace hydrogen {
 template <typename T, typename = void>
 struct blackboard_storage_type : std::false_type {};
 
-#define GET_TYPE_KEY(type)											\
-static Vector2i get_type_key() {									\
-																	\
-	constexpr int32_t variant_t = GetTypeInfo<type>::VARIANT_TYPE;	\
-	constexpr int32_t metadata = GetTypeInfo<type>::METADATA;		\
-																	\
-	static Vector2i key = {variant_t, metadata};					\
-	return key;														\
+#define GET_TYPE_KEY(type)								\
+static const StringName &get_type_key() {				\
+														\
+	static const StringName key = StringName(#type);	\
+	return key;											\
 }
 
-#define DECLARE_BLACKBOARD_STORAGE_TYPE(type)							\
-template<>																\
-struct blackboard_storage_type<type> : std::true_type {					\
-	GET_TYPE_KEY(type)													\
-};																		\
+#define GET_CLASS_TYPE_KEY(type)										\
+static const StringName &get_type_key() {								\
+																		\
+	static const StringName & class_name = type::get_class_static();	\
+	return class_name;													\
+}
+
+#define DECLARE_BLACKBOARD_STORAGE_TYPE(type)			\
+template<>												\
+struct blackboard_storage_type<type> : std::true_type {	\
+														\
+	GET_TYPE_KEY(type)									\
+};
 
 DECLARE_BLACKBOARD_STORAGE_TYPE(bool)
 DECLARE_BLACKBOARD_STORAGE_TYPE(uint8_t)
@@ -68,6 +73,7 @@ DECLARE_BLACKBOARD_STORAGE_TYPE(Color)
 DECLARE_BLACKBOARD_STORAGE_TYPE(StringName)
 DECLARE_BLACKBOARD_STORAGE_TYPE(NodePath)
 DECLARE_BLACKBOARD_STORAGE_TYPE(RID)
+DECLARE_BLACKBOARD_STORAGE_TYPE(ObjectID)
 DECLARE_BLACKBOARD_STORAGE_TYPE(Callable)
 DECLARE_BLACKBOARD_STORAGE_TYPE(Signal)
 DECLARE_BLACKBOARD_STORAGE_TYPE(Dictionary)
@@ -89,29 +95,25 @@ template<typename T>
 struct blackboard_storage_type<
 	T*, typename EnableIf<TypeInherits<Object, T>::value>::type
 > : std::true_type {
-	GET_TYPE_KEY(T*)
+	GET_CLASS_TYPE_KEY(T)
 };
 
 template<typename T>
-struct blackboard_storage_type<const T*, typename EnableIf<
-	TypeInherits<Object, T>::value>::type
+struct blackboard_storage_type<
+	const T*, typename EnableIf<TypeInherits<Object, T>::value>::type
 > : std::true_type {
-	GET_TYPE_KEY(const T*)
+	GET_CLASS_TYPE_KEY(T)
 };
 
 template<typename T>
 struct blackboard_storage_type<
 	Ref<T>, typename EnableIf<TypeInherits<RefCounted, T>::value>::type
 > : std::true_type {
-	GET_TYPE_KEY(Ref<T>)
+	GET_CLASS_TYPE_KEY(T)
 };
 
-template<typename T>
-struct blackboard_storage_type<
-	const Ref<T>&, typename EnableIf<TypeInherits<RefCounted, T>::value>::type
-> : std::true_type {
-	GET_TYPE_KEY(Ref<T>)
-};
+// TODO: Setup interface to allow for user-defined types and storing
+// alternate backings for certain entry kinds (IE const char* -> backed as String)
 
 #undef GET_TYPE_KEY
 #undef DECLARE_BLACKBOARD_STORAGE_TYPE

@@ -4,7 +4,26 @@
 
 #include "blackboard.hpp"
 
+#include <memory>
+
 namespace hydrogen {
+
+template <typename T>
+Blackboard::EntryBase* Blackboard::create_entry(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase *> &p_entries) {
+	Entry<T> *entry = memnew(Entry<T>);
+
+	const RID rid = p_owner.make_rid(entry);
+	entry->set_self(rid);
+
+	p_entries[p_name] = entry;
+	return entry;
+}
+
+template <typename T>
+void Blackboard::register_create() {
+	const StringName &type_key = blackboard_storage_type<T>::get_type_key();
+	factories[type_key] = std::function<entry_factory>(create_entry<T>);
+}
 
 bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 	if (!p_parent)
@@ -32,27 +51,6 @@ bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 
 	return true;
 }
-
-template <typename T>
-Blackboard::EntryBase *Blackboard::create_entry(const StringName &p_name,
-		RID_PtrOwner<EntryBase> &p_owner,
-		HashMap<StringName, EntryBase*> &p_entries) {
-	EntryBase *entry = memnew(Entry<T>);
-
-	const RID rid = p_owner.make_rid(entry);
-	entry->set_self(rid);
-
-	p_entries[p_name] = entry;
-	return entry;
-}
-
-
-template <typename T>
-void Blackboard::register_create() {
-	const auto type_key = blackboard_storage_type<T>::get_type_key();
-	factories[type_key] = std::function<entry_factory>(create_entry<T>);
-}
-
 
 void Blackboard::init_create_functions() {
 
@@ -95,6 +93,7 @@ void Blackboard::init_create_functions() {
 	register_create<StringName>();
 	register_create<NodePath>();
 	register_create<RID>();
+	register_create<ObjectID>();
 	register_create<Callable>();
 	register_create<Signal>();
 	register_create<Array>();
@@ -109,11 +108,19 @@ void Blackboard::init_create_functions() {
 	register_create<PackedVector4Array>();
 	register_create<PackedColorArray>();
 
-	register_create<Variant>();
+	// fallbacks for when we use the generalized Variant set_entry
+	// and have no
+	register_create<Object*>();
+	register_create<const Object*>();
+	register_create<Ref<RefCounted>>();
+
+	// we never actually use the Variant type itself as backing storage
+	// nil results should just not exist, and specifically using VariantType::Nil
+	// should simply delete an existing entry.
+	// TODO: Determine if the above is the correct approach for null object refs
 
 	// TODO: Actually handle Object type correctly
 }
-
 
 Blackboard::Blackboard() :
 		parent(nullptr) {}
@@ -181,13 +188,30 @@ has_result:
 template <typename T>
 void Blackboard::set_entry(const StringName &p_name, const typename EnableIf<blackboard_storage_type<T>::value, T>::type &p_value) {
 
-
+	const auto iter = entries.find(p_name);
+	if (likely(iter != entries.end())) {
+		const auto existing_entry = iter->value;
+		if (unlikely(existing_entry->get_type_key() != blackboard_storage_type<T>::get_type_key())) {
+			free_entry(iter);
+		}
+		else {
+			iter->value = p_value;
+		}
+	}
+	else {
+		Entry<T> *new_entry = create_entry<T>(p_name, entries_owner, entries);
+		new_entry->value = p_value;
+	}
 }
 
 template <>
 void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value) {
 
-	// p_value.
+	const auto iter = entries.find(p_name);
+	if (likely(iter != entries.end())) {
+		const auto existing_entry = iter->value;
+		if (unlikely(existing_entry->get_type_key() != blackboard_storage_type<Variant>::get_type_key())) {}
+	}
 }
 
 void Blackboard::free_entry(const HashMap<StringName, EntryBase *>::Iterator &iter) {
@@ -198,6 +222,7 @@ void Blackboard::free_entry(const HashMap<StringName, EntryBase *>::Iterator &it
 	entries_owner.free(rid);
 	memdelete(entry);
 }
+
 bool Blackboard::erase_entry(const StringName &p_name) {
 
 	const auto iter = entries.find(p_name);
