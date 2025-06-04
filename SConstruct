@@ -2,7 +2,7 @@
 import os
 import sys
 
-from methods import print_error
+from methods import print_error, print_special
 
 def check_submodule(dir_name):
     if os.path.isdir(dir_name):
@@ -34,7 +34,7 @@ Help(opts.GenerateHelpText(localEnv))
 env = localEnv.Clone()
 
 check_submodule('godot-cpp')
-env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
+env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs, "opts": opts})
 
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
@@ -60,6 +60,8 @@ if env.tests:
         "doctest/doctest/",
         "tests/"])
     sources += Glob("tests/*.cpp")
+
+    print_special("Included tests")
 
 if env["target"] in ["editor", "template_debug"]:
     try:

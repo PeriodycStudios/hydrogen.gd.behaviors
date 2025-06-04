@@ -50,3 +50,7 @@ def print_warning(*values: object) -> None:
 def print_error(*values: object) -> None:
     """Prints an error message with formatting."""
     print(f"{ANSI.RED}{ANSI.BOLD}ERROR:{ANSI.REGULAR}", *values, ANSI.RESET, file=sys.stderr)
+
+def print_special(*values: object) -> None:
+    """Prints a special message with only color formatting."""
+    print(f"{ANSI.GREEN}", *values, ANSI.RESET, file=sys.stdout)
