@@ -34,7 +34,7 @@ Help(opts.GenerateHelpText(localEnv))
 env = localEnv.Clone()
 
 check_submodule('godot-cpp')
-env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs, "opts": opts})
+env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
