@@ -70,6 +70,8 @@ class Blackboard final : public RidData {
 	bool validate_parent(const Blackboard *p_parent) const;
 	void free_entry(HashMap<StringName, EntryBase *>::Iterator &iter);
 
+	template<typename T>
+	bool find_entry(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const;
 
 public:
 
@@ -110,6 +112,9 @@ public:
 
 	bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
 };
+
+template <>
+bool Blackboard::find_entry<Variant>(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const;
 
 template <>
 bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, bool p_check_parents) const;

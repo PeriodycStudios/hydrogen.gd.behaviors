@@ -55,6 +55,54 @@ bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 	return true;
 }
 
+template <typename T>
+bool Blackboard::find_entry(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, const bool p_check_parents) const {
+	auto iter = entries.find(p_name);
+	if (unlikely(iter == entries.end())) {
+		if (likely(p_check_parents)) {
+			const Blackboard *current = parent;
+			while (current != nullptr) {
+				iter = current->entries.find(p_name);
+				if (iter != current->entries.end()) {
+					const StringName &type_key = iter->value->get_type_key();
+
+					if (type_key != BlackboardStorageType<T>::get_type_key()) {
+						return false;
+					}
+
+					p_out_result = iter;
+					return true;
+				}
+
+				current = current->parent;
+			}
+		}
+	}
+
+	return false;
+}
+
+template <>
+bool Blackboard::find_entry<Variant>(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const {
+	auto iter = entries.find(p_name);
+	if (unlikely(iter == entries.end())) {
+		if (likely(p_check_parents)) {
+			const Blackboard *current = parent;
+			while (current != nullptr) {
+				iter = current->entries.find(p_name);
+				if (iter != current->entries.end()) {
+					p_out_result = iter;
+					return true;
+				}
+
+				current = current->parent;
+			}
+		}
+	}
+
+	return false;
+}
+
 Blackboard *Blackboard::get_parent(const StringName &p_name) const {
 	Blackboard *current = parent;
 	while (current != nullptr) {
@@ -80,32 +128,11 @@ Blackboard *Blackboard::get_parent(const RID &p_rid) const {
 template <typename T>
 bool Blackboard::try_get_entry(const StringName &p_name, typename EnableIf<BlackboardStorageType<T>::value, T>::type &p_out_result, const bool p_check_parents) const {
 
-	auto iter = entries.find(p_name);
-	if (unlikely(iter == entries.end())) {
-		if (likely(p_check_parents)) {
-			const Blackboard* current = parent;
-			while (current != nullptr) {
-
-				iter = current->entries.find(p_name);
-				if (iter != current->entries.end()) {
-
-					const StringName &type_key = iter->value->get_type_key();
-
-					if (type_key != BlackboardStorageType<T>::get_type_key()) {
-						return false;
-					}
-
-					goto has_result;
-				}
-
-				current = current->parent;
-			}
-		}
-
+	HashMap<StringName, EntryBase *>::ConstIterator iter;
+	if (unlikely(!find_entry<T>(p_name, &iter, p_check_parents))) {
 		return false;
 	}
 
-has_result:
 	Entry<T>* result = iter->value;
 	p_out_result = result->value;
 	return true;
@@ -114,24 +141,13 @@ has_result:
 template<>
 bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, const bool p_check_parents) const {
 
-	auto iter = entries.find(p_name);
-	if (unlikely(iter == entries.end())) {
-		if (likely(p_check_parents)) {
-			const Blackboard *current = parent;
-			while (current != nullptr) {
-				iter = current->entries.find(p_name);
-				if (iter != current->entries.end()) {
-					goto has_result;
-				}
-
-				current = current->parent;
-			}
-		}
+	HashMap<StringName, EntryBase *>::ConstIterator iter;
+	if (unlikely(!find_entry<Variant>(p_name, iter, p_check_parents))) {
 		return false;
 	}
 
-has_result:
-	p_out_result = iter->value->as_variant();
+	const EntryBase *result = iter->value;
+	p_out_result = result->as_variant();
 	return true;
 }
 
