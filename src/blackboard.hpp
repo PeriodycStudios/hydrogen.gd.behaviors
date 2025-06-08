@@ -22,38 +22,74 @@ namespace hydrogen {
 
 class Blackboard final : public RidData {
 
-	const StringName &name;
+	struct EntryBase;
+
+	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase*> &p_entries)> entry_factory;
+
+	template <typename T>
+	static const StringName &get_type_key();
+
+	template <typename T>
+	static const entry_factory &get_entry_factory();
 
 	struct EntryBase : RidData {
 
 		virtual ~EntryBase() = default;
-		virtual Variant as_variant() const = 0;
+		virtual Variant as_variant() const {
+			return {};
+		}
 
 		virtual const StringName &get_type_key() const;
 		virtual const Variant::Type get_variant_type() const;
-		virtual void set_from(const Variant &p_value);
+		virtual bool set_from(const Variant &p_value) { return false; }
+	};
+
+	template<typename  T>
+	struct Entry : EntryBase {
+		T value;
+
+		const StringName &get_type_key() const override {
+			return Blackboard::get_type_key<T>();
+		}
+
+		Entry() = default;
+		explicit Entry(const T &p_value) : value(p_value) {}
 	};
 
 	template<typename T>
-	struct Entry final : EntryBase {
-		T value;
+	struct EntryVariant final : Entry<T> {
+
 		Variant as_variant() const override {
-			return Variant(value);
+			return Variant(this->value);
 		}
 
-		 const StringName &get_type_key() const override {
-			return BlackboardStorageType<T>::get_type_key();
+		bool set_from(const Variant &p_value) override {
+			this->value = p_value;
+			return true;
 		}
 
-		void set_from(const Variant &p_value) override {
-			value = p_value;
-		}
-
-		explicit Entry(const T &p_value) : value(p_value) {}
-		explicit Entry(const Variant &p_value) : value(p_value) {}
+		explicit EntryVariant(const T &p_value) : Entry<T>(p_value) {}
+		explicit EntryVariant(const Variant &p_value) : Entry<T>(p_value) {}
 	};
 
-	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase*> &p_entries)> entry_factory;
+	struct TypeInfo {
+		const StringName type_key = "";
+		const entry_factory factory = nullptr;
+		const GDExtensionVariantType variant_type_id;
+		const GDExtensionClassMethodArgumentMetadata variant_argument_metadata;
+		const bool is_registered = false;
+		const bool is_variant_compatible = false;
+		const bool is_gd_object = false;
+		const bool is_gd_reference = false;
+	};
+
+	template <typename T>
+	struct RegisteredTypeInfo {
+		static TypeInfo type_info;
+		typedef T registered_type;
+	};
+
+	const StringName &name;
 
 	static HashMap<StringName, entry_factory> factories;
 
@@ -62,8 +98,13 @@ class Blackboard final : public RidData {
 
 	Blackboard *parent;
 
-	template<typename T>
+	template <typename T>
 	static EntryBase* create_entry(const StringName &p_name,
+		RID_PtrOwner<EntryBase> &p_owner,
+		HashMap<StringName, EntryBase*> &p_entries);
+
+	template<typename T>
+	static EntryBase* create_variant_entry(const StringName &p_name,
 		RID_PtrOwner<EntryBase> &p_owner,
 		HashMap<StringName, EntryBase*> &p_entries);
 
@@ -75,11 +116,16 @@ class Blackboard final : public RidData {
 
 public:
 
-	template<typename T, typename = void>
-	static void register_storage_type() {}
-
-	template <typename T, typename EnableIf<BlackboardStorageType<T>::value, T>::type>
-	static void register_storage_type();
+	// TODO: look into constexpr/decltype check to separate types
+	template <typename T>
+	static void register_type(const StringName &p_type_key = "");
+	//
+	//
+	// template<typename T, typename = void>
+	// static void register_storage_type() {}
+	//
+	// template <typename T, typename EnableIf<BlackboardStorageType<T>::value, T>::type>
+	// static void register_storage_type();
 
 	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
 	~Blackboard() = default;
@@ -100,13 +146,13 @@ public:
 	Blackboard *get_parent(const RID &p_rid) const;
 
 	template <typename T>
-	bool try_get_entry(const StringName &p_name, typename EnableIf<BlackboardStorageType<T>::value, T>::type &p_out_result, bool p_check_parents = true) const;
+	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true) const;
 
 	template <typename T>
-	T get_entry(const StringName &p_name, const typename EnableIf<BlackboardStorageType<T>::value, T>::type &p_default = {}, bool p_check_parents = true) const;
+	T get_entry(const StringName &p_name, const T &p_default = {}, bool p_check_parents = true) const;
 
 	template <typename T>
-	void set_entry(const StringName &p_name, const typename EnableIf<BlackboardStorageType<T>::value, T>::type &p_value);
+	void set_entry(const StringName &p_name, const T &p_value);
 
 	bool erase_entry(const StringName &p_name);
 
