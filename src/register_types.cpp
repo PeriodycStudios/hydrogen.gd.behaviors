@@ -8,6 +8,7 @@
 
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
+#include "variant_type_traits.hpp"
 
 #ifdef TESTS_ENABLED
 #include "tests.hpp"
@@ -31,6 +32,19 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
+
+	if (traits::can_construct_from_variant<Ref<RefCounted>>::value) {
+		std::cout << "can construct ref refcounted" << std::endl;
+	}
+
+	if (traits::variant_has_operator<bool>::value) {
+		std::cout << "has operator<bool" << std::endl;
+	}
+
+	if (traits::has_variant_operator<Ref<RefCounted>>::value) {
+		std::cout << "has_variant_operator<Ref<RefCounted>" << std::endl;
+	}
+
 	//
 	// REGISTER_BLACKBOARD_DATA_TYPE(bool)
 	// REGISTER_BLACKBOARD_DATA_TYPE(uint8_t)
