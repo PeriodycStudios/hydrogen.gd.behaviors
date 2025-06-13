@@ -11,7 +11,7 @@ using namespace godot;
 
 namespace hydrogen {
 
-class BehaviorServer final : public Object {
+class BehaviorServer : public Object {
 	GDCLASS(BehaviorServer, Object);
 
 	static BehaviorServer *singleton;
