@@ -8,7 +8,20 @@
 
 namespace hydrogen {
 
-static const StringName k_empty_string_name = "";
+template <typename T>
+const StringName &Blackboard::get_type_key() {
+	return "";
+}
+
+template <typename T>
+const Blackboard::entry_factory &Blackboard::get_entry_factory() { return nullptr; }
+
+HashMap<StringName, Blackboard::entry_factory> Blackboard::factories = {};
+
+template <typename T>
+void Blackboard::register_type(const StringName &p_type_key) {
+
+}
 
 template <typename T>
 Blackboard::EntryBase *Blackboard::create_entry(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase *> &p_entries) {
@@ -68,9 +81,9 @@ bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 
 template <typename T>
 bool Blackboard::find_entry(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, const bool p_check_parents) const {
-
+	static const StringName empty_string_name = "";
 	const StringName &type_key = get_type_key<T>();
-	if (type_key == k_empty_string_name) {
+	if (type_key == empty_string_name) {
 		return false;
 	}
 

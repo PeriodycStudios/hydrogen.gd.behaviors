@@ -2,8 +2,8 @@
 // Created by tkey on 4/2/25.
 //
 
-#ifndef GAME_AI_SERVER_HPP
-#define GAME_AI_SERVER_HPP
+#ifndef BEHAVIOR_SERVER_HPP
+#define BEHAVIOR_SERVER_HPP
 
 #include <godot_cpp/core/object.hpp>
 
@@ -11,7 +11,7 @@ using namespace godot;
 
 namespace hydrogen {
 
-class BehaviorServer : public Object {
+class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
 
 	static BehaviorServer *singleton;
@@ -20,7 +20,7 @@ protected:
 	static void _bind_methods() {}
 
 public:
-	static BehaviorServer *get_singleton() { return singleton; };
+	static BehaviorServer *get_singleton();
 
 	BehaviorServer() {
 		singleton = this;
@@ -43,18 +43,18 @@ public:
 	void finish() {};
 };
 
-}
 
-class _BehaviorServer : public Object {
+class _BehaviorServer final : public Object {
 	GDCLASS(_BehaviorServer, Object);
 
+	friend class BehaviorServer;
 	static _BehaviorServer *singleton;
 
 protected:
 	static void _bind_methods() {}
 
 public:
-	static _BehaviorServer *get_singleton() { return singleton; };
+	static _BehaviorServer *get_singleton();
 
 	_BehaviorServer() {
 		singleton = this;
@@ -65,4 +65,7 @@ public:
 	};
 };
 
-#endif
+}
+
+
+#endif //BEHAVIOR_SERVER_HPP

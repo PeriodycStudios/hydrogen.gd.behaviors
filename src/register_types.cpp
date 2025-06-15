@@ -8,7 +8,6 @@
 
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
-#include "variant_type_traits.hpp"
 
 #ifdef TESTS_ENABLED
 #include "tests.hpp"
@@ -20,29 +19,13 @@ using namespace hydrogen;
 static BehaviorServer *behavior_server = nullptr;
 static _BehaviorServer *_behavior_server = nullptr;
 
-const String k_server_name = "HydrogenBehaviorServer";
-
-#define CLEAN_MEM_DELETE(x) \
-	memdelete(x);			\
-	(x) = nullptr;			\
+static auto k_server_name = "BehaviorServer";
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
-
-	// if (traits::can_construct_from_variant<Ref<RefCounted>>::value) {
-	// 	std::cout << "can construct ref refcounted" << std::endl;
-	// }
-	//
-	// if (traits::variant_has_operator<bool>::value) {
-	// 	std::cout << "has operator<bool" << std::endl;
-	// }
-	//
-	// if (traits::has_variant_operator<Ref<RefCounted>>::value) {
-	// 	std::cout << "has_variant_operator<Ref<RefCounted>" << std::endl;
-	// }
 
 	//
 	// REGISTER_BLACKBOARD_DATA_TYPE(bool)
@@ -102,14 +85,15 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	// REGISTER_BLACKBOARD_OBJECT_TYPE(Object)
 	// REGISTER_BLACKBOARD_REFERENCE_TYPE(RefCounted)
 
-	// behavior_server = memnew(BehaviorServer);
-	// behavior_server->init();
-	//
-	// _behavior_server = memnew(_BehaviorServer);
+	GDREGISTER_INTERNAL_CLASS(BehaviorServer);
+	GDREGISTER_CLASS(_BehaviorServer);
 
-	// GDREGISTER_CLASS(_BehaviorServer);
+	behavior_server = memnew(BehaviorServer);
+	behavior_server->init();
 
-	// Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
+	_behavior_server = memnew(_BehaviorServer);
+
+	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
 
 }
 
@@ -118,16 +102,16 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 		return;
 	}
 
-	// Engine::get_singleton()->unregister_singleton(k_server_name);
+	Engine::get_singleton()->unregister_singleton(k_server_name);
 
-	// if (behavior_server) {
-	// 	behavior_server->finish();
-	// 	CLEAN_MEM_DELETE(behavior_server);
-	// }
-	//
-	// if (_behavior_server) {
-	// 	CLEAN_MEM_DELETE(_behavior_server);
-	// }
+	if (_behavior_server) {
+		memdelete(_behavior_server);
+	}
+
+	if (behavior_server) {
+		behavior_server->finish();
+		memdelete(behavior_server);
+	}
 }
 
 extern "C"

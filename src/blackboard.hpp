@@ -11,7 +11,7 @@
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 
-#include "blackboard_storage_type.hpp"
+// #include "blackboard_storage_type.hpp"
 #include "rid_data.hpp"
 
 #include <functional>
@@ -174,4 +174,4 @@ void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_v
 
 } //namespace hydrogen
 
-#endif //BLACKBOARD_H
+#endif //BLACKBOARD_HPP
