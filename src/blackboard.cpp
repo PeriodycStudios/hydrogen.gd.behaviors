@@ -5,21 +5,69 @@
 #include "blackboard.hpp"
 
 #include <memory>
+#include "type_name.hpp"
 
 namespace hydrogen {
 
 template <typename T>
 const StringName &Blackboard::get_type_key() {
-	return "";
+
+	const TypeInfo &type_info = RegisteredTypeInfo<T>::type_info;
+
+	if (!type_info.is_registered) {
+		static const auto default_type_key = StringName();
+		return default_type_key;
+	}
+
+	return type_info.type_key;
 }
 
 template <typename T>
-const Blackboard::entry_factory &Blackboard::get_entry_factory() { return nullptr; }
+const Blackboard::entry_factory &Blackboard::get_entry_factory() {
+	const TypeInfo &type_info = RegisteredTypeInfo<T>::type_info;
+
+	if (!type_info.is_registered) {
+		return nullptr;
+	}
+
+	return type_info.factory;
+}
 
 HashMap<StringName, Blackboard::entry_factory> Blackboard::factories = {};
 
 template <typename T>
-void Blackboard::register_type(const StringName &p_type_key) {
+void Blackboard::register_type() {
+
+	StringName type_key;
+	entry_factory factory;
+	GDExtensionVariantType variant_type = GDEXTENSION_VARIANT_TYPE_NIL;
+	GDExtensionClassMethodArgumentMetadata metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
+	bool is_variant = false;
+	bool is_gd_object = false;
+	bool is_gd_reference = false;
+
+	if constexpr (traits::has_class_name<T>::value) {
+		type_key = T::get_class_name();
+	}
+	else {
+		type_key = type_name<T>();
+	}
+
+
+	if constexpr (traits::has_get_type_info<T>::value) {
+		variant_type = GetTypeInfo<T>::get_type();
+		metadata = GetTypeInfo<T>::metadata;
+		factory = create_variant_entry<T>;
+
+		if constexpr (traits::is_object_ptr<>)
+	}
+	else {
+		factory = create_entry<T>;
+	}
+
+	RegisteredTypeInfo<T>::type_info = TypeInfo(
+		type_key,
+		factory);
 
 }
 
@@ -51,6 +99,7 @@ Blackboard::EntryBase* Blackboard::create_variant_entry(const StringName &p_name
 // 		factories[type_key] = create_variant_entry<T>;
 // 	}
 // }
+
 
 bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 	if (!p_parent)

@@ -2,9 +2,9 @@
 #ifndef VARIANT_TYPE_TRAITS_HPP
 #define VARIANT_TYPE_TRAITS_HPP
 
-#include <type_traits>
 #include <godot_cpp/core/object.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <type_traits>
 
 using namespace godot;
 
@@ -40,10 +40,23 @@ struct can_construct_from_variant<T,
 		std::void_t<decltype(T(std::declval<Variant>()))>> : std::true_type {};
 
 template <typename T, typename = void>
-struct is_variant_compatible : std::false_type {};
+struct is_ref_type : std::false_type {};
+
+template <typename T>
+struct is_ref_type<T,
+std::void_t<decltype(std::declval<T>().unref())>> : std::true_type {};
 
 template <typename T, typename = void>
-struct is_object_ptr : std::false_type {};
+struct is_object_type : std::false_type {};
+
+template <typename T>
+struct is_object_type<T,
+	std::enable_if_t<std::is_base_of_v<Object, std::remove_pointer_t<T>>, void>> : std::true_type {};
+
+
+
+template <typename T, typename = void>
+struct is_variant_compatible : std::false_type {};
 
 template <typename T>
 struct is_variant_compatible<T,
@@ -60,6 +73,13 @@ struct has_class_name : std::false_type {};
 template <typename T>
 struct has_class_name<T,
 		std::void_t<decltype(std::remove_pointer_t<T>::get_class_name())>> : std::true_type {};
+
+template <typename T, typename = void>
+struct has_get_type_info : std::false_type {};
+
+template <typename T>
+struct has_get_type_info<T,
+	std::void_t<decltype(GetTypeInfo<T>::VARIANT_TYPE)>> : std::true_type {};
 
 } //namespace hydrogen::traits
 

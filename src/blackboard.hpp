@@ -13,6 +13,7 @@
 
 // #include "blackboard_storage_type.hpp"
 #include "rid_data.hpp"
+#include "variant_type_traits.hpp"
 
 #include <functional>
 
@@ -21,6 +22,8 @@ using namespace godot;
 namespace hydrogen {
 
 class Blackboard final : public RidData {
+
+	static const StringName default_type_key;
 
 	struct EntryBase;
 
@@ -75,12 +78,26 @@ class Blackboard final : public RidData {
 	struct TypeInfo {
 		const StringName type_key = "";
 		const entry_factory factory = nullptr;
-		const GDExtensionVariantType variant_type_id;
-		const GDExtensionClassMethodArgumentMetadata variant_argument_metadata;
+		const GDExtensionVariantType variant_type_id = GDEXTENSION_VARIANT_TYPE_NIL;
+		const GDExtensionClassMethodArgumentMetadata variant_argument_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
 		const bool is_registered = false;
-		const bool is_variant_compatible = false;
+		const bool is_variant = false;
 		const bool is_gd_object = false;
 		const bool is_gd_reference = false;
+
+		TypeInfo(
+			const StringName &p_type_key,
+			const entry_factory &p_factory,
+			const GDExtensionVariantType p_variant_type = GDEXTENSION_VARIANT_TYPE_NIL,
+			const GDExtensionClassMethodArgumentMetadata p_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE,
+			const bool p_is_variant = false,
+			const bool p_is_gd_object = false,
+			const bool p_is_gd_reference = false
+			) :
+		type_key(p_type_key), factory(p_factory),
+		is_registered(true), is_variant(p_is_variant),
+		is_gd_object(p_is_gd_object), is_gd_reference(p_is_gd_reference)
+		{}
 	};
 
 	template <typename T>
@@ -118,7 +135,7 @@ public:
 
 	// TODO: look into constexpr/decltype check to separate types
 	template <typename T>
-	static void register_type(const StringName &p_type_key = "");
+	static void register_type();
 	//
 	//
 	// template<typename T, typename = void>
@@ -170,6 +187,9 @@ Variant Blackboard::get_entry(const StringName &p_name, const Variant &p_default
 
 template <>
 void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value);
+
+template <>
+inline void Blackboard::register_type<Variant>() {}
 
 
 } //namespace hydrogen
