@@ -13,7 +13,6 @@
 
 // #include "blackboard_storage_type.hpp"
 #include "rid_data.hpp"
-#include "variant_type_traits.hpp"
 
 #include <functional>
 
@@ -23,100 +22,114 @@ namespace hydrogen {
 
 class Blackboard final : public RidData {
 
-	static const StringName default_type_key;
-
-	struct EntryBase;
-
-	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase*> &p_entries)> entry_factory;
-
-	template <typename T>
-	static const StringName &get_type_key();
-
-	template <typename T>
-	static const entry_factory &get_entry_factory();
-
 	struct EntryBase : RidData {
 
 		virtual ~EntryBase() = default;
 		virtual Variant as_variant() const {
 			return {};
 		}
+		virtual bool set_from(const Variant &p_value) { return false; }
 
 		virtual const StringName &get_type_key() const;
-		virtual const Variant::Type get_variant_type() const;
-		virtual bool set_from(const Variant &p_value) { return false; }
+		virtual GDExtensionVariantType get_variant_type() const {
+			return GDEXTENSION_VARIANT_TYPE_NIL;
+		}
 	};
 
 	template<typename  T>
-	struct Entry : EntryBase {
+	struct EntryData : EntryBase {
 		T value;
 
 		const StringName &get_type_key() const override {
-			return Blackboard::get_type_key<T>();
+			return RegisteredTypeInfo<T>::get_info().type_key;
 		}
 
-		Entry() = default;
-		explicit Entry(const T &p_value) : value(p_value) {}
+		EntryData() = default;
+		explicit EntryData(const T &p_value) : value(p_value) {}
 	};
 
 	template<typename T>
-	struct EntryVariant final : Entry<T> {
+	struct EntryVariant final : EntryData<T> {
 
-		Variant as_variant() const override {
-			return Variant(this->value);
+		Variant as_variant() const override;
+
+		bool set_from(const Variant &p_value) override;
+
+		EntryVariant() = default;
+		explicit EntryVariant(const T &p_value) : EntryData<T>(p_value) {}
+		explicit EntryVariant(const Variant &p_value) : EntryData<T>(p_value) {}
+
+		GDExtensionVariantType get_variant_type() const override {
+			return RegisteredTypeInfo<T>::get_info().variant_type;
 		}
-
-		bool set_from(const Variant &p_value) override {
-			this->value = p_value;
-			return true;
-		}
-
-		explicit EntryVariant(const T &p_value) : Entry<T>(p_value) {}
-		explicit EntryVariant(const Variant &p_value) : Entry<T>(p_value) {}
 	};
 
-	struct TypeInfo {
-		const StringName type_key = "";
-		const entry_factory factory = nullptr;
-		const GDExtensionVariantType variant_type_id = GDEXTENSION_VARIANT_TYPE_NIL;
-		const GDExtensionClassMethodArgumentMetadata variant_argument_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
-		const bool is_registered = false;
-		const bool is_variant = false;
-		const bool is_gd_object = false;
-		const bool is_gd_reference = false;
+	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase*> &p_entries)> entry_factory;
 
-		TypeInfo(
-			const StringName &p_type_key,
-			const entry_factory &p_factory,
-			const GDExtensionVariantType p_variant_type = GDEXTENSION_VARIANT_TYPE_NIL,
-			const GDExtensionClassMethodArgumentMetadata p_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE,
-			const bool p_is_variant = false,
-			const bool p_is_gd_object = false,
-			const bool p_is_gd_reference = false
-			) :
-		type_key(p_type_key), factory(p_factory),
-		is_registered(true), is_variant(p_is_variant),
-		is_gd_object(p_is_gd_object), is_gd_reference(p_is_gd_reference)
-		{}
+	struct TypeInfo {
+
+		enum struct Flags : uint8_t {
+			NONE = 0,
+			IS_REGISTERED = 1 << 0,
+			IS_VARIANT_TYPE = 1 << 1,
+			IS_GD_OBJECT = 1 << 2,
+			IS_GD_REF = 1 << 3,
+		};
+
+		PropertyInfo variant_prop_info = {};
+		StringName type_key = "";
+		entry_factory factory = nullptr;
+		GDExtensionVariantType variant_type = GDEXTENSION_VARIANT_TYPE_NIL;
+		GDExtensionClassMethodArgumentMetadata variant_argument_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
+		Flags flags = Flags::NONE;
+
+		bool has_flag(const Flags p_flags) const {
+			return (static_cast<uint8_t>(flags) & static_cast<uint8_t>(p_flags)) != 0;
+		}
+
+		void enable_flag(const Flags p_flags) {
+			flags = static_cast<Flags>(static_cast<uint8_t>(flags) | static_cast<uint8_t>(p_flags));
+		}
+
+		bool is_registered() const { return has_flag(Flags::IS_REGISTERED); }
+		bool is_variant_type() const { return has_flag(Flags::IS_VARIANT_TYPE); }
+		bool is_gd_object() const { return has_flag(Flags::IS_GD_OBJECT); }
+		bool is_gd_reference() const { return has_flag(Flags::IS_GD_REF); }
 	};
 
 	template <typename T>
-	struct RegisteredTypeInfo {
+	class RegisteredTypeInfo {
+		friend class Blackboard;
 		static TypeInfo type_info;
+
+	public:
+
+		static void set_info(const TypeInfo &p_info) {
+			if (is_registered()) return;
+
+			type_info = p_info;
+		}
+
+		static const TypeInfo &get_info() { return type_info; }
+		static const TypeInfo *get_info_ptr() { return &type_info; }
+		static bool is_registered() { return type_info.is_registered(); }
+
 		typedef T registered_type;
 	};
 
+	static HashMap<StringName, const TypeInfo*> type_infos;
+	static std::array<const TypeInfo*, GDEXTENSION_VARIANT_TYPE_VARIANT_MAX> core_variant_type_infos;
+	static const TypeInfo *ref_fallback_type_info;
+	static bool core_variants_registered;
+
 	const StringName &name;
-
-	static HashMap<StringName, entry_factory> factories;
-
 	RID_PtrOwner<EntryBase> entries_owner;
 	HashMap<StringName, EntryBase*> entries;
 
 	Blackboard *parent;
 
 	template <typename T>
-	static EntryBase* create_entry(const StringName &p_name,
+	static EntryBase* create_data_entry(const StringName &p_name,
 		RID_PtrOwner<EntryBase> &p_owner,
 		HashMap<StringName, EntryBase*> &p_entries);
 
@@ -133,16 +146,10 @@ class Blackboard final : public RidData {
 
 public:
 
-	// TODO: look into constexpr/decltype check to separate types
+	static void register_core_variant_types();
+
 	template <typename T>
 	static void register_type();
-	//
-	//
-	// template<typename T, typename = void>
-	// static void register_storage_type() {}
-	//
-	// template <typename T, typename EnableIf<BlackboardStorageType<T>::value, T>::type>
-	// static void register_storage_type();
 
 	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
 	~Blackboard() = default;
@@ -157,10 +164,10 @@ public:
 		return false;
 	}
 
-	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
+	_FORCE_INLINE_ Blackboard *find_parent() const { return parent; }
 
-	Blackboard *get_parent(const StringName &p_name) const;
-	Blackboard *get_parent(const RID &p_rid) const;
+	Blackboard *find_parent(const StringName &p_name) const;
+	Blackboard *find_parent(const RID &p_rid) const;
 
 	template <typename T>
 	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true) const;
@@ -191,6 +198,20 @@ void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_v
 template <>
 inline void Blackboard::register_type<Variant>() {}
 
+template <typename T>
+Blackboard::TypeInfo Blackboard::RegisteredTypeInfo<T>::type_info = TypeInfo();
+
+template <>
+Variant Blackboard::EntryVariant<char16_t>::as_variant() const;
+
+template <>
+bool Blackboard::EntryVariant<char16_t>::set_from(const Variant &p_value);
+
+template <>
+Variant Blackboard::EntryVariant<char32_t>::as_variant() const;
+
+template <>
+Variant Blackboard::EntryVariant<char32_t>::as_variant() const;
 
 } //namespace hydrogen
 
