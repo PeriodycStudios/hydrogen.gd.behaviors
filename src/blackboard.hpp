@@ -82,18 +82,18 @@ class Blackboard final : public RidData {
 		GDExtensionClassMethodArgumentMetadata variant_argument_metadata = GDEXTENSION_METHOD_ARGUMENT_METADATA_NONE;
 		Flags flags = Flags::NONE;
 
-		bool has_flag(const Flags p_flags) const {
+		_FORCE_INLINE_ bool has_flag(const Flags p_flags) const {
 			return (static_cast<uint8_t>(flags) & static_cast<uint8_t>(p_flags)) != 0;
 		}
 
-		void enable_flag(const Flags p_flags) {
+		_FORCE_INLINE_ void enable_flag(const Flags p_flags) {
 			flags = static_cast<Flags>(static_cast<uint8_t>(flags) | static_cast<uint8_t>(p_flags));
 		}
 
-		bool is_registered() const { return has_flag(Flags::IS_REGISTERED); }
-		bool is_variant_type() const { return has_flag(Flags::IS_VARIANT_TYPE); }
-		bool is_gd_object() const { return has_flag(Flags::IS_GD_OBJECT); }
-		bool is_gd_reference() const { return has_flag(Flags::IS_GD_REF); }
+		_FORCE_INLINE_ bool is_registered() const { return has_flag(Flags::IS_REGISTERED); }
+		_FORCE_INLINE_ bool is_variant_type() const { return has_flag(Flags::IS_VARIANT_TYPE); }
+		_FORCE_INLINE_ bool is_gd_object() const { return has_flag(Flags::IS_GD_OBJECT); }
+		_FORCE_INLINE_ bool is_gd_reference() const { return has_flag(Flags::IS_GD_REF); }
 	};
 
 	template <typename T>
@@ -103,15 +103,15 @@ class Blackboard final : public RidData {
 
 	public:
 
-		static void set_info(const TypeInfo &p_info) {
+		_FORCE_INLINE_ static void set_info(const TypeInfo &p_info) {
 			if (is_registered()) return;
 
 			type_info = p_info;
 		}
 
-		static const TypeInfo &get_info() { return type_info; }
-		static const TypeInfo *get_info_ptr() { return &type_info; }
-		static bool is_registered() { return type_info.is_registered(); }
+		_FORCE_INLINE_ static const TypeInfo &get_info() { return type_info; }
+		_FORCE_INLINE_ static const TypeInfo *get_info_ptr() { return &type_info; }
+		_FORCE_INLINE_ static bool is_registered() { return type_info.is_registered(); }
 
 		typedef T registered_type;
 	};
@@ -155,7 +155,7 @@ public:
 
 	_FORCE_INLINE_ const StringName &get_name() const { return name; }
 
-	bool set_parent(Blackboard *p_parent) {
+	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
 		if (validate_parent(p_parent)) {
 			parent = p_parent;
 			return true;
@@ -163,7 +163,7 @@ public:
 		return false;
 	}
 
-	_FORCE_INLINE_ Blackboard *find_parent() const { return parent; }
+	_FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
 
 	Blackboard *find_parent(const StringName &p_name) const;
 	Blackboard *find_parent(const RID &p_rid) const;
@@ -195,7 +195,7 @@ template <>
 void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value);
 
 template <>
-inline void Blackboard::register_type<Variant>() {}
+_FORCE_INLINE_ void Blackboard::register_type<Variant>() {}
 
 template <typename T>
 Blackboard::TypeInfo Blackboard::RegisteredTypeInfo<T>::type_info = TypeInfo();
@@ -210,7 +210,8 @@ template <>
 Variant Blackboard::EntryVariant<char32_t>::as_variant() const;
 
 template <>
-Variant Blackboard::EntryVariant<char32_t>::as_variant() const;
+bool Blackboard::EntryVariant<char32_t>::set_from(const Variant &p_value);
+
 
 } //namespace hydrogen
 

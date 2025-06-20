@@ -38,7 +38,6 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	_behavior_server = memnew(_BehaviorServer);
 
 	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
-
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
