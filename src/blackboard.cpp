@@ -6,6 +6,7 @@
 
 #include <memory>
 #include "type_name.hpp"
+#include "variant_type_traits.hpp"
 
 namespace hydrogen {
 
