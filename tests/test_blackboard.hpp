@@ -15,13 +15,12 @@ DOCTEST_MAKE_STD_HEADERS_CLEAN_FROM_WARNINGS_ON_WALL_END
 #include <godot_cpp/variant/string.hpp>
 #include "blackboard.hpp"
 
-namespace hydrogen {
-namespace test {
+namespace hydrogen::test {
 
-GDE_EXPORT TEST_CASE("[Blackboard] Set and Get") {
+TEST_CASE("[Blackboard] Set and Get") {
 	CHECK(true);
 
-	Blackboard* blackboard = memnew(Blackboard("TestBlackboard"));
+	Blackboard *blackboard = memnew(Blackboard("TestBlackboard"));
 	REQUIRE(blackboard != nullptr);
 
 	blackboard->set_entry<uint8_t>("SomeEntry", 255);
@@ -33,7 +32,6 @@ GDE_EXPORT TEST_CASE("[Blackboard] Set and Get") {
 	memdelete(blackboard);
 }
 
-}
-}
+} //namespace hydrogen::test
 
 #endif //TEST_BLACKBOARD_HPP

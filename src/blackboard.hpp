@@ -10,6 +10,7 @@
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#include <godot_cpp/core/print_string.hpp>
 #include <functional>
 
 #include "rid_data.hpp"
@@ -20,7 +21,7 @@ using namespace godot;
 
 namespace hydrogen {
 
-class GDE_EXPORT Blackboard final : public RidData {
+class Blackboard final : public RidData {
 
 	struct EntryBase : RidData {
 
@@ -170,7 +171,7 @@ class GDE_EXPORT Blackboard final : public RidData {
 public:
 
 	template<typename T, typename U>
-	struct GDE_EXPORT EntryVariantConvertable final : EntryData<T> {
+	struct EntryVariantConvertable final : EntryData<T> {
 
 		[[nodiscard]] Variant as_variant() const override;
 
@@ -195,7 +196,7 @@ public:
 		const std::string type_name_str(type_name<type>());
 		const String name_str = String(type_name_str.c_str());
 
-		std::cout << "Registering type with blackboard: " << type_name_str << std::endl;
+		print_line("Registering type with blackboard ", name_str);
 
 		TypeInfo type_info = {};
 		type_info.type_key = name_str.hash();
@@ -206,7 +207,7 @@ public:
 			type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
 			type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
 
-			std::cout << "* Registering variant type: " << type_info.variant_type << std::endl;
+			print_line("* Registering variant type: ", type_info.variant_type);
 		}
 		else {
 			type_info.factory = create_data_entry<type>;
@@ -217,7 +218,7 @@ public:
 		RegisteredTypeInfo<type>::init(type_info);
 		type_infos[type_info.type_key] = RegisteredTypeInfo<type>::get_info_ptr();
 
-		std::cout << "* Type fully registered with key: " << type_info.type_key << std::endl;
+		print_line("* Type fully registered with key: ", type_info.type_key);
 	}
 
 	template <typename T, typename U>
@@ -235,7 +236,7 @@ public:
 		const std::string type_name_str(type_name<convertable_type>());
 		const auto name_str = String(type_name_str.c_str());
 
-		std::cout << "Registering convertable type with Blackboard: " << type_name_str << std::endl;
+		print_line( "Registering convertable type with Blackboard: ", name_str);
 
 		TypeInfo type_info = {};
 		type_info.type_key = name_str.hash();
@@ -245,12 +246,13 @@ public:
 		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
 		type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
 
-		std::cout << "* Registering with conversion type: " << type_info.variant_type << std::endl;
+		print_line("* Registering with conversion type: ", type_info.variant_type);
 
 		RegisteredTypeInfo<convertable_type>::init(type_info);
 		type_infos[type_info.type_key] = RegisteredTypeInfo<convertable_type>::get_info_ptr();
 
-		std::cout << "* Type fully registered with key: " << type_info.type_key << std::endl;
+
+		print_line("* Type fully registered with key: ", type_info.type_key);
 	}
 
 	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
@@ -290,18 +292,21 @@ public:
 template <>
 inline bool Blackboard::find_entry<Variant>(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const {
 	auto iter = entries.find(p_name);
-	if (unlikely(iter == entries.end())) {
-		if (likely(p_check_parents)) {
-			const Blackboard *current = parent;
-			while (current != nullptr) {
-				iter = current->entries.find(p_name);
-				if (iter != current->entries.end()) {
-					p_out_result = iter;
-					return true;
-				}
+	if (likely(iter != entries.end())) {
+		p_out_result = iter;
+		return true;
+	}
 
-				current = current->parent;
+	if (likely(p_check_parents)) {
+		const Blackboard *current = parent;
+		while (current != nullptr) {
+			iter = current->entries.find(p_name);
+			if (iter != current->entries.end()) {
+				p_out_result = iter;
+				return true;
 			}
+
+			current = current->parent;
 		}
 	}
 
@@ -319,24 +324,27 @@ bool Blackboard::find_entry(const StringName &p_name, HashMap<StringName, EntryB
 	const auto type_key = type_info.type_key;
 
 	auto iter = entries.find(p_name);
-	if (unlikely(iter == entries.end())) {
-		if (likely(p_check_parents)) {
-			const Blackboard *current = parent;
-			while (current != nullptr) {
-				iter = current->entries.find(p_name);
-				if (iter != current->entries.end()) {
-					const auto entry_type_key = iter->value->get_type_key();
+	if (likely(iter != entries.end())) {
+		p_out_result = iter;
+		return true;
+	}
 
-					if (entry_type_key != type_key) {
-						return false;
-					}
+	if (likely(p_check_parents)) {
+		const Blackboard *current = parent;
+		while (current != nullptr) {
+			iter = current->entries.find(p_name);
+			if (iter != current->entries.end()) {
+				const auto entry_type_key = iter->value->get_type_key();
 
-					p_out_result = iter;
-					return true;
+				if (entry_type_key != type_key) {
+					return false;
 				}
 
-				current = current->parent;
+				p_out_result = iter;
+				return true;
 			}
+
+			current = current->parent;
 		}
 	}
 
