@@ -1,11 +1,10 @@
-#include "register_types.hpp"
 #include <gdextension_interface.h>
 #include <godot_cpp/core/class_db.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
-
 #include <godot_cpp/classes/engine.hpp>
 
+#include "register_types.hpp"
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
 
@@ -38,6 +37,19 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	_behavior_server = memnew(_BehaviorServer);
 
 	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
+
+	Blackboard* blackboard = memnew(Blackboard("My_Blackboard"));
+
+	blackboard->set_entry<uint8_t>("My_Entry", 255);
+	uint8_t result;
+	if (blackboard->try_get_entry<uint8_t>("My_Entry", result)) {
+		std::cout << "My_Entry: " << result << std::endl;
+	}
+	else {
+		std::cout << "couldn't find My_Entry" << std::endl;
+	}
+
+	memdelete(blackboard);
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
