@@ -10,7 +10,9 @@
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
+#if BLACKBOARD_VERBOSE
 #include <godot_cpp/core/print_string.hpp>
+#endif
 #include <functional>
 
 #include "rid_data.hpp"
@@ -81,7 +83,7 @@ class Blackboard final : public RidData {
 		};
 
 		entry_factory factory = nullptr;
-		std::string name; // any attempt to use String or StringName here crashes the plugin on load!
+		std::string raw_name; // any attempt to use String or StringName here crashes the plugin on load!
 		Variant::Type variant_type = Variant::Type::NIL;
 		int64_t type_key = 0;
 		Flags flags = Flags::NONE;
@@ -193,32 +195,45 @@ public:
 			return;
 		}
 
-		const std::string type_name_str(type_name<type>());
-		const String name_str = String(type_name_str.c_str());
-
-		print_line("Registering type with blackboard ", name_str);
-
 		TypeInfo type_info = {};
-		type_info.type_key = name_str.hash();
-		type_info.name = type_name_str;
+		type_info.raw_name = std::string(type_name<type>());
+		String name = "";
+
 		if constexpr (traits::is_variant_type<type>::value) {
 
 			type_info.factory = create_variant_entry<type>;
 			type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
 			type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
 
-			print_line("* Registering variant type: ", type_info.variant_type);
+			if constexpr (traits::is_gd_ref_helper<type>::value) {
+				typedef std::remove_pointer_t<typename traits::extract_ref_counted_type<type>::type> helper_type;
+				name = helper_type::get_class_static();
+			}
+			else if constexpr (traits::is_gd_object_type<type>::value) {
+				name = std::remove_pointer_t<type>::get_class_static();
+			}
+#if BLACKBOARD_VERBOSE
+			print_line("Registering variant type: ", type_info.variant_type);
+#endif
 		}
 		else {
 			type_info.factory = create_data_entry<type>;
 		}
 
+		if (name == "") {
+			name = String(type_info.raw_name.c_str());
+		}
+
+		type_info.type_key = name.hash();
+
 		type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
 
 		RegisteredTypeInfo<type>::init(type_info);
 		type_infos[type_info.type_key] = RegisteredTypeInfo<type>::get_info_ptr();
-
-		print_line("* Type fully registered with key: ", type_info.type_key);
+#if BLACKBOARD_VERBOSE
+		print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
+		print_line("");
+#endif
 	}
 
 	template <typename T, typename U>
@@ -233,26 +248,25 @@ public:
 			return;
 		}
 
-		const std::string type_name_str(type_name<convertable_type>());
-		const auto name_str = String(type_name_str.c_str());
-
-		print_line( "Registering convertable type with Blackboard: ", name_str);
-
 		TypeInfo type_info = {};
-		type_info.type_key = name_str.hash();
-		type_info.name = type_name_str;
+		type_info.raw_name = std::string(type_name<convertable_type>());
+		const auto name = String(type_info.raw_name.c_str());
+		type_info.type_key = name.hash();
+
 		type_info.factory = create_variant_converted_entry<convertable_type, conversion_type>;
 		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<conversion_type>::VARIANT_TYPE);
 		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
 		type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
-
-		print_line("* Registering with conversion type: ", type_info.variant_type);
-
+#if BLACKBOARD_VERBOSE
+		print_line("Registering with conversion type: ", type_info.variant_type);
+#endif
 		RegisteredTypeInfo<convertable_type>::init(type_info);
 		type_infos[type_info.type_key] = RegisteredTypeInfo<convertable_type>::get_info_ptr();
 
-
-		print_line("* Type fully registered with key: ", type_info.type_key);
+#if BLACKBOARD_VERBOSE
+		print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
+		print_line("");
+#endif
 	}
 
 	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
@@ -399,7 +413,24 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		EntryBase *existing_entry = iter->value;
-		if (likely(existing_entry->get_variant_type() == variant_type)) {
+
+		if (unlikely(p_value.get_type() == Variant::NIL)) {
+			free(existing_entry);
+			return;
+		}
+
+		if (unlikely(existing_entry->get_variant_type() == Variant::OBJECT)) {
+			const int64_t existing_type_key = existing_entry->get_type_key();
+			const Object *incoming_obj = p_value;
+			const String incoming_class_type = incoming_obj->get_class();
+			const int64_t incoming_type_key = incoming_class_type.hash();
+
+			if (likely(existing_type_key == incoming_type_key)) {
+				existing_entry->set_from(p_value);
+			}
+			// else regenerate entry with fallback
+		}
+		else if (likely(existing_entry->get_variant_type() == variant_type)) {
 			existing_entry->set_from(p_value);
 			return;
 		}
@@ -415,10 +446,20 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 
 	const TypeInfo *type_info;
 	if (unlikely(variant_type == Variant::Type::OBJECT)) {
-		const Ref<RefCounted> ref = p_value;
-		type_info = ref.is_null() ?
+		const Object * obj = p_value;
+		const String class_name = obj->get_class();
+		const int64_t type_key = class_name.hash();
+
+		const auto type_info_iter = type_infos.find(type_key);
+		if (likely(type_info_iter == type_infos.end())) {
+			const Ref<RefCounted> ref = p_value;
+			type_info = ref.is_null() ?
 			core_variant_type_infos[Variant::Type::OBJECT] :
 			ref_fallback_type_info;
+		}
+		else {
+			type_info = type_info_iter->value;
+		}
 	}
 	else {
 		type_info = core_variant_type_infos[variant_type];
@@ -437,19 +478,18 @@ void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
 	}
 
 	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
-	const int64_t type_key = type_info.type_key;
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
-		EntryData<type>* existing_entry = dynamic_cast<EntryData<type>*>(iter->value);
-		if (likely(existing_entry->get_type_key() == type_key)) {
+		auto* existing_entry = dynamic_cast<EntryData<type> *>(iter->value);
+		if (likely(existing_entry->get_type_key() == type_info.type_key)) {
 			existing_entry->value = p_value;
 			return;
 		}
 		free_entry(iter);
 	}
 
-	EntryData<type> *new_entry = dynamic_cast<EntryData<type>*>(type_info.factory(p_name, entries_owner, entries));
+	auto *new_entry = dynamic_cast<EntryData<type> *>(type_info.factory(p_name, entries_owner, entries));
 	new_entry->value = p_value;
 }
 

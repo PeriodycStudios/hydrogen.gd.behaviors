@@ -200,7 +200,7 @@ bool Blackboard::erase_entry(const StringName &p_name) {
 	return true;
 }
 
-bool Blackboard::has_entry(const StringName &p_name, bool p_check_parents) const {
+bool Blackboard::has_entry(const StringName &p_name, const bool p_check_parents) const {
 	bool result = entries.has(p_name);
 
 	if (!result && p_check_parents) {
