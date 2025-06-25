@@ -11,7 +11,7 @@
 
 
 #ifdef TESTS_ENABLED
-#include "tests.hpp"
+#include "test_runner.hpp"
 #endif
 
 using namespace godot;
@@ -39,6 +39,9 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	_behavior_server = memnew(_BehaviorServer);
 
 	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
+
+	auto result = tests::behavior_test_runner();
+	print_line("Result of tests: ", result == 0 ? "Success" : "Failure");
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {

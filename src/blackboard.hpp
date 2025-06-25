@@ -5,6 +5,8 @@
 #ifndef BLACKBOARD_HPP
 #define BLACKBOARD_HPP
 
+#define BLACKBOARD_VERBOSE 1
+
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
@@ -32,7 +34,7 @@ class Blackboard final : public RidData {
 			return {};
 		}
 
-		virtual bool set_from(const Variant &p_value) { return false; }
+		virtual void set_from(const Variant &p_value) {}
 
 		[[nodiscard]] virtual int64_t get_type_key() const = 0;
 		[[nodiscard]] virtual Variant::Type get_variant_type() const {
@@ -49,6 +51,7 @@ class Blackboard final : public RidData {
 		}
 
 		EntryData() = default;
+		~EntryData() override = default;
 
 		typedef T type;
 	};
@@ -60,12 +63,12 @@ class Blackboard final : public RidData {
 			return Variant(this->value);
 		}
 
-		bool set_from(const Variant &p_value) override {
+		void set_from(const Variant &p_value) override {
 			this->value = p_value;
-			return true;
 		}
 
 		EntryVariant() = default;
+		~EntryVariant() override = default;
 
 		[[nodiscard]] Variant::Type get_variant_type() const override {
 			return RegisteredTypeInfo<T>::get_info().variant_type;
@@ -177,9 +180,10 @@ public:
 
 		[[nodiscard]] Variant as_variant() const override;
 
-		bool set_from(const Variant &p_value) override;
+		void set_from(const Variant &p_value) override;
 
 		EntryVariantConvertable() = default;
+		~EntryVariantConvertable() override = default;
 
 		[[nodiscard]] Variant::Type get_variant_type() const override {
 			return RegisteredTypeInfo<U>::get_info().variant_type;
@@ -474,7 +478,7 @@ void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
 
 	typedef typename traits::unadorned_type<T>::type type;
 	if (unlikely(!RegisteredTypeInfo<type>::is_registered())) {
-		register_type<type>();
+		register_type<T>();
 	}
 
 	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
@@ -507,10 +511,9 @@ inline Variant Blackboard::EntryVariantConvertable<char16_t, int64_t>::as_varian
 }
 
 template <>
-inline bool Blackboard::EntryVariantConvertable<char16_t, int64_t>::set_from(const Variant &p_value) {
+inline void Blackboard::EntryVariantConvertable<char16_t, int64_t>::set_from(const Variant &p_value) {
 	const int64_t conversion = p_value;
 	this->value = static_cast<char16_t>(conversion);
-	return true;
 }
 
 template <>
@@ -520,10 +523,9 @@ inline Variant Blackboard::EntryVariantConvertable<char32_t, int64_t>::as_varian
 }
 
 template <>
-inline bool Blackboard::EntryVariantConvertable<char32_t, int64_t>::set_from(const Variant &p_value) {
+inline void Blackboard::EntryVariantConvertable<char32_t, int64_t>::set_from(const Variant &p_value) {
 	const int64_t conversion = p_value;
 	this->value = static_cast<char32_t>(conversion);
-	return true;
 }
 
 template <>
@@ -533,10 +535,9 @@ inline Variant Blackboard::EntryVariantConvertable<ObjectID, int64_t>::as_varian
 }
 
 template <>
-inline bool Blackboard::EntryVariantConvertable<ObjectID, int64_t>::set_from(const Variant &p_value) {
+inline void Blackboard::EntryVariantConvertable<ObjectID, int64_t>::set_from(const Variant &p_value) {
 	const int64_t conversion = p_value;
 	this->value = conversion;
-	return true;
 }
 
 
@@ -547,10 +548,9 @@ Variant Blackboard::EntryVariantConvertable<T, U>::as_variant() const {
 }
 
 template <typename T, typename U>
-bool Blackboard::EntryVariantConvertable<T, U>::set_from(const Variant &p_value) {
+void Blackboard::EntryVariantConvertable<T, U>::set_from(const Variant &p_value) {
 	U conversion = p_value;
 	this->value = conversion;
-	return true;
 }
 
 
