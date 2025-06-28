@@ -6,8 +6,8 @@
 
 namespace hydrogen {
 
-HashMap<int64_t, const Blackboard::TypeInfo*> Blackboard::type_infos = {};
-std::array<const Blackboard::TypeInfo*, Variant::Type::VARIANT_MAX> Blackboard::core_variant_type_infos = {nullptr};
+Blackboard::TypeInfoMap Blackboard::type_infos = {};
+Blackboard::FallbackTable Blackboard::variant_fallbacks = {nullptr};
 const Blackboard::TypeInfo *Blackboard::ref_fallback_type_info = nullptr;
 bool Blackboard::core_variants_registered = false;
 
@@ -26,8 +26,8 @@ void Blackboard::register_core_variant_types() {
 	register_type<uint64_t>();
 	register_type<int64_t>();
 
-	register_convertable_type<char16_t, int64_t>();
-	register_convertable_type<char32_t, int64_t>();
+	register_type<char16_t>();
+	register_type<char32_t>();
 
 	register_type<float>();
 	register_type<double>();
@@ -69,10 +69,10 @@ void Blackboard::register_core_variant_types() {
 	register_type<PackedVector4Array>();
 	register_type<PackedColorArray>();
 
-	register_convertable_type<ObjectID, int64_t>();
+	register_type<ObjectID>();
 	register_type<Ref<RefCounted>>();
 
-#define SET_VARIANT_FALLBACK(type) core_variant_type_infos[GetTypeInfo<type>::VARIANT_TYPE] = RegisteredTypeInfo<type>::get_info_ptr();
+#define SET_VARIANT_FALLBACK(type) variant_fallbacks[GetTypeInfo<type>::VARIANT_TYPE] = RegisteredTypeInfo<type>::get_info_ptr();
 	SET_VARIANT_FALLBACK(bool)
 	SET_VARIANT_FALLBACK(uint64_t)
 	SET_VARIANT_FALLBACK(double)
@@ -180,7 +180,7 @@ Blackboard *Blackboard::find_parent(const RID &p_rid) const {
 	return nullptr;
 }
 
-void Blackboard::free_entry(HashMap<StringName, EntryBase *>::Iterator &iter) {
+void Blackboard::free_entry(EntryMap::Iterator &iter) {
 	EntryBase *entry = iter->value;
 	const RID rid = entry->get_self();
 

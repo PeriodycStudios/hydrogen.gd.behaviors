@@ -15,6 +15,7 @@
 #if BLACKBOARD_VERBOSE
 #include <godot_cpp/core/print_string.hpp>
 #endif
+
 #include <functional>
 
 #include "rid_data.hpp"
@@ -25,10 +26,40 @@ using namespace godot;
 
 namespace hydrogen {
 
+namespace traits {
+
+template <typename T>
+struct convertible_info {
+	typedef false_type needs_conversion;
+	// typedef variant_compatible_type conversion_type;
+	// static constexpr T convert_to(const U x) { return x; }
+	// static constexpr U convert_from(const T x) { return x; }
+};
+
+template <typename T>
+constexpr bool convertible_info_needs_conversion_v = convertible_info<T>::needs_conversion::value;
+
+// use this handy macro to easily define convertible type information:
+#define MAKE_VARIANT_CONVERTIBLE_TYPE(type, conv_type, to_func, from_func)	\
+template <>																	\
+struct hydrogen::traits::convertible_info<type> {							\
+	typedef std::true_type needs_conversion;								\
+	typedef conv_type conversion_type;										\
+	_FORCE_INLINE_ static type convert_to(const conv_type x) {	\
+		to_func																\
+	}																		\
+																			\
+_FORCE_INLINE_ static conv_type convert_from(const type x) {		\
+		from_func															\
+	}																		\
+};
+}
+
 class Blackboard final : public RidData {
 
 	struct EntryBase : RidData {
 
+		EntryBase() = default;
 		virtual ~EntryBase() = default;
 		[[nodiscard]] virtual Variant as_variant() const {
 			return {};
@@ -75,7 +106,46 @@ class Blackboard final : public RidData {
 		}
 	};
 
-	typedef std::function<EntryBase*(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase*> &p_entries)> entry_factory;
+	template <typename T>
+	struct EntryVariantObject final : EntryData<T> {
+
+		[[nodiscard]] Variant as_variant() const override {
+			Object* conversion = this->value;
+			return Variant(conversion);
+		}
+
+		void set_from(const Variant &p_value) override {
+			Object* conversion = this->value;
+			this->value = Object::cast_to<std::remove_pointer_t<T>>(conversion);
+		}
+
+		EntryVariantObject() = default;
+		~EntryVariantObject() override = default;
+
+		[[nodiscard]] Variant::Type get_variant_type() const override {
+			return Variant::OBJECT;
+		}
+	};
+
+	template<typename T, typename U>
+	struct EntryVariantConvertable final : EntryData<T> {
+
+		[[nodiscard]] Variant as_variant() const override;
+
+		void set_from(const Variant &p_value) override;
+
+		EntryVariantConvertable() = default;
+		~EntryVariantConvertable() override = default;
+
+		[[nodiscard]] Variant::Type get_variant_type() const override {
+			return RegisteredTypeInfo<U>::get_info().variant_type;
+		}
+	};
+
+	typedef HashMap<StringName, EntryBase*> EntryMap;
+	typedef RID_PtrOwner<EntryBase> EntryOwner;
+
+	typedef std::function<EntryBase*(const StringName &p_name, EntryOwner &p_owner, EntryMap &p_entries)> entry_factory;
 
 	struct TypeInfo {
 
@@ -83,6 +153,11 @@ class Blackboard final : public RidData {
 			NONE = 0,
 			IS_REGISTERED = 1 << 0,
 			IS_VARIANT_TYPE = 1 << 1,
+			IS_OBJECT_PTR_TYPE = 1 << 2,
+			IS_REF_COUNTED = 1 << 3,
+			IS_CONVERTIBLE = 1 << 4,
+
+			IS_GD_OBJECT = IS_OBJECT_PTR_TYPE | IS_REF_COUNTED,
 		};
 
 		entry_factory factory = nullptr;
@@ -101,6 +176,10 @@ class Blackboard final : public RidData {
 
 		[[nodiscard]] _FORCE_INLINE_ bool is_registered() const { return has_flag(Flags::IS_REGISTERED); }
 		[[nodiscard]] _FORCE_INLINE_ bool is_variant_type() const { return has_flag(Flags::IS_VARIANT_TYPE); }
+		[[nodiscard]] _FORCE_INLINE_ bool is_object_ptr_type() const { return has_flag(Flags::IS_OBJECT_PTR_TYPE); }
+		[[nodiscard]] _FORCE_INLINE_ bool is_ref_counted() const { return has_flag(Flags::IS_REF_COUNTED); }
+		[[nodiscard]] _FORCE_INLINE_ bool is_gd_object() const { return has_flag(Flags::IS_GD_OBJECT); }
+		[[nodiscard]] _FORCE_INLINE_ bool is_convertible() const { return has_flag(Flags::IS_CONVERTIBLE); }
 	};
 
 	template <typename T>
@@ -122,18 +201,23 @@ class Blackboard final : public RidData {
 		typedef T registered_type;
 	};
 
-	static HashMap<int64_t, const TypeInfo*> type_infos;
-	static std::array<const TypeInfo*, GDEXTENSION_VARIANT_TYPE_VARIANT_MAX> core_variant_type_infos;
+	typedef HashMap<int64_t, const TypeInfo*> TypeInfoMap;
+	typedef std::array<const TypeInfo*, Variant::VARIANT_MAX> FallbackTable;
+
+	static TypeInfoMap type_infos;
+	static FallbackTable variant_fallbacks;
 	static const TypeInfo *ref_fallback_type_info;
 	static bool core_variants_registered;
 
-	RID_PtrOwner<EntryBase> entries_owner;
-	HashMap<StringName, EntryBase*> entries;
+
+
+	EntryOwner entries_owner;
+	EntryMap entries;
 	StringName name;
 	Blackboard *parent;
 
 	template <typename T>
-	static EntryBase* create_entry(const StringName &p_name, RID_PtrOwner<EntryBase> &p_owner, HashMap<StringName, EntryBase *> &p_entries) {
+	static EntryBase* create_entry(const StringName &p_name, EntryOwner &p_owner, EntryMap &p_entries) {
 		T* entry = memnew(T());
 		const RID rid = p_owner.make_rid(entry);
 		entry->set_self(rid);
@@ -142,136 +226,18 @@ class Blackboard final : public RidData {
 		return entry;
 	}
 
-	template <typename T>
-	static EntryBase* create_data_entry(const StringName &p_name,
-		RID_PtrOwner<EntryBase> &p_owner,
-		HashMap<StringName, EntryBase*> &p_entries) {
-		typedef typename traits::unadorned_type<T>::type type;
-		return create_entry<EntryData<type>>(p_name, p_owner, p_entries);
-	}
-
-	template<typename T>
-	static EntryBase* create_variant_entry(const StringName &p_name,
-		RID_PtrOwner<EntryBase> &p_owner,
-		HashMap<StringName, EntryBase*> &p_entries) {
-		typedef typename traits::unadorned_type<T>::type type;
-		return create_entry<EntryVariant<type>>(p_name, p_owner, p_entries);
-	}
-
-	template<typename T, typename U>
-	static EntryBase* create_variant_converted_entry(const StringName &p_name,
-		RID_PtrOwner<EntryBase> &p_owner,
-		HashMap<StringName, EntryBase*> &p_entries) {
-		typedef typename traits::unadorned_type<T>::type type;
-		static_assert(traits::is_variant_type<U>::value, "Convertable type must be a variant type");
-		return create_entry<EntryVariantConvertable<type, U>>(p_name, p_owner, p_entries);
-	}
-
 	bool validate_parent(const Blackboard *p_parent) const;
-	void free_entry(HashMap<StringName, EntryBase *>::Iterator &iter);
+	void free_entry(EntryMap::Iterator &iter);
 
 	template<typename T>
-	bool find_entry(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const;
+	bool find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, bool p_check_parents) const;
 
 public:
-
-	template<typename T, typename U>
-	struct EntryVariantConvertable final : EntryData<T> {
-
-		[[nodiscard]] Variant as_variant() const override;
-
-		void set_from(const Variant &p_value) override;
-
-		EntryVariantConvertable() = default;
-		~EntryVariantConvertable() override = default;
-
-		[[nodiscard]] Variant::Type get_variant_type() const override {
-			return RegisteredTypeInfo<U>::get_info().variant_type;
-		}
-	};
 
 	static void register_core_variant_types();
 
 	template <typename T>
-	static void register_type() {
-		typedef typename traits::unadorned_type<T>::type type;
-		if (RegisteredTypeInfo<type>::is_registered()) {
-			return;
-		}
-
-		TypeInfo type_info = {};
-		type_info.raw_name = std::string(type_name<type>());
-		String name = "";
-
-		if constexpr (traits::is_variant_type<type>::value) {
-
-			type_info.factory = create_variant_entry<type>;
-			type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
-			type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
-
-			if constexpr (traits::is_gd_ref_helper<type>::value) {
-				typedef std::remove_pointer_t<typename traits::extract_ref_counted_type<type>::type> helper_type;
-				name = helper_type::get_class_static();
-			}
-			else if constexpr (traits::is_gd_object_type<type>::value) {
-				name = std::remove_pointer_t<type>::get_class_static();
-			}
-#if BLACKBOARD_VERBOSE
-			print_line("Registering variant type: ", type_info.variant_type);
-#endif
-		}
-		else {
-			type_info.factory = create_data_entry<type>;
-		}
-
-		if (name == "") {
-			name = String(type_info.raw_name.c_str());
-		}
-
-		type_info.type_key = name.hash();
-
-		type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
-
-		RegisteredTypeInfo<type>::init(type_info);
-		type_infos[type_info.type_key] = RegisteredTypeInfo<type>::get_info_ptr();
-#if BLACKBOARD_VERBOSE
-		print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
-		print_line("");
-#endif
-	}
-
-	template <typename T, typename U>
-	static void register_convertable_type() {
-		static_assert(!std::is_same_v<T, Variant>, "Cannot register Variant as a convertable type.");
-		static_assert(!std::is_same_v<U, Variant>, "Cannot register Variant as a conversion type.");
-		static_assert(traits::is_variant_type<U>::value, "Conversion type MUST be directly compatible with Variant");
-
-		typedef typename traits::unadorned_type<T>::type convertable_type;
-		typedef typename traits::unadorned_type<U>::type conversion_type;
-		if (RegisteredTypeInfo<convertable_type>::is_registered()) {
-			return;
-		}
-
-		TypeInfo type_info = {};
-		type_info.raw_name = std::string(type_name<convertable_type>());
-		const auto name = String(type_info.raw_name.c_str());
-		type_info.type_key = name.hash();
-
-		type_info.factory = create_variant_converted_entry<convertable_type, conversion_type>;
-		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<conversion_type>::VARIANT_TYPE);
-		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
-		type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
-#if BLACKBOARD_VERBOSE
-		print_line("Registering with conversion type: ", type_info.variant_type);
-#endif
-		RegisteredTypeInfo<convertable_type>::init(type_info);
-		type_infos[type_info.type_key] = RegisteredTypeInfo<convertable_type>::get_info_ptr();
-
-#if BLACKBOARD_VERBOSE
-		print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
-		print_line("");
-#endif
-	}
+	static void register_type();
 
 	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
 	~Blackboard();
@@ -306,9 +272,100 @@ public:
 	[[nodiscard]] bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
 };
 
+template <typename T>
+void Blackboard::register_type() {
+
+	typedef traits::resolved_type_t<T> type;
+	static_assert(!std::is_same_v<type, Variant>, "Cannot register Variant type itself.");
+	if (RegisteredTypeInfo<type>::is_registered()) {
+		return;
+	}
+
+	typedef std::remove_pointer_t<type> without_ptr;
+	if constexpr (traits::is_ref_counted_v<without_ptr>) {
+		register_type<Ref<without_ptr>>();
+		return;
+	}
+
+	if constexpr (!std::is_pointer_v<type> && traits::is_gd_object_type_v<type>) {
+		register_type<type*>();
+		return;
+	}
+
+	TypeInfo type_info = {};
+	type_info.raw_name = std::string(type_name<type>());
+	const auto name = String(type_info.raw_name.c_str());
+
+	if constexpr (traits::convertible_info_needs_conversion_v<type>) {
+		typedef typename traits::convertible_info<type>::conversion_type conversion_type;
+		
+		static_assert(!std::is_same_v<type, Variant>, "Cannot register Variant as a convertable type.");
+		static_assert(!std::is_same_v<conversion_type, Variant>, "Cannot register Variant as a conversion type.");
+		static_assert(traits::is_variant_type<conversion_type>::value, "Conversion type MUST be directly compatible with Variant");
+
+		type_info.type_key = name.hash();
+		type_info.factory = create_entry<EntryVariantConvertable<type, conversion_type>>;
+		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<conversion_type>::VARIANT_TYPE);
+		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
+		type_info.enable_flag(TypeInfo::Flags::IS_CONVERTIBLE);
+	}
+	else if constexpr (traits::is_variant_type_v<type>) {
+		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
+		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
+
+		if constexpr (traits::is_exactly_gd_object_v<without_ptr>) {
+			type_info.type_key = Object::get_class_static().hash();
+			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
+			type_info.factory = create_entry<EntryVariant<Object*>>;
+		}
+		else if constexpr (traits::is_gd_object_type_v<without_ptr>) {
+			type_info.type_key = without_ptr::get_class_static().hash();
+			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
+			type_info.factory = create_entry<EntryVariantObject<type>>;
+		}
+		else if constexpr (traits::is_gd_ref_helper_v<type>) {
+			typedef traits::extract_ref_counted_type_t<type> ref_counted_type;
+			type_info.type_key = ref_counted_type::get_class_static().hash();
+			type_info.enable_flag(TypeInfo::Flags::IS_REF_COUNTED);
+			type_info.factory = create_entry<EntryVariant<type>>;
+		}
+		else {
+			type_info.type_key = name.hash();
+			type_info.factory = create_entry<EntryVariant<type>>;
+		}
+	}
+	else {
+		type_info.type_key = name.hash();
+		type_info.factory = create_entry<EntryData<type>>;
+	}
+
+	type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
+	RegisteredTypeInfo<T>::init(type_info);
+	type_infos[type_info.type_key] = RegisteredTypeInfo<T>::get_info_ptr();
+
+#if BLACKBOARD_VERBOSE
+	print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
+	if (type_info.variant_type != Variant::NIL) {
+		const String variant_name = Variant::get_type_name(type_info.variant_type);
+		print_line("- Type associated with: ", variant_name);
+		if (type_info.is_convertible()) {
+			print_line("- Is Convertible");
+		}
+		if (type_info.is_gd_object()) {
+			if (type_info.is_object_ptr_type()) {
+				print_line("- Is Object pointer type");
+			}
+			if (type_info.is_ref_counted()) {
+				print_line("- Is Ref-Counted");
+			}
+		}
+	}
+	print_line("");
+#endif
+}
 
 template <>
-inline bool Blackboard::find_entry<Variant>(const StringName &p_name, HashMap<StringName, EntryBase *>::ConstIterator &p_out_result, bool p_check_parents) const {
+inline bool Blackboard::find_entry<Variant>(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		p_out_result = iter;
@@ -331,9 +388,14 @@ inline bool Blackboard::find_entry<Variant>(const StringName &p_name, HashMap<St
 	return false;
 }
 
+template <>
+inline bool Blackboard::find_entry<const Variant>(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
+	return find_entry<Variant>(p_name, p_out_result, p_check_parents);
+}
+
 template <typename T>
-bool Blackboard::find_entry(const StringName &p_name, HashMap<StringName, EntryBase*>::ConstIterator &p_out_result, const bool p_check_parents) const {
-	typedef typename traits::unadorned_type<T>::type type;
+bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
+	typedef traits::resolved_type_t<T> type;
 	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
 	if (unlikely(!type_info.is_registered())) {
 		return false;
@@ -370,49 +432,59 @@ bool Blackboard::find_entry(const StringName &p_name, HashMap<StringName, EntryB
 }
 
 template <>
-inline bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, bool p_check_parents) const {
-
-	HashMap<StringName, EntryBase *>::ConstIterator iter;
+inline bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, const bool p_check_parents) const {
+	EntryMap::ConstIterator iter;
 	if (unlikely(!find_entry<Variant>(p_name, iter, p_check_parents))) {
 		return false;
 	}
 
-	const EntryBase *result = iter->value;
-	p_out_result = result->as_variant();
+	const EntryBase *entry = iter->value;
+	p_out_result = entry->as_variant();
 	return true;
 }
 
 template <typename T>
 bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const bool p_check_parents) const {
-	HashMap<StringName, EntryBase *>::ConstIterator iter;
-	if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
+	static_assert(!std::is_const_v<T>, "Can't use const types with try_get_entry.");
+	if constexpr (!std::is_const_v<T>) {
+		EntryMap::ConstIterator iter;
+		if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
+			return false;
+		}
+
+		typedef traits::resolved_type_t<T> type;
+		auto *entry = dynamic_cast<EntryData<type> *>(iter->value);
+		p_out_result = entry->value;
+		return true;
+	}
+	else {
 		return false;
 	}
-
-	typedef typename traits::unadorned_type<T>::type type;
-	auto *result = dynamic_cast<EntryData<type> *>(iter->value);
-	p_out_result = result->value;
-	return true;
 }
 
 template <>
-inline Variant Blackboard::get_entry(const StringName &p_name, const Variant &p_default, bool p_check_parents ) const {
+inline Variant Blackboard::get_entry<Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents ) const {
 	Variant result = p_default;
 	try_get_entry<Variant>(p_name, result, p_check_parents);
 	return result;
 }
 
+template <>
+inline const Variant Blackboard::get_entry<const Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents) const {
+	return get_entry<Variant>(p_name, p_default, p_check_parents);
+}
+
 template <typename T>
 T Blackboard::get_entry(const StringName &p_name, const T &p_default, const bool p_check_parents) const {
-	T result = p_default;
-	try_get_entry<T>(p_name, result, p_check_parents);
+	typedef traits::resolved_type_t<T> type;
+	type result = p_default;
+	try_get_entry<type>(p_name, result, p_check_parents);
 	return result;
 }
 
 template <>
 inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value) {
-
-	const auto variant_type =p_value.get_type();
+	const auto variant_type = p_value.get_type();
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
@@ -458,7 +530,7 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 		if (likely(type_info_iter == type_infos.end())) {
 			const Ref<RefCounted> ref = p_value;
 			type_info = ref.is_null() ?
-			core_variant_type_infos[Variant::Type::OBJECT] :
+			variant_fallbacks[Variant::Type::OBJECT] :
 			ref_fallback_type_info;
 		}
 		else {
@@ -466,21 +538,26 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 		}
 	}
 	else {
-		type_info = core_variant_type_infos[variant_type];
+		type_info = variant_fallbacks[variant_type];
 	}
 
 	EntryBase *entry = type_info->factory(p_name, entries_owner, entries);
 	entry->set_from(p_value);
 }
 
+template <>
+inline void Blackboard::set_entry<const Variant>(const StringName& p_name, const Variant &p_value) {
+	set_entry<Variant>(p_name, p_value);
+}
+
 template <typename T>
 void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
-
-	typedef typename traits::unadorned_type<T>::type type;
+	typedef traits::resolved_type_t<T> type;
 	if (unlikely(!RegisteredTypeInfo<type>::is_registered())) {
 		register_type<T>();
 	}
 
+	typedef traits::resolved_type_t<T> type;
 	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
 
 	auto iter = entries.find(p_name);
@@ -497,61 +574,23 @@ void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
 	new_entry->value = p_value;
 }
 
-
-template <>
-_FORCE_INLINE_ void Blackboard::register_type<Variant>() {}
-
 template <typename T>
 Blackboard::TypeInfo Blackboard::RegisteredTypeInfo<T>::type_info = TypeInfo();
 
-template <>
-inline Variant Blackboard::EntryVariantConvertable<char16_t, int64_t>::as_variant() const {
-	int64_t conversion = this->value;
-	return {conversion};
-}
-
-template <>
-inline void Blackboard::EntryVariantConvertable<char16_t, int64_t>::set_from(const Variant &p_value) {
-	const int64_t conversion = p_value;
-	this->value = static_cast<char16_t>(conversion);
-}
-
-template <>
-inline Variant Blackboard::EntryVariantConvertable<char32_t, int64_t>::as_variant() const {
-	int64_t conversion = this->value;
-	return {conversion};
-}
-
-template <>
-inline void Blackboard::EntryVariantConvertable<char32_t, int64_t>::set_from(const Variant &p_value) {
-	const int64_t conversion = p_value;
-	this->value = static_cast<char32_t>(conversion);
-}
-
-template <>
-inline Variant Blackboard::EntryVariantConvertable<ObjectID, int64_t>::as_variant() const {
-	const int64_t conversion = this->value;
-	return {conversion};
-}
-
-template <>
-inline void Blackboard::EntryVariantConvertable<ObjectID, int64_t>::set_from(const Variant &p_value) {
-	const int64_t conversion = p_value;
-	this->value = conversion;
-}
-
-
 template <typename T, typename U>
 Variant Blackboard::EntryVariantConvertable<T, U>::as_variant() const {
-	U conversion = this->value;
+	U conversion = traits::convertible_info<T>::convert_from(this->value);
 	return Variant(conversion);
 }
 
 template <typename T, typename U>
 void Blackboard::EntryVariantConvertable<T, U>::set_from(const Variant &p_value) {
-	U conversion = p_value;
-	this->value = conversion;
+	this->value = traits::convertible_info<T>::convert_to(p_value);
 }
+
+MAKE_VARIANT_CONVERTIBLE_TYPE(char16_t, int64_t, return static_cast<char16_t>(x);, return x;)
+MAKE_VARIANT_CONVERTIBLE_TYPE(char32_t, int64_t, return static_cast<char32_t>(x);, return x;)
+MAKE_VARIANT_CONVERTIBLE_TYPE(ObjectID, uint64_t, return ObjectID(x);, return x.operator uint64_t();)
 
 
 } //namespace hydrogen

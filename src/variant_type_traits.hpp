@@ -7,7 +7,6 @@
 using namespace godot;
 
 namespace hydrogen::traits {
-
 using namespace std;
 
 template <typename T, typename = void>
@@ -15,6 +14,9 @@ struct is_ref_counted : false_type {};
 
 template <typename T>
 struct is_ref_counted<T, enable_if_t<is_base_of_v<RefCounted, T>, void>> : true_type {};
+
+template <typename T>
+constexpr bool is_ref_counted_v = is_ref_counted<T>::value;
 
 template <typename T, typename = void>
 struct is_gd_ref_helper : false_type {};
@@ -30,20 +32,40 @@ struct is_gd_ref_helper<T,
 		>
 	, void>> : true_type {};
 
+template <typename T>
+constexpr bool is_gd_ref_helper_v = is_gd_ref_helper<T>::value;
+
 template <typename T, typename = void>
 struct extract_ref_counted_type { typedef T type; };
 
 template <typename T>
 struct extract_ref_counted_type<T, enable_if_t<is_gd_ref_helper<T>::value, void>> {
-	typedef decltype(declval<T>().ptr()) type;
+	typedef std::remove_pointer_t<decltype(declval<T>().ptr())> type;
 };
+
+template <typename T>
+using extract_ref_counted_type_t = typename extract_ref_counted_type<T>::type;
+
+template <typename T>
+struct resolved_type {
+	typedef remove_const_t<remove_reference_t<T>> type;
+};
+
+template <typename T>
+using resolved_type_t = typename resolved_type<T>::type;
 
 template <typename T, typename = void>
 struct is_gd_object_type : false_type {};
 
 template <typename T>
 struct is_gd_object_type<T,
-	enable_if_t<is_base_of_v<Object, remove_pointer_t<T>>, void>> : true_type {};
+	enable_if_t<
+		is_base_of_v<Object, resolved_type_t<T>> &&
+			!is_base_of_v<RefCounted, resolved_type_t<T>>
+>> : true_type {};
+
+template <typename T>
+constexpr bool is_gd_object_type_v = is_gd_object_type<T>::value;
 
 template <typename T, typename = void>
 struct is_variant_type : false_type {};
@@ -53,9 +75,26 @@ struct is_variant_type<T,
 	void_t<decltype(GetTypeInfo<T>::VARIANT_TYPE)>> : true_type {};
 
 template <typename T>
-struct unadorned_type {
-	typedef remove_cv_t<remove_reference_t<T>> type;
-};
+constexpr bool is_variant_type_v = is_variant_type<T>::value;
+
+template <typename T>
+struct is_exactly_gd_object : false_type {};
+
+template <>
+struct is_exactly_gd_object<Object> : true_type {};
+
+template <>
+struct is_exactly_gd_object<const Object> : true_type {};
+
+template <>
+struct is_exactly_gd_object<Object *> : true_type {};
+
+template <>
+struct is_exactly_gd_object<const Object *> : true_type {};
+
+template <typename T>
+constexpr bool is_exactly_gd_object_v = is_exactly_gd_object<T>::value;
+
 
 } //namespace hydrogen::traits
 

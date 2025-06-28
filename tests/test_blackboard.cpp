@@ -16,24 +16,84 @@ namespace hydrogen::test {
 using namespace godot;
 
 template<typename T>
-void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
-	blackboard->set_entry(p_name, p_value);
+void test_simple_get_set(Blackboard &blackboard, const StringName &p_name, T p_value) {
+	blackboard.set_entry(p_name, p_value);
+	CHECK(blackboard.has_entry(p_name));
 
-	T result;
-	CHECK(blackboard->try_get_entry<T>(p_name, result));
+	typedef traits::resolved_type_t<T> type;
+
+	if constexpr (!std::is_const_v<T>) {
+		type result;
+		CHECK(blackboard.try_get_entry<T>(p_name, result));
+		CHECK(result == p_value);
+	}
+
+	CHECK(blackboard.get_entry<T>(p_name) == p_value);
+
+	if constexpr (traits::is_variant_type_v<T>) {
+		blackboard.erase_entry(p_name);
+		CHECK_FALSE(blackboard.has_entry(p_name));
+
+		Variant v1 = p_value;
+		blackboard.set_entry(p_name, v1);
+		CHECK(blackboard.has_entry(p_name));
+
+		Variant v2 = blackboard.get_entry<Variant>(p_name);
+		type result = v2;
+		CHECK(result == p_value);
+	}
+	else {
+		blackboard.erase_entry(p_name);
+		CHECK_FALSE(blackboard.has_entry(p_name));
+	}
+}
+
+template<typename T, typename U>
+void test_convertable_get_set(Blackboard &blackboard, const StringName &p_name, T p_value) {
+	static_assert(traits::is_variant_type_v<U>, "U must have a supported Variant conversion.");
+
+	blackboard.set_entry(p_name, p_value);
+	CHECK(blackboard.has_entry(p_name));
+
+	typedef traits::resolved_type_t<T> type;
+	typedef traits::resolved_type_t<U> conversion_type;
+
+	if constexpr (!std::is_const_v<T>) {
+		type result;
+		CHECK(blackboard.try_get_entry<T>(p_name, result));
+		CHECK(result == p_value);
+	}
+
+	CHECK(blackboard.get_entry<T>(p_name) == p_value);
+	blackboard.erase_entry(p_name);
+	CHECK_FALSE(blackboard.has_entry(p_name));
+
+	conversion_type conversion = p_value;
+	Variant v1 = conversion;
+	blackboard.set_entry(p_name, v1);
+
+	CHECK(blackboard.has_entry(p_name));
+
+	Variant v2 = blackboard.get_entry<Variant>(p_name);
+	conversion_type conversion_result = v2;
+	type result = conversion_result;
 	CHECK(result == p_value);
-	CHECK(blackboard->get_entry<T>(p_name) == p_value);
+
+	blackboard.erase_entry(p_name);
+	CHECK_FALSE(blackboard.has_entry(p_name));
 }
 
 #define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(blackboard, #type, value);
+#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) test_convertable_get_set<type, convert_type>(blackboard, #type, value);
 
 TEST_CASE("[Blackboard] Simple Set and Get") {
 
-	Blackboard *blackboard = memnew(Blackboard("TestBlackboard"));
-	REQUIRE(blackboard != nullptr);
+	Blackboard blackboard = Blackboard("TestBlackboard");
 
 	TEST_SIMPLE_GET_SET(bool, true)
+	TEST_SIMPLE_GET_SET(const bool, false)
 	TEST_SIMPLE_GET_SET(int8_t, std::numeric_limits<int8_t>::min())
+	TEST_SIMPLE_GET_SET(const int8_t, std::numeric_limits<int8_t>::max())
 	TEST_SIMPLE_GET_SET(uint8_t, std::numeric_limits<uint8_t>::max())
 	TEST_SIMPLE_GET_SET(int16_t, std::numeric_limits<int16_t>::min())
 	TEST_SIMPLE_GET_SET(uint16_t, std::numeric_limits<uint16_t>::max())
@@ -42,8 +102,8 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	TEST_SIMPLE_GET_SET(int64_t, std::numeric_limits<int64_t>::min())
 	TEST_SIMPLE_GET_SET(uint64_t, std::numeric_limits<uint64_t>::max())
 
-	// TEST_SIMPLE_GET_SET(char16_t, std::numeric_limits<char>::min())
-	// TEST_SIMPLE_GET_SET(char32_t, std::numeric_limits<char>::min())
+	TEST_CONVERTABLE_GET_SET(char16_t, int64_t, std::numeric_limits<char>::min())
+	TEST_CONVERTABLE_GET_SET(char32_t, int64_t, std::numeric_limits<char>::min())
 
 	TEST_SIMPLE_GET_SET(float, std::numeric_limits<float>::max())
 	TEST_SIMPLE_GET_SET(double, std::numeric_limits<double>::max())
@@ -80,7 +140,7 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 
 	TEST_SIMPLE_GET_SET(RID, rid)
 	TEST_SIMPLE_GET_SET(Object*, obj)
-	// TEST_SIMPLE_GET_SET(const Object*, obj_const)
+	TEST_SIMPLE_GET_SET(const Object*, obj_const)
 	Callable callable = Callable::create(json, "get_data");
 	TEST_SIMPLE_GET_SET(Callable, callable)
 
@@ -185,7 +245,6 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	// TEST_SIMPLE_GET_SET(Node*, node)
 
 	signal.disconnect(callable);
-	memdelete(blackboard);
 	memdelete(node);
 }
 
