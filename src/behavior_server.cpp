@@ -28,7 +28,7 @@ void _BehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("agent_create"), &_BehaviorServer::agent_create);
 
 #if TESTS_ENABLED
-	ClassDB::bind_static_method("BehaviorServer", D_METHOD("run_tests"), +[] { tests::behavior_test_runner(); });
+	ClassDB::bind_method( D_METHOD("run_tests"), &_BehaviorServer::run_tests);
 #endif
 }
 
@@ -50,6 +50,10 @@ RID _BehaviorServer::state_machine_create() {
 
 RID _BehaviorServer::agent_create() {
 	return BehaviorServer::get_singleton()->agent_create();
+}
+
+void _BehaviorServer::run_tests() {
+	tests::behavior_test_runner();
 }
 
 }

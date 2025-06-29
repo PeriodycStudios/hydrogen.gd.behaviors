@@ -129,15 +129,17 @@ class Blackboard final : public RidData {
 
 	template <typename T>
 	struct EntryVariantObject final : EntryData<T> {
+		typedef traits::resolve_object_ptr_type_t<T> convert_type;
+		typedef std::remove_pointer_t<T> without_ptr;
 
 		[[nodiscard]] Variant as_variant() const override {
-			Object* conversion = this->value;
+			convert_type conversion = this->value;
 			return Variant(conversion);
 		}
 
 		void set_from(const Variant &p_value) override {
-			Object* conversion = p_value;
-			this->value = Object::cast_to<std::remove_pointer_t<T>>(conversion);
+			convert_type conversion = p_value;
+			this->value = Object::cast_to<without_ptr>(conversion);
 		}
 
 		EntryVariantObject() = default;

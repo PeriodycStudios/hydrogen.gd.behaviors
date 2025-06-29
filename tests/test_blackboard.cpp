@@ -23,36 +23,32 @@ void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_v
 		T result;
 		CHECK(blackboard->try_get_entry<T>(p_name, result));
 		CHECK(result == p_value);
-		// print_line("Try-get result: ", result);
 	}
 
 	CHECK(blackboard->get_entry<T>(p_name) == p_value);
-	// print_line("Get result: ", blackboard->get_entry<T>(p_name));
 
-	if constexpr (traits::is_exactly_gd_object_v<T>) {
+	if constexpr (
+		!traits::is_exactly_gd_object_v<T> &&
+		traits::is_variant_type_v<T> &&
+		std::is_pointer_v<T> &&
+		traits::is_gd_object_type_v<std::remove_pointer_t<T>>
+		) {
+
 		blackboard->erase_entry(p_name);
 		CHECK_FALSE(blackboard->has_entry(p_name));
 
-		Variant v1 = p_value;
-		blackboard->set_entry(p_name, v1);
-		CHECK(blackboard->has_entry(p_name));
+		typedef traits::resolve_object_ptr_type_t<T> obj_ptr_t;
+		typedef std::remove_pointer_t<obj_ptr_t> obj_without_ptr;
+		typedef std::remove_pointer_t<T> without_ptr;
 
-		Variant v2 = blackboard->get_entry<Variant>(p_name);
-		T result = v2;
-		CHECK(result == p_value);
-	}
-	else if constexpr (traits::is_variant_type_v<T> && std::is_pointer_v<T> && traits::is_gd_object_type_v<std::remove_pointer_t<T>>) {
-		blackboard->erase_entry(p_name);
-		CHECK_FALSE(blackboard->has_entry(p_name));
-
-		Object* obj = Object::cast_to<Object>(p_value);
+		obj_ptr_t obj = Object::cast_to<obj_without_ptr>(p_value);
 		Variant v1 = obj;
 		blackboard->set_entry(p_name, v1);
 		CHECK(blackboard->has_entry(p_name));
 
 		Variant v2 = blackboard->get_entry<Variant>(p_name);
-		Object * obj2 = v2;
-		T result = Object::cast_to<std::remove_pointer_t<T>>(obj);
+		obj_ptr_t obj2 = v2;
+		T result = Object::cast_to<without_ptr>(obj);
 		CHECK(result == p_value);
 	}
 	else if constexpr (traits::is_variant_type_v<T>) {
@@ -105,13 +101,9 @@ void test_convertable_get_set(Blackboard *blackboard, const StringName &p_name, 
 	CHECK_FALSE(blackboard->has_entry(p_name));
 }
 
-#define TEST_SIMPLE_GET_SET(type, value) SUBCASE(#type) {	\
-	test_simple_get_set<type>(blackboard, #type, value);	\
-}
+#define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(blackboard, #type, value);
 
-#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) SUBCASE(#type) {		\
-	test_convertable_get_set<type, convert_type>(blackboard, #type, value); 	\
-}
+#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) test_convertable_get_set<type, convert_type>(blackboard, #type, value);
 
 TEST_CASE("[Blackboard] Simple Set and Get") {
 
@@ -156,7 +148,6 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	TEST_SIMPLE_GET_SET(NodePath, NodePath("../Sibling:color:r"))
 
 	Ref<JSON> json = Ref(memnew(JSON));
-	print_line(" Just created json ref: ", json->get_reference_count());
 	json->parse("{\"alpha\": 1}");
 	RID rid = json->get_rid();
 
@@ -269,6 +260,9 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	TEST_SIMPLE_GET_SET(Ref<JSON>, json)
 	Blackboard::register_type<Node*>();
 	TEST_SIMPLE_GET_SET(Node*, node)
+
+	const Node* const_node = node;
+	TEST_SIMPLE_GET_SET(const Node*, const_node)
 
 	memdelete(blackboard);
 	memdelete(node);

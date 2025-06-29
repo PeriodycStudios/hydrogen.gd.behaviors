@@ -95,10 +95,25 @@ struct is_exactly_gd_object<const Object *> : true_type {};
 template <typename T>
 constexpr bool is_exactly_gd_object_v = is_exactly_gd_object<T>::value;
 
-template <typename T>
-struct is_const_pointer {
-	static constexpr bool value = is_pointer_v<T> && is_const_v<decltype(std::declval<T>())>;
+template <typename T, typename = void>
+struct resolve_object_ptr_type {
+	typedef Object * type;
 };
+
+template <typename T>
+struct resolve_object_ptr_type<T,
+	std::enable_if_t<
+		is_pointer_v<T> &&
+		is_base_of_v<Object, remove_pointer_t<T>> &&
+		is_const_v<remove_pointer_t<T>>
+>> : std::true_type {
+
+	typedef const Object * type;
+};
+
+template <typename T>
+using resolve_object_ptr_type_t = typename resolve_object_ptr_type<T>::type;
+
 
 
 } //namespace hydrogen::traits

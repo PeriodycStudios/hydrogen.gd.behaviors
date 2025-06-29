@@ -68,6 +68,8 @@ public:
 	RID behavior_tree_create();
 	RID state_machine_create();
 	RID agent_create();
+
+	void run_tests();
 };
 
 }
