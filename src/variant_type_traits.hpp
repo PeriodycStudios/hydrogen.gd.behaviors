@@ -95,6 +95,11 @@ struct is_exactly_gd_object<const Object *> : true_type {};
 template <typename T>
 constexpr bool is_exactly_gd_object_v = is_exactly_gd_object<T>::value;
 
+template <typename T>
+struct is_const_pointer {
+	static constexpr bool value = is_pointer_v<T> && is_const_v<decltype(std::declval<T>())>;
+};
+
 
 } //namespace hydrogen::traits
 

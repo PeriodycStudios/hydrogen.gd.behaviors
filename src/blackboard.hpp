@@ -5,8 +5,6 @@
 #ifndef BLACKBOARD_HPP
 #define BLACKBOARD_HPP
 
-#define BLACKBOARD_VERBOSE 1
-
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
@@ -71,20 +69,39 @@ class Blackboard final : public RidData {
 		[[nodiscard]] virtual Variant::Type get_variant_type() const {
 			return Variant::Type::NIL;
 		}
+		[[nodiscard]] virtual int64_t get_object_class_key() const = 0;
+
+		[[nodiscard]] virtual String get_type_name() const = 0;
+
+		[[nodiscard]] virtual String get_entry_type_name() const {
+			return "EntryBase";
+		}
 	};
 
 	template<typename  T>
 	struct EntryData : EntryBase {
-		T value;
+		typedef T type;
+		type value;
 
 		[[nodiscard]] int64_t get_type_key() const override {
-			return RegisteredTypeInfo<T>::get_info().type_key;
+			return RegisteredTypeInfo<type>::get_info().type_key;
+		}
+
+		[[nodiscard]] int64_t get_object_class_key() const override {
+			return RegisteredTypeInfo<type>::get_info().object_class_key;
 		}
 
 		EntryData() = default;
 		~EntryData() override = default;
 
-		typedef T type;
+		[[nodiscard]] String get_type_name() const override {
+			const std::string raw_name = RegisteredTypeInfo<type>::get_info().raw_name;
+			return {raw_name.c_str()};
+		}
+
+		[[nodiscard]] String get_entry_type_name() const override {
+			return "EntryData";
+		}
 	};
 
 	template<typename T>
@@ -104,6 +121,10 @@ class Blackboard final : public RidData {
 		[[nodiscard]] Variant::Type get_variant_type() const override {
 			return RegisteredTypeInfo<T>::get_info().variant_type;
 		}
+
+		[[nodiscard]] String get_entry_type_name() const override {
+			return "EntryVariant";
+		}
 	};
 
 	template <typename T>
@@ -115,7 +136,7 @@ class Blackboard final : public RidData {
 		}
 
 		void set_from(const Variant &p_value) override {
-			Object* conversion = this->value;
+			Object* conversion = p_value;
 			this->value = Object::cast_to<std::remove_pointer_t<T>>(conversion);
 		}
 
@@ -124,6 +145,10 @@ class Blackboard final : public RidData {
 
 		[[nodiscard]] Variant::Type get_variant_type() const override {
 			return Variant::OBJECT;
+		}
+
+		[[nodiscard]] String get_entry_type_name() const override {
+			return "EntryVariantObject";
 		}
 	};
 
@@ -139,6 +164,10 @@ class Blackboard final : public RidData {
 
 		[[nodiscard]] Variant::Type get_variant_type() const override {
 			return RegisteredTypeInfo<U>::get_info().variant_type;
+		}
+
+		[[nodiscard]] String get_entry_type_name() const override {
+			return "EntryVariantConvertable";
 		}
 	};
 
@@ -164,6 +193,7 @@ class Blackboard final : public RidData {
 		std::string raw_name; // any attempt to use String or StringName here crashes the plugin on load!
 		Variant::Type variant_type = Variant::Type::NIL;
 		int64_t type_key = 0;
+		int64_t object_class_key = 0;
 		Flags flags = Flags::NONE;
 
 		[[nodiscard]] _FORCE_INLINE_ bool has_flag(const Flags p_flags) const {
@@ -205,11 +235,10 @@ class Blackboard final : public RidData {
 	typedef std::array<const TypeInfo*, Variant::VARIANT_MAX> FallbackTable;
 
 	static TypeInfoMap type_infos;
+	static TypeInfoMap object_class_infos;
 	static FallbackTable variant_fallbacks;
 	static const TypeInfo *ref_fallback_type_info;
 	static bool core_variants_registered;
-
-
 
 	EntryOwner entries_owner;
 	EntryMap entries;
@@ -295,6 +324,7 @@ void Blackboard::register_type() {
 	TypeInfo type_info = {};
 	type_info.raw_name = std::string(type_name<type>());
 	const auto name = String(type_info.raw_name.c_str());
+	type_info.type_key = name.hash();
 
 	if constexpr (traits::convertible_info_needs_conversion_v<type>) {
 		typedef typename traits::convertible_info<type>::conversion_type conversion_type;
@@ -303,7 +333,6 @@ void Blackboard::register_type() {
 		static_assert(!std::is_same_v<conversion_type, Variant>, "Cannot register Variant as a conversion type.");
 		static_assert(traits::is_variant_type<conversion_type>::value, "Conversion type MUST be directly compatible with Variant");
 
-		type_info.type_key = name.hash();
 		type_info.factory = create_entry<EntryVariantConvertable<type, conversion_type>>;
 		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<conversion_type>::VARIANT_TYPE);
 		type_info.enable_flag(TypeInfo::Flags::IS_VARIANT_TYPE);
@@ -314,23 +343,22 @@ void Blackboard::register_type() {
 		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
 
 		if constexpr (traits::is_exactly_gd_object_v<without_ptr>) {
-			type_info.type_key = Object::get_class_static().hash();
+			type_info.object_class_key = Object::get_class_static().hash();
 			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
-			type_info.factory = create_entry<EntryVariant<Object*>>;
+			type_info.factory = create_entry<EntryVariant<type>>;
 		}
 		else if constexpr (traits::is_gd_object_type_v<without_ptr>) {
-			type_info.type_key = without_ptr::get_class_static().hash();
+			type_info.object_class_key = without_ptr::get_class_static().hash();
 			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
 			type_info.factory = create_entry<EntryVariantObject<type>>;
 		}
 		else if constexpr (traits::is_gd_ref_helper_v<type>) {
 			typedef traits::extract_ref_counted_type_t<type> ref_counted_type;
-			type_info.type_key = ref_counted_type::get_class_static().hash();
+			type_info.object_class_key = ref_counted_type::get_class_static().hash();
 			type_info.enable_flag(TypeInfo::Flags::IS_REF_COUNTED);
 			type_info.factory = create_entry<EntryVariant<type>>;
 		}
 		else {
-			type_info.type_key = name.hash();
 			type_info.factory = create_entry<EntryVariant<type>>;
 		}
 	}
@@ -341,7 +369,10 @@ void Blackboard::register_type() {
 
 	type_info.enable_flag(TypeInfo::Flags::IS_REGISTERED);
 	RegisteredTypeInfo<T>::init(type_info);
-	type_infos[type_info.type_key] = RegisteredTypeInfo<T>::get_info_ptr();
+	type_infos[type_info.type_key] = RegisteredTypeInfo<type>::get_info_ptr();
+	if (type_info.object_class_key != 0) {
+		object_class_infos[type_info.object_class_key] = RegisteredTypeInfo<type>::get_info_ptr();
+	}
 
 #if BLACKBOARD_VERBOSE
 	print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
@@ -488,32 +519,41 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
+		// print_line("[Variant] Found entry.");
 		EntryBase *existing_entry = iter->value;
 
 		if (unlikely(p_value.get_type() == Variant::NIL)) {
+			// print_line("[Variant] Type is nil, deleting entry.");
 			free(existing_entry);
 			return;
 		}
 
 		if (unlikely(existing_entry->get_variant_type() == Variant::OBJECT)) {
-			const int64_t existing_type_key = existing_entry->get_type_key();
+			// print_line("[Variant] type is object, attempting resolve");
+			const int64_t existing_type_key = existing_entry->get_object_class_key();
+			// print_line("Existing Object class key: ", existing_type_key);
 			const Object *incoming_obj = p_value;
-			const String incoming_class_type = incoming_obj->get_class();
-			const int64_t incoming_type_key = incoming_class_type.hash();
+			const String incoming_class_name = incoming_obj->get_class();
+			const int64_t incoming_class_key = incoming_class_name.hash();
 
-			if (likely(existing_type_key == incoming_type_key)) {
+			// print_line("Incoming: ", incoming_class_name, " ", incoming_class_key);
+
+			if (likely(existing_type_key == incoming_class_key)) {
+				// print_line("[Variant] Same type, setting.");
 				existing_entry->set_from(p_value);
+				return;
 			}
 			// else regenerate entry with fallback
 		}
 		else if (likely(existing_entry->get_variant_type() == variant_type)) {
+			// print_line("[Variant] Type is not object, simple set.");
 			existing_entry->set_from(p_value);
 			return;
 		}
 
+		// print_line("[Variant] Type mismatch, regenerating entry.");
 		free_entry(iter);
 	}
-
 
 	// NIL will delete an existing entry or do nothing if one doesn't exist.
 	if (unlikely(variant_type == Variant::Type::NIL)) {
@@ -522,27 +562,37 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 
 	const TypeInfo *type_info;
 	if (unlikely(variant_type == Variant::Type::OBJECT)) {
+		// print_line("[Variant] Type is object, attempting resolve");
 		const Object * obj = p_value;
 		const String class_name = obj->get_class();
-		const int64_t type_key = class_name.hash();
+		const int64_t object_class_key = class_name.hash();
 
-		const auto type_info_iter = type_infos.find(type_key);
-		if (likely(type_info_iter == type_infos.end())) {
+		// print_line("Object class key: ", class_name, " ", object_class_key);
+
+		const auto type_info_iter = object_class_infos.find(object_class_key);
+		if (likely(type_info_iter == object_class_infos.end())) {
+			// print_line("Couldn't find object class key. Resorting to fallback.");
 			const Ref<RefCounted> ref = p_value;
+
+			// print_line("Is ref? ", !ref.is_null());
 			type_info = ref.is_null() ?
 			variant_fallbacks[Variant::Type::OBJECT] :
 			ref_fallback_type_info;
 		}
 		else {
+			// print_line("Found object type info");
 			type_info = type_info_iter->value;
 		}
 	}
 	else {
+		// print_line("[Variant] Type is not object, simple set using fallback.");
 		type_info = variant_fallbacks[variant_type];
 	}
 
 	EntryBase *entry = type_info->factory(p_name, entries_owner, entries);
+	// print_line("Found ", entry->get_entry_type_name(), "<", entry->get_type_name(), "> ", entry->get_object_class_key(), " ", entry->get_type_key(), " ", entry->get_variant_type());
 	entry->set_from(p_value);
+
 }
 
 template <>
@@ -591,7 +641,6 @@ void Blackboard::EntryVariantConvertable<T, U>::set_from(const Variant &p_value)
 MAKE_VARIANT_CONVERTIBLE_TYPE(char16_t, int64_t, return static_cast<char16_t>(x);, return x;)
 MAKE_VARIANT_CONVERTIBLE_TYPE(char32_t, int64_t, return static_cast<char32_t>(x);, return x;)
 MAKE_VARIANT_CONVERTIBLE_TYPE(ObjectID, uint64_t, return ObjectID(x);, return x.operator uint64_t();)
-
 
 } //namespace hydrogen
 

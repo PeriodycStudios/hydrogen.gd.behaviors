@@ -12,83 +12,110 @@
 #include <godot_cpp/variant/variant.hpp>
 
 namespace hydrogen::test {
-
 using namespace godot;
 
 template<typename T>
-void test_simple_get_set(Blackboard &blackboard, const StringName &p_name, T p_value) {
-	blackboard.set_entry(p_name, p_value);
-	CHECK(blackboard.has_entry(p_name));
-
-	typedef traits::resolved_type_t<T> type;
+void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
+	blackboard->set_entry(p_name, p_value);
+	CHECK(blackboard->has_entry(p_name));
 
 	if constexpr (!std::is_const_v<T>) {
-		type result;
-		CHECK(blackboard.try_get_entry<T>(p_name, result));
+		T result;
+		CHECK(blackboard->try_get_entry<T>(p_name, result));
 		CHECK(result == p_value);
+		// print_line("Try-get result: ", result);
 	}
 
-	CHECK(blackboard.get_entry<T>(p_name) == p_value);
+	CHECK(blackboard->get_entry<T>(p_name) == p_value);
+	// print_line("Get result: ", blackboard->get_entry<T>(p_name));
 
-	if constexpr (traits::is_variant_type_v<T>) {
-		blackboard.erase_entry(p_name);
-		CHECK_FALSE(blackboard.has_entry(p_name));
+	if constexpr (traits::is_exactly_gd_object_v<T>) {
+		blackboard->erase_entry(p_name);
+		CHECK_FALSE(blackboard->has_entry(p_name));
 
 		Variant v1 = p_value;
-		blackboard.set_entry(p_name, v1);
-		CHECK(blackboard.has_entry(p_name));
+		blackboard->set_entry(p_name, v1);
+		CHECK(blackboard->has_entry(p_name));
 
-		Variant v2 = blackboard.get_entry<Variant>(p_name);
-		type result = v2;
+		Variant v2 = blackboard->get_entry<Variant>(p_name);
+		T result = v2;
+		CHECK(result == p_value);
+	}
+	else if constexpr (traits::is_variant_type_v<T> && std::is_pointer_v<T> && traits::is_gd_object_type_v<std::remove_pointer_t<T>>) {
+		blackboard->erase_entry(p_name);
+		CHECK_FALSE(blackboard->has_entry(p_name));
+
+		Object* obj = Object::cast_to<Object>(p_value);
+		Variant v1 = obj;
+		blackboard->set_entry(p_name, v1);
+		CHECK(blackboard->has_entry(p_name));
+
+		Variant v2 = blackboard->get_entry<Variant>(p_name);
+		Object * obj2 = v2;
+		T result = Object::cast_to<std::remove_pointer_t<T>>(obj);
+		CHECK(result == p_value);
+	}
+	else if constexpr (traits::is_variant_type_v<T>) {
+		blackboard->erase_entry(p_name);
+		CHECK_FALSE(blackboard->has_entry(p_name));
+
+		Variant v1 = p_value;
+		blackboard->set_entry(p_name, v1);
+		CHECK(blackboard->has_entry(p_name));
+
+		Variant v2 = blackboard->get_entry<Variant>(p_name);
+		T result = v2;
 		CHECK(result == p_value);
 	}
 	else {
-		blackboard.erase_entry(p_name);
-		CHECK_FALSE(blackboard.has_entry(p_name));
+		blackboard->erase_entry(p_name);
+		CHECK_FALSE(blackboard->has_entry(p_name));
 	}
 }
 
 template<typename T, typename U>
-void test_convertable_get_set(Blackboard &blackboard, const StringName &p_name, T p_value) {
+void test_convertable_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
 	static_assert(traits::is_variant_type_v<U>, "U must have a supported Variant conversion.");
 
-	blackboard.set_entry(p_name, p_value);
-	CHECK(blackboard.has_entry(p_name));
-
-	typedef traits::resolved_type_t<T> type;
-	typedef traits::resolved_type_t<U> conversion_type;
+	blackboard->set_entry(p_name, p_value);
+	CHECK(blackboard->has_entry(p_name));
 
 	if constexpr (!std::is_const_v<T>) {
-		type result;
-		CHECK(blackboard.try_get_entry<T>(p_name, result));
+		T result;
+		CHECK(blackboard->try_get_entry<T>(p_name, result));
 		CHECK(result == p_value);
 	}
 
-	CHECK(blackboard.get_entry<T>(p_name) == p_value);
-	blackboard.erase_entry(p_name);
-	CHECK_FALSE(blackboard.has_entry(p_name));
+	CHECK(blackboard->get_entry<T>(p_name) == p_value);
+	blackboard->erase_entry(p_name);
+	CHECK_FALSE(blackboard->has_entry(p_name));
 
-	conversion_type conversion = p_value;
+	U conversion = p_value;
 	Variant v1 = conversion;
-	blackboard.set_entry(p_name, v1);
+	blackboard->set_entry(p_name, v1);
 
-	CHECK(blackboard.has_entry(p_name));
+	CHECK(blackboard->has_entry(p_name));
 
-	Variant v2 = blackboard.get_entry<Variant>(p_name);
-	conversion_type conversion_result = v2;
-	type result = conversion_result;
+	Variant v2 = blackboard->get_entry<Variant>(p_name);
+	U conversion_result = v2;
+	T result = conversion_result;
 	CHECK(result == p_value);
 
-	blackboard.erase_entry(p_name);
-	CHECK_FALSE(blackboard.has_entry(p_name));
+	blackboard->erase_entry(p_name);
+	CHECK_FALSE(blackboard->has_entry(p_name));
 }
 
-#define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(blackboard, #type, value);
-#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) test_convertable_get_set<type, convert_type>(blackboard, #type, value);
+#define TEST_SIMPLE_GET_SET(type, value) SUBCASE(#type) {	\
+	test_simple_get_set<type>(blackboard, #type, value);	\
+}
+
+#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) SUBCASE(#type) {		\
+	test_convertable_get_set<type, convert_type>(blackboard, #type, value); 	\
+}
 
 TEST_CASE("[Blackboard] Simple Set and Get") {
 
-	Blackboard blackboard = Blackboard("TestBlackboard");
+	Blackboard* blackboard = memnew(Blackboard("TestBlackboard"));
 
 	TEST_SIMPLE_GET_SET(bool, true)
 	TEST_SIMPLE_GET_SET(const bool, false)
@@ -129,10 +156,9 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	TEST_SIMPLE_GET_SET(NodePath, NodePath("../Sibling:color:r"))
 
 	Ref<JSON> json = Ref(memnew(JSON));
+	print_line(" Just created json ref: ", json->get_reference_count());
 	json->parse("{\"alpha\": 1}");
 	RID rid = json->get_rid();
-
-	print_line("Is json Null?: ", json.is_null());
 
 	Node *node = memnew(Node);
 	Object *obj = node;
@@ -141,18 +167,18 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	TEST_SIMPLE_GET_SET(RID, rid)
 	TEST_SIMPLE_GET_SET(Object*, obj)
 	TEST_SIMPLE_GET_SET(const Object*, obj_const)
-	Callable callable = Callable::create(json, "get_data");
+	Callable callable = Callable();
 	TEST_SIMPLE_GET_SET(Callable, callable)
 
 	Signal signal = Signal();
-	signal.connect(callable);
+
 	TEST_SIMPLE_GET_SET(Signal, signal)
 
 	Dictionary dict = Dictionary();
 	dict["A"] = 42.0;
 	dict["B"] = 37;
-	// dict["C"] = callable;
-	// dict["S"] = signal;
+	dict["C"] = callable;
+	dict["S"] = signal;
 
 	TEST_SIMPLE_GET_SET(Dictionary, dict)
 
@@ -233,18 +259,18 @@ TEST_CASE("[Blackboard] Simple Set and Get") {
 	pcol_array.push_back(Color::named("MINT_CREAM"));
 	TEST_SIMPLE_GET_SET(PackedColorArray, pcol_array)
 
-	// ObjectID obj_id = ObjectID(node->get_instance_id());
-	// TEST_SIMPLE_GET_SET(ObjectID, obj_id)
+	ObjectID obj_id = ObjectID(node->get_instance_id());
+	TEST_SIMPLE_GET_SET(ObjectID, obj_id)
 
 	Ref<RefCounted> ref_obj = json;
 	TEST_SIMPLE_GET_SET(Ref<RefCounted>, ref_obj)
 
 	Blackboard::register_type<Ref<JSON>>();
 	TEST_SIMPLE_GET_SET(Ref<JSON>, json)
-	// Blackboard::register_type<Node*>();
-	// TEST_SIMPLE_GET_SET(Node*, node)
+	Blackboard::register_type<Node*>();
+	TEST_SIMPLE_GET_SET(Node*, node)
 
-	signal.disconnect(callable);
+	memdelete(blackboard);
 	memdelete(node);
 }
 

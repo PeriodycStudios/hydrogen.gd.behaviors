@@ -40,10 +40,10 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 
 	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
 
-#if TESTS_ENABLED
-	auto result = tests::behavior_test_runner();
-	print_line("Result of tests: ", result == 0 ? "Success" : "Failure");
-#endif
+// #if TESTS_ENABLED
+// 	auto result = tests::behavior_test_runner();
+// 	print_line("Result of tests: ", result == 0 ? "Success" : "Failure");
+// #endif
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {

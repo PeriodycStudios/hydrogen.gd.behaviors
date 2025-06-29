@@ -6,7 +6,10 @@
 
 namespace hydrogen {
 
+// TODO: tkey250628 - need to create a custom allocation strategy so all of the small Entry allocs aren't fragmented.
+
 Blackboard::TypeInfoMap Blackboard::type_infos = {};
+Blackboard::TypeInfoMap Blackboard::object_class_infos = {};
 Blackboard::FallbackTable Blackboard::variant_fallbacks = {nullptr};
 const Blackboard::TypeInfo *Blackboard::ref_fallback_type_info = nullptr;
 bool Blackboard::core_variants_registered = false;
