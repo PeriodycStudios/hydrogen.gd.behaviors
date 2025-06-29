@@ -17,7 +17,7 @@ class BehaviorServer final : public Object {
 	static BehaviorServer *singleton;
 
 protected:
-	static void _bind_methods() {}
+	static void _bind_methods();
 
 public:
 	static BehaviorServer *get_singleton();
@@ -30,9 +30,7 @@ public:
 		singleton = nullptr;
 	};
 
-	void free(RID p_object) {};
-
-	void set_active(bool p_active) {};
+	void free_rid(RID p_object) {};
 
 	RID blackboard_create() { return {}; };
 	RID behavior_tree_create() { return {}; };
@@ -51,7 +49,7 @@ class _BehaviorServer final : public Object {
 	static _BehaviorServer *singleton;
 
 protected:
-	static void _bind_methods() {}
+	static void _bind_methods();
 
 public:
 	static _BehaviorServer *get_singleton();
@@ -63,6 +61,13 @@ public:
 	~_BehaviorServer() override {
 		singleton = nullptr;
 	};
+
+	void free_rid(RID p_rid);
+
+	RID blackboard_create();
+	RID behavior_tree_create();
+	RID state_machine_create();
+	RID agent_create();
 };
 
 }
