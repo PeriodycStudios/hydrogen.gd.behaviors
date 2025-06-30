@@ -244,7 +244,6 @@ class Blackboard final : public RidData {
 
 	EntryOwner entries_owner;
 	EntryMap entries;
-	StringName name;
 	Blackboard *parent;
 
 	template <typename T>
@@ -270,11 +269,8 @@ public:
 	template <typename T>
 	static void register_type();
 
-	explicit Blackboard(const StringName &p_name) : name(p_name), parent(nullptr) {}
+	explicit Blackboard() : parent(nullptr) {}
 	~Blackboard();
-
-	_FORCE_INLINE_ void set_name(const StringName &p_name) { name = p_name; }
-	[[nodiscard]] _FORCE_INLINE_ const StringName &get_name() const { return name; }
 
 	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
 		if (validate_parent(p_parent)) {
@@ -285,8 +281,6 @@ public:
 	}
 
 	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
-
-	[[nodiscard]] Blackboard *find_parent(const StringName &p_name) const;
 	[[nodiscard]] Blackboard *find_parent(const RID &p_rid) const;
 
 	template <typename T>

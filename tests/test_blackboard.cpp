@@ -107,7 +107,7 @@ void test_convertable_get_set(Blackboard *blackboard, const StringName &p_name, 
 
 TEST_CASE("[Blackboard] Simple Set and Get") {
 
-	Blackboard* blackboard = memnew(Blackboard("TestBlackboard"));
+	Blackboard* blackboard = memnew(Blackboard);
 
 	TEST_SIMPLE_GET_SET(bool, true)
 	TEST_SIMPLE_GET_SET(const bool, false)

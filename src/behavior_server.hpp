@@ -5,7 +5,11 @@
 #ifndef BEHAVIOR_SERVER_HPP
 #define BEHAVIOR_SERVER_HPP
 
+#include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/core/object.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
+
+#include "blackboard.hpp"
 
 using namespace godot;
 
@@ -16,29 +20,31 @@ class BehaviorServer final : public Object {
 
 	static BehaviorServer *singleton;
 
+	RID_PtrOwner<Blackboard> blackboard_owner;
+
+	Mutex *mutex = nullptr;
+
 protected:
 	static void _bind_methods();
 
 public:
 	static BehaviorServer *get_singleton();
 
-	BehaviorServer() {
-		singleton = this;
-	};
+	BehaviorServer();
+	~BehaviorServer() override;
 
-	~BehaviorServer() override {
-		singleton = nullptr;
-	};
+	void lock() const;
+	void unlock() const;
 
-	void free_rid(RID p_object) {};
+	void free_rid(RID p_rid);
 
-	RID blackboard_create() { return {}; };
-	RID behavior_tree_create() { return {}; };
-	RID state_machine_create() { return {}; };
-	RID agent_create() { return {}; };
+	RID blackboard_create();
+	RID behavior_tree_create();
+	RID state_machine_create();
+	RID agent_create();
 
-	void init() {};
-	void finish() {};
+	Error init();
+	void finish();
 };
 
 

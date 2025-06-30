@@ -161,17 +161,6 @@ bool Blackboard::validate_parent(const Blackboard *p_parent) const {
 	return true;
 }
 
-Blackboard *Blackboard::find_parent(const StringName &p_name) const {
-	Blackboard *current = parent;
-	while (current != nullptr) {
-		if (current->get_name() == p_name) {
-			return current;
-		}
-		current = current->parent;
-	}
-	return nullptr;
-}
-
 Blackboard *Blackboard::find_parent(const RID &p_rid) const {
 	Blackboard *current = parent;
 	while (current != nullptr) {
