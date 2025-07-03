@@ -1,6 +1,9 @@
 #ifndef TYPE_NAME_HPP
 #define TYPE_NAME_HPP
 
+// TODO: twk250701 - look into making this use a minimal string_view replacement
+// to stick closer to the Godot C++ guidelines
+
 // a constexpr non-RTTI enabled way of getting a type's name
 // taken from this StackOverflow post: https://stackoverflow.com/a/56600402
 // compatible with C++17

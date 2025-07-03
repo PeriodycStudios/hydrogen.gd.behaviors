@@ -6,8 +6,9 @@
 
 namespace hydrogen {
 
-// TODO: tkey250628 - need to create a custom allocation strategy so all of the small Entry allocs aren't fragmented.
+// TODO: tkey250628 - need a custom allocator so the Entries aren't fragmented.
 
+HashMap<int64_t, StringName> Blackboard::TypeInfo::type_names = {};
 Blackboard::TypeInfoMap Blackboard::type_infos = {};
 Blackboard::TypeInfoMap Blackboard::object_class_infos = {};
 Blackboard::FallbackTable Blackboard::variant_fallbacks = {nullptr};
@@ -128,34 +129,29 @@ Blackboard::~Blackboard() {
 		const auto entry = entry_kvp.value;
 		const RID rid = entry->get_self();
 		entries_owner.free(rid);
-		memfree(entry);
+		memdelete(entry);
 	}
 
 	entries.clear();
 }
 
-bool Blackboard::validate_parent(const Blackboard *p_parent) const {
-	if (!p_parent)
+bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const {
+
+	if (p_candidate == nullptr) {
 		return true;
+	}
 
-	if (p_parent == this)
+	if (p_candidate == this) {
 		return false;
+	}
 
-	if (p_parent->parent == this)
-		return false;
+	const Blackboard * current = p_candidate->parent;
 
-	if (p_parent->parent == nullptr)
-		return true;
-
-	auto a = p_parent;
-	auto b = p_parent;
-
-	while (a && b && b->parent) {
-		a = a->parent;
-		b = b->parent->parent;
-
-		if (a == b)
+	while (current) {
+		if (unlikely(current == this)) {
 			return false;
+		}
+		current = current->parent;
 	}
 
 	return true;
@@ -172,13 +168,15 @@ Blackboard *Blackboard::find_parent(const RID &p_rid) const {
 	return nullptr;
 }
 
-void Blackboard::free_entry(EntryMap::Iterator &iter) {
+void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 	EntryBase *entry = iter->value;
+
 	const RID rid = entry->get_self();
 
 	entries.remove(iter);
 	entries_owner.free(rid);
-	memfree(entry);
+
+	memdelete(entry);
 }
 
 bool Blackboard::erase_entry(const StringName &p_name) {
@@ -207,6 +205,40 @@ bool Blackboard::has_entry(const StringName &p_name, const bool p_check_parents)
 	}
 
 	return result;
+}
+
+Dictionary Blackboard::export_entries() const {
+
+	Dictionary dict = {};
+
+	for (const auto &kvp : entries) {
+		dict[kvp.key] = kvp.value->as_variant();
+	}
+
+	return dict;
+}
+
+Array Blackboard::export_type_infos() {
+	Array results = {};
+
+	for (const auto &kvp : type_infos) {
+		const TypeInfo * info = kvp.value;
+		Dictionary dict = {};
+		dict["type_key"] = kvp.key;
+		dict["type_name"] = info->get_name();
+		dict["variant_type"] = info->variant_type;
+		dict["object_class_key"] = info->object_class_key;
+		dict["is_registered"] = info->is_registered();
+		dict["is_variant_type"] = info->is_variant_type();
+		dict["is_object_ptr_type"] = info->is_object_ptr_type();
+		dict["is_ref_counted"] = info->is_ref_counted();
+		dict["is_gd_object"] = info->is_gd_object();
+		dict["is_convertable"] = info->is_convertible();
+
+		results.push_back(dict);
+	}
+
+	return results;
 }
 
 } //namespace Hydrogen

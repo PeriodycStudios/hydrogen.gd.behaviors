@@ -30,8 +30,8 @@ template <typename T>
 struct convertible_info {
 	typedef false_type needs_conversion;
 	// typedef variant_compatible_type conversion_type;
-	// static constexpr T convert_to(const U x) { return x; }
-	// static constexpr U convert_from(const T x) { return x; }
+	// static T convert_to(const U x) { return x; }
+	// static U convert_from(const T x) { return x; }
 };
 
 template <typename T>
@@ -55,6 +55,10 @@ _FORCE_INLINE_ static conv_type convert_from(const type x) {		\
 
 class Blackboard final : public RidData {
 
+#define ENTRY_NAME_BODY(name)					\
+	static const StringName entry_name = #name;	\
+	return entry_name;
+
 	struct EntryBase : RidData {
 
 		EntryBase() = default;
@@ -71,10 +75,10 @@ class Blackboard final : public RidData {
 		}
 		[[nodiscard]] virtual int64_t get_object_class_key() const = 0;
 
-		[[nodiscard]] virtual String get_type_name() const = 0;
+		[[nodiscard]] virtual const StringName &get_type_name() const = 0;
 
-		[[nodiscard]] virtual String get_entry_type_name() const {
-			return "EntryBase";
+		[[nodiscard]] virtual const StringName &get_entry_type_name() const {
+			ENTRY_NAME_BODY(EntryBase)
 		}
 	};
 
@@ -94,13 +98,12 @@ class Blackboard final : public RidData {
 		EntryData() = default;
 		~EntryData() override = default;
 
-		[[nodiscard]] String get_type_name() const override {
-			const std::string raw_name = RegisteredTypeInfo<type>::get_info().raw_name;
-			return {raw_name.c_str()};
+		[[nodiscard]] const StringName &get_type_name() const override {
+			return RegisteredTypeInfo<type>::get_info().get_name();
 		}
 
-		[[nodiscard]] String get_entry_type_name() const override {
-			return "EntryData";
+		[[nodiscard]] const StringName &get_entry_type_name() const override {
+			ENTRY_NAME_BODY(EntryData)
 		}
 	};
 
@@ -122,8 +125,8 @@ class Blackboard final : public RidData {
 			return RegisteredTypeInfo<T>::get_info().variant_type;
 		}
 
-		[[nodiscard]] String get_entry_type_name() const override {
-			return "EntryVariant";
+		[[nodiscard]] const StringName &get_entry_type_name() const override {
+			ENTRY_NAME_BODY(EntryVariant)
 		}
 	};
 
@@ -149,8 +152,8 @@ class Blackboard final : public RidData {
 			return Variant::OBJECT;
 		}
 
-		[[nodiscard]] String get_entry_type_name() const override {
-			return "EntryVariantObject";
+		[[nodiscard]] const StringName &get_entry_type_name() const override {
+			ENTRY_NAME_BODY(EntryVariantObject)
 		}
 	};
 
@@ -168,10 +171,12 @@ class Blackboard final : public RidData {
 			return RegisteredTypeInfo<U>::get_info().variant_type;
 		}
 
-		[[nodiscard]] String get_entry_type_name() const override {
-			return "EntryVariantConvertable";
+		[[nodiscard]] const StringName &get_entry_type_name() const override {
+			ENTRY_NAME_BODY(EntryVariantConvertable)
 		}
 	};
+
+#undef ENTRY_NAME_BODY
 
 	typedef HashMap<StringName, EntryBase*> EntryMap;
 	typedef RID_PtrOwner<EntryBase> EntryOwner;
@@ -179,6 +184,8 @@ class Blackboard final : public RidData {
 	typedef std::function<EntryBase*(const StringName &p_name, EntryOwner &p_owner, EntryMap &p_entries)> entry_factory;
 
 	struct TypeInfo {
+
+		static HashMap<int64_t, StringName> type_names;
 
 		enum struct Flags : uint8_t {
 			NONE = 0,
@@ -192,7 +199,6 @@ class Blackboard final : public RidData {
 		};
 
 		entry_factory factory = nullptr;
-		std::string raw_name; // any attempt to use String or StringName here crashes the plugin on load!
 		Variant::Type variant_type = Variant::Type::NIL;
 		int64_t type_key = 0;
 		int64_t object_class_key = 0;
@@ -212,6 +218,9 @@ class Blackboard final : public RidData {
 		[[nodiscard]] _FORCE_INLINE_ bool is_ref_counted() const { return has_flag(Flags::IS_REF_COUNTED); }
 		[[nodiscard]] _FORCE_INLINE_ bool is_gd_object() const { return has_flag(Flags::IS_GD_OBJECT); }
 		[[nodiscard]] _FORCE_INLINE_ bool is_convertible() const { return has_flag(Flags::IS_CONVERTIBLE); }
+		[[nodiscard]] _FORCE_INLINE_ const StringName &get_name() const {
+			return type_names[type_key];
+		}
 	};
 
 	template <typename T>
@@ -249,6 +258,7 @@ class Blackboard final : public RidData {
 	template <typename T>
 	static EntryBase* create_entry(const StringName &p_name, EntryOwner &p_owner, EntryMap &p_entries) {
 		T* entry = memnew(T());
+
 		const RID rid = p_owner.make_rid(entry);
 		entry->set_self(rid);
 
@@ -256,8 +266,8 @@ class Blackboard final : public RidData {
 		return entry;
 	}
 
-	bool validate_parent(const Blackboard *p_parent) const;
-	void free_entry(EntryMap::Iterator &iter);
+	bool validate_candidate_parent(const Blackboard *p_candidate) const;
+	void free_entry(const EntryMap::Iterator &iter);
 
 	template<typename T>
 	bool find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, bool p_check_parents) const;
@@ -273,7 +283,7 @@ public:
 	~Blackboard();
 
 	_FORCE_INLINE_ bool set_parent(Blackboard *p_parent) {
-		if (validate_parent(p_parent)) {
+		if (likely(p_parent != parent && validate_candidate_parent(p_parent))) {
 			parent = p_parent;
 			return true;
 		}
@@ -295,6 +305,10 @@ public:
 	bool erase_entry(const StringName &p_name);
 
 	[[nodiscard]] bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
+
+	[[nodiscard]] Dictionary export_entries() const;
+
+	[[nodiscard]] static Array export_type_infos();
 };
 
 template <typename T>
@@ -318,9 +332,9 @@ void Blackboard::register_type() {
 	}
 
 	TypeInfo type_info = {};
-	type_info.raw_name = std::string(type_name<type>());
-	const auto name = String(type_info.raw_name.c_str());
+	const StringName name = StringName(std::string(type_name<type>()).c_str());
 	type_info.type_key = name.hash();
+	type_info.type_names[type_info.type_key] = name;
 
 	if constexpr (traits::convertible_info_needs_conversion_v<type>) {
 		typedef typename traits::convertible_info<type>::conversion_type conversion_type;
@@ -515,78 +529,60 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
-		// print_line("[Variant] Found entry.");
 		EntryBase *existing_entry = iter->value;
 
 		if (unlikely(p_value.get_type() == Variant::NIL)) {
-			// print_line("[Variant] Type is nil, deleting entry.");
-			free(existing_entry);
+			free_entry(iter);
 			return;
 		}
 
 		if (unlikely(existing_entry->get_variant_type() == Variant::OBJECT)) {
-			// print_line("[Variant] type is object, attempting resolve");
 			const int64_t existing_type_key = existing_entry->get_object_class_key();
-			// print_line("Existing Object class key: ", existing_type_key);
 			const Object *incoming_obj = p_value;
 			const String incoming_class_name = incoming_obj->get_class();
 			const int64_t incoming_class_key = incoming_class_name.hash();
 
-			// print_line("Incoming: ", incoming_class_name, " ", incoming_class_key);
-
 			if (likely(existing_type_key == incoming_class_key)) {
-				// print_line("[Variant] Same type, setting.");
 				existing_entry->set_from(p_value);
 				return;
 			}
 			// else regenerate entry with fallback
 		}
 		else if (likely(existing_entry->get_variant_type() == variant_type)) {
-			// print_line("[Variant] Type is not object, simple set.");
 			existing_entry->set_from(p_value);
 			return;
 		}
 
-		// print_line("[Variant] Type mismatch, regenerating entry.");
 		free_entry(iter);
 	}
 
-	// NIL will delete an existing entry or do nothing if one doesn't exist.
 	if (unlikely(variant_type == Variant::Type::NIL)) {
 		return;
 	}
 
 	const TypeInfo *type_info;
 	if (unlikely(variant_type == Variant::Type::OBJECT)) {
-		// print_line("[Variant] Type is object, attempting resolve");
 		const Object * obj = p_value;
 		const String class_name = obj->get_class();
 		const int64_t object_class_key = class_name.hash();
 
-		// print_line("Object class key: ", class_name, " ", object_class_key);
-
 		const auto type_info_iter = object_class_infos.find(object_class_key);
 		if (likely(type_info_iter == object_class_infos.end())) {
-			// print_line("Couldn't find object class key. Resorting to fallback.");
 			const Ref<RefCounted> ref = p_value;
 
-			// print_line("Is ref? ", !ref.is_null());
 			type_info = ref.is_null() ?
 			variant_fallbacks[Variant::Type::OBJECT] :
 			ref_fallback_type_info;
 		}
 		else {
-			// print_line("Found object type info");
 			type_info = type_info_iter->value;
 		}
 	}
 	else {
-		// print_line("[Variant] Type is not object, simple set using fallback.");
 		type_info = variant_fallbacks[variant_type];
 	}
 
 	EntryBase *entry = type_info->factory(p_name, entries_owner, entries);
-	// print_line("Found ", entry->get_entry_type_name(), "<", entry->get_type_name(), "> ", entry->get_object_class_key(), " ", entry->get_type_key(), " ", entry->get_variant_type());
 	entry->set_from(p_value);
 
 }
@@ -608,9 +604,10 @@ void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
-		auto* existing_entry = dynamic_cast<EntryData<type> *>(iter->value);
+		EntryBase* existing_entry = iter->value;
 		if (likely(existing_entry->get_type_key() == type_info.type_key)) {
-			existing_entry->value = p_value;
+			auto *entry = dynamic_cast<EntryData<type> *>(existing_entry);
+			entry->value = p_value;
 			return;
 		}
 		free_entry(iter);
