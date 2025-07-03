@@ -5,10 +5,10 @@
 #include <godot_cpp/classes/engine.hpp>
 #include <godot_cpp/core/print_string.hpp>
 
-#include "register_types.hpp"
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
-
+#include "hydrogen_blackboard.hpp"
+#include "register_types.hpp"
 
 #ifdef TESTS_ENABLED
 #include "test_runner.hpp"
@@ -32,6 +32,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 
 	GDREGISTER_INTERNAL_CLASS(BehaviorServer);
 	GDREGISTER_CLASS(_BehaviorServer);
+	GDREGISTER_CLASS(HydrogenBlackboard);
 
 	behavior_server = memnew(BehaviorServer);
 	behavior_server->init();

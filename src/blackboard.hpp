@@ -291,7 +291,7 @@ public:
 	}
 
 	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_parent() const { return parent; }
-	[[nodiscard]] Blackboard *find_parent(const RID &p_rid) const;
+	[[nodiscard]] bool is_ancestor(Blackboard *p_candidate) const;
 
 	template <typename T>
 	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true) const;

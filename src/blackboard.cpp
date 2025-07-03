@@ -157,15 +157,15 @@ bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const 
 	return true;
 }
 
-Blackboard *Blackboard::find_parent(const RID &p_rid) const {
+bool Blackboard::is_ancestor(Blackboard *p_candidate) const {
 	Blackboard *current = parent;
 	while (current != nullptr) {
-		if (current->get_self() == p_rid) {
-			return current;
+		if (current->get_self() == p_candidate) {
+			return true;
 		}
 		current = current->parent;
 	}
-	return nullptr;
+	return false;
 }
 
 void Blackboard::free_entry(const EntryMap::Iterator &iter) {
