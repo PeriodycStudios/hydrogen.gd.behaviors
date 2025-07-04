@@ -218,14 +218,15 @@ Dictionary Blackboard::export_entries() const {
 	return dict;
 }
 
-Array Blackboard::export_type_infos() {
-	Array results = {};
+Dictionary Blackboard::export_type_infos() {
+	Dictionary results = {};
 
 	for (const auto &kvp : type_infos) {
 		const TypeInfo * info = kvp.value;
 		Dictionary dict = {};
+		const StringName &type_name = info->get_name();
 		dict["type_key"] = kvp.key;
-		dict["type_name"] = info->get_name();
+		dict["type_name"] = type_name;
 		dict["variant_type"] = info->variant_type;
 		dict["object_class_key"] = info->object_class_key;
 		dict["is_registered"] = info->is_registered();
@@ -235,7 +236,7 @@ Array Blackboard::export_type_infos() {
 		dict["is_gd_object"] = info->is_gd_object();
 		dict["is_convertable"] = info->is_convertible();
 
-		results.push_back(dict);
+		results[type_name] = dict;
 	}
 
 	return results;

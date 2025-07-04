@@ -308,7 +308,7 @@ public:
 
 	[[nodiscard]] Dictionary export_entries() const;
 
-	[[nodiscard]] static Array export_type_infos();
+	[[nodiscard]] static Dictionary export_type_infos();
 };
 
 template <typename T>

@@ -69,7 +69,7 @@ _FORCE_INLINE_ Dictionary HydrogenBlackboard::export_entries() const {
 	return BehaviorServer::get_singleton()->blackboard_export_entries(blackboard);
 }
 
-_FORCE_INLINE_ Array HydrogenBlackboard::export_type_infos() {
+_FORCE_INLINE_ Dictionary HydrogenBlackboard::export_type_infos() {
 	return BehaviorServer::blackboard_export_type_infos();
 }
 

@@ -9,7 +9,14 @@ offset_right = 8.0
 offset_bottom = 8.0
 text = "Run Behavior Tests"
 
+[node name="Button2" type="Button" parent="."]
+offset_top = 35.0
+offset_right = 156.0
+offset_bottom = 66.0
+text = "Export Type Infos"
+
 [node name="Node" type="Node" parent="."]
 script = ExtResource("1_wtcfe")
 
 [connection signal="pressed" from="Button" to="Node" method="try_running_tests"]
+[connection signal="pressed" from="Button2" to="Node" method="try_exporting_type_infos"]

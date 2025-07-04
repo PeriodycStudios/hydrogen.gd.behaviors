@@ -67,7 +67,7 @@ public:
 
 	Dictionary blackboard_export_entries(RID p_rid);
 
-	static Array blackboard_export_type_infos();
+	static Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
 };
@@ -129,7 +129,7 @@ public:
 
 	Dictionary blackboard_export_entries(RID p_rid);
 
-	Array blackboard_export_type_infos();
+	Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
 

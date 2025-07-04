@@ -40,7 +40,7 @@ public:
 
 	Dictionary export_entries() const;
 
-	static Array export_type_infos();
+	static Dictionary export_type_infos();
 };
 
 

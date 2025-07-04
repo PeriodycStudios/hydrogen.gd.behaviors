@@ -607,7 +607,48 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	memdelete(blackboard4);
 }
 
-// TEST_CASES .. Export Blackboard entries
-// TEST_CASE .. Export Blackboard Type infos
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
+	Blackboard* blackboard = memnew(Blackboard);
+	REQUIRE(blackboard != nullptr);
+
+	Dictionary entries = blackboard->export_entries();
+	CHECK(entries.size() == 0);
+
+	Node *node = memnew(Node);
+	Ref json = memnew(JSON);
+
+	blackboard->set_entry("First", 255ul);
+	blackboard->set_entry("Second", String("42"));
+	blackboard->set_entry("Third", 512);
+	blackboard->set_entry("Fourth", json);
+	blackboard->set_entry("Fifth", node);
+	entries = blackboard->export_entries();
+	CHECK(entries.size() == 5);
+
+	uint64_t first = entries["First"];
+	int64_t third = entries["Third"];
+	Object* fifth = entries["Fifth"];
+
+	CHECK(first == 255ul);
+	CHECK(entries["Second"] == String("42"));
+	CHECK(third == 512);
+	CHECK(entries["Fourth"] == json);
+	CHECK(fifth == node);
+
+	memdelete(blackboard);
+	memdelete(node);
+}
+
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Type Infos") {
+	Dictionary type_infos = Blackboard::export_type_infos();
+	REQUIRE(type_infos.size() > 0);
+
+	const StringName ulong_name = "unsigned long";
+	Variant unsigned_long = type_infos.get(ulong_name, Variant());
+	REQUIRE(unsigned_long.get_type() != Variant::NIL);
+	REQUIRE(unsigned_long.get("type_name") == ulong_name);
+	int64_t hash_candidate = unsigned_long.get("type_key");
+	CHECK(hash_candidate == ulong_name.hash());
+}
 
 } //namespace hydrogen::test

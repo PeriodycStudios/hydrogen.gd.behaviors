@@ -155,7 +155,7 @@ Dictionary BehaviorServer::blackboard_export_entries(RID p_rid) {
 	return blackboard->export_entries();
 }
 
-Array BehaviorServer::blackboard_export_type_infos() {
+Dictionary BehaviorServer::blackboard_export_type_infos() {
 	return Blackboard::export_type_infos();
 }
 
@@ -340,7 +340,7 @@ Dictionary _BehaviorServer::blackboard_export_entries(RID p_rid) {
 	return BehaviorServer::get_singleton()->blackboard_export_entries(p_rid);
 }
 
-Array _BehaviorServer::blackboard_export_type_infos() {
+Dictionary _BehaviorServer::blackboard_export_type_infos() {
 	return BehaviorServer::blackboard_export_type_infos();
 }
 // ---- Blackboard END ----
