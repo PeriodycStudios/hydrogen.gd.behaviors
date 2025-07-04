@@ -297,10 +297,16 @@ public:
 	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true) const;
 
 	template <typename T>
-	[[nodiscard]] T get_entry(const StringName &p_name, const T &p_default = {}, bool p_check_parents = true) const;
+	[[nodiscard]] const T &get_entry_fast(const StringName &p_name, const T &p_default = {}, bool p_check_parents = true) const;
 
 	template <typename T>
-	void set_entry(const StringName &p_name, const T &p_value);
+	[[nodiscard]] T get_entry(const StringName &p_name, T p_default = {}, bool p_check_parents = true) const;
+
+	template <typename T>
+	void set_entry_fast(const StringName &p_name, const T &p_value);
+
+	template <typename T>
+	void set_entry(const StringName &p_name, T p_value);
 
 	bool erase_entry(const StringName &p_name);
 
@@ -434,44 +440,6 @@ inline bool Blackboard::find_entry<const Variant>(const StringName &p_name, Entr
 	return find_entry<Variant>(p_name, p_out_result, p_check_parents);
 }
 
-template <typename T>
-bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
-	typedef traits::resolved_type_t<T> type;
-	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
-	if (unlikely(!type_info.is_registered())) {
-		return false;
-	}
-
-	const auto type_key = type_info.type_key;
-
-	auto iter = entries.find(p_name);
-	if (likely(iter != entries.end())) {
-		p_out_result = iter;
-		return true;
-	}
-
-	if (likely(p_check_parents)) {
-		const Blackboard *current = parent;
-		while (current != nullptr) {
-			iter = current->entries.find(p_name);
-			if (iter != current->entries.end()) {
-				const auto entry_type_key = iter->value->get_type_key();
-
-				if (entry_type_key != type_key) {
-					return false;
-				}
-
-				p_out_result = iter;
-				return true;
-			}
-
-			current = current->parent;
-		}
-	}
-
-	return false;
-}
-
 template <>
 inline bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, const bool p_check_parents) const {
 	EntryMap::ConstIterator iter;
@@ -484,47 +452,16 @@ inline bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant
 	return true;
 }
 
-template <typename T>
-bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const bool p_check_parents) const {
-	static_assert(!std::is_const_v<T>, "Can't use const types with try_get_entry.");
-	if constexpr (!std::is_const_v<T>) {
-		EntryMap::ConstIterator iter;
-		if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
-			return false;
-		}
-
-		typedef traits::resolved_type_t<T> type;
-		auto *entry = dynamic_cast<EntryData<type> *>(iter->value);
-		p_out_result = entry->value;
-		return true;
-	}
-	else {
-		return false;
-	}
-}
-
 template <>
-inline Variant Blackboard::get_entry<Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents ) const {
-	Variant result = p_default;
-	try_get_entry<Variant>(p_name, result, p_check_parents);
+inline const Variant &Blackboard::get_entry_fast<Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents ) const {
+	static Variant result;
+	result = p_default; // TODO: Find out if this is thread safe enough.
+	try_get_entry(p_name, result, p_check_parents);
 	return result;
 }
 
 template <>
-inline const Variant Blackboard::get_entry<const Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents) const {
-	return get_entry<Variant>(p_name, p_default, p_check_parents);
-}
-
-template <typename T>
-T Blackboard::get_entry(const StringName &p_name, const T &p_default, const bool p_check_parents) const {
-	typedef traits::resolved_type_t<T> type;
-	type result = p_default;
-	try_get_entry<type>(p_name, result, p_check_parents);
-	return result;
-}
-
-template <>
-inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Variant &p_value) {
+inline void Blackboard::set_entry_fast<Variant>(const StringName &p_name, const Variant& p_value) {
 	const auto variant_type = p_value.get_type();
 
 	auto iter = entries.find(p_name);
@@ -584,37 +521,112 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, const Varia
 
 	EntryBase *entry = type_info->factory(p_name, entries_owner, entries);
 	entry->set_from(p_value);
-
 }
 
 template <>
-inline void Blackboard::set_entry<const Variant>(const StringName& p_name, const Variant &p_value) {
-	set_entry<Variant>(p_name, p_value);
+inline void Blackboard::set_entry<Variant>(const StringName &p_name, Variant p_value) {
+	set_entry_fast(p_name, p_value);
 }
 
 template <typename T>
-void Blackboard::set_entry(const StringName &p_name, const T &p_value)  {
+bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
 	typedef traits::resolved_type_t<T> type;
-	if (unlikely(!RegisteredTypeInfo<type>::is_registered())) {
+	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
+	if (unlikely(!type_info.is_registered())) {
+		return false;
+	}
+
+	const auto type_key = type_info.type_key;
+
+	auto iter = entries.find(p_name);
+	if (likely(iter != entries.end())) {
+		p_out_result = iter;
+		return true;
+	}
+
+	if (likely(p_check_parents)) {
+		const Blackboard *current = parent;
+		while (current != nullptr) {
+			iter = current->entries.find(p_name);
+			if (iter != current->entries.end()) {
+				const auto entry_type_key = iter->value->get_type_key();
+
+				if (entry_type_key != type_key) {
+					return false;
+				}
+
+				p_out_result = iter;
+				return true;
+			}
+
+			current = current->parent;
+		}
+	}
+
+	return false;
+}
+
+template <typename T>
+bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const bool p_check_parents) const {
+	static_assert(!std::is_const_v<T>, "Can't use const types with try_get_entry.");
+	if constexpr (!std::is_const_v<T>) {
+		EntryMap::ConstIterator iter;
+		if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
+			return false;
+		}
+
+		typedef traits::resolved_type_t<T> type;
+		auto *entry = dynamic_cast<EntryData<type> *>(iter->value);
+		p_out_result = entry->value;
+		return true;
+	}
+	else {
+		return false;
+	}
+}
+
+template <typename T>
+const T &Blackboard::get_entry_fast(const StringName &p_name, const T &p_default, const bool p_check_parents) const {
+	EntryMap::ConstIterator iter;
+	if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
+		return p_default;
+	}
+
+	const EntryData<T> *entry = dynamic_cast<const EntryData<T> *>(iter->value);
+	return entry->value;
+}
+
+template <typename T>
+T Blackboard::get_entry(const StringName &p_name, T p_default, const bool p_check_parents) const {
+	T result = get_entry_fast(p_name, p_default, p_check_parents);
+	return result;
+}
+
+template <typename T>
+void Blackboard::set_entry_fast(const StringName &p_name, const T &p_value)  {
+	if (unlikely(!RegisteredTypeInfo<T>::is_registered())) {
 		register_type<T>();
 	}
 
-	typedef traits::resolved_type_t<T> type;
-	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
-
+	const TypeInfo &type_info = RegisteredTypeInfo<T>::get_info();
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		EntryBase* existing_entry = iter->value;
 		if (likely(existing_entry->get_type_key() == type_info.type_key)) {
-			auto *entry = dynamic_cast<EntryData<type> *>(existing_entry);
+			auto *entry = dynamic_cast<EntryData<T> *>(existing_entry);
 			entry->value = p_value;
 			return;
 		}
 		free_entry(iter);
 	}
 
-	auto *new_entry = dynamic_cast<EntryData<type> *>(type_info.factory(p_name, entries_owner, entries));
+	auto *new_entry = dynamic_cast<EntryData<T> *>(type_info.factory(p_name, entries_owner, entries));
 	new_entry->value = p_value;
+}
+
+template <typename T>
+void Blackboard::set_entry(const StringName &p_name, T p_value) {
+	set_entry_fast(p_name, p_value);
 }
 
 template <typename T>

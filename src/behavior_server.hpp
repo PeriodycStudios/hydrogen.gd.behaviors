@@ -56,10 +56,16 @@ public:
 	bool blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
 
 	template<typename T>
-	T blackboard_get_entry(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+	const T &blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+
+	template <typename T>
+	T blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
 	template<typename T>
-	void blackboard_set_entry(RID p_rid, const StringName &p_name, const T &p_value);
+	void blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value);
+
+	template <typename T>
+	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_value);
 
 	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
 
@@ -71,7 +77,6 @@ public:
 
 	// ---- Blackboard END ----
 };
-
 
 class _BehaviorServer final : public Object {
 	GDCLASS(_BehaviorServer, Object);
@@ -110,18 +115,16 @@ public:
 	bool blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
 
 	template<typename T>
-	T blackboard_get_entry(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+	const T &blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
 
-	Object* blackboard_get_object(RID p_rid, const StringName &p_name, Object* p_default = nullptr, bool p_check_parents = true) {
-		return blackboard_get_entry(p_rid, p_name, p_default, p_check_parents);
-	}
+	template <typename T>
+	T blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
 	template<typename T>
-	void blackboard_set_entry(RID p_rid, const StringName &p_name, const T &p_value);
+	void blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value);
 
-	void blackboard_set_object(RID p_rid, const StringName &p_name, const Object* p_value) {
-		blackboard_set_entry(p_rid, p_name, p_value);
-	}
+	template <typename T>
+	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_default = {});
 
 	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
 
@@ -135,6 +138,66 @@ public:
 
 	void run_tests();
 };
+
+template <typename T>
+bool BehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL_V(blackboard, false);
+	return blackboard->try_get_entry(p_name, p_out_result, p_check_parents);
+}
+
+template <typename T>
+const T &BehaviorServer::blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL_V(blackboard, p_name);
+	return blackboard->get_entry_fast(p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+T BehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default, bool p_check_parents) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL_V(blackboard, p_default);
+	return blackboard->get_entry(p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+void BehaviorServer::blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(blackboard);
+	blackboard->set_entry_fast(p_name, p_value);
+}
+
+template <typename T>
+void BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, T p_value) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL(blackboard);
+	blackboard->set_entry(p_name, p_value);
+}
+
+template <typename T>
+bool _BehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_try_get<T>(p_rid, p_name, p_out_result, p_check_parents);
+}
+
+template <typename T>
+const T &_BehaviorServer::blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_get_entry_fast<T>(p_rid, p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+T _BehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_get_entry<T>(p_rid, p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+void _BehaviorServer::blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value) {
+	BehaviorServer::get_singleton()->blackboard_set_entry_fast<T>(p_rid, p_name, p_value);
+}
+
+template <typename T>
+void _BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, T p_default) {
+	BehaviorServer::get_singleton()->blackboard_set_entry<T>(p_rid, p_name, p_default);
+}
 
 }
 

@@ -1,7 +1,9 @@
 
 #include "behavior_server.hpp"
 
+#ifdef TESTS_ENABLED
 #include "test_runner.hpp"
+#endif
 
 #include <godot_cpp/core/class_db.hpp>
 
@@ -116,27 +118,6 @@ bool BehaviorServer::blackboard_is_ancestor(RID p_rid, RID p_candidate) {
 	return blackboard->is_ancestor(candidate);
 }
 
-template <typename T>
-bool BehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-	ERR_FAIL_NULL_V(blackboard, false);
-	return blackboard->try_get_entry(p_name, p_out_result, p_check_parents);
-}
-
-template <typename T>
-T BehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-	ERR_FAIL_NULL_V(blackboard, p_default);
-	return blackboard->get_entry(p_name, p_default, p_check_parents);
-}
-
-template <typename T>
-void BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, const T &p_value) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-	ERR_FAIL_NULL(blackboard);
-	blackboard->set_entry(p_name, p_value);
-}
-
 bool BehaviorServer::blackboard_erase_entry(RID p_rid, const StringName &p_name) {
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(blackboard, false);
@@ -182,46 +163,46 @@ void _BehaviorServer::_bind_methods() {
 
 	// TODO: try_get_entry_*, cannot find an example of an out reference in the gdscript bindings
 
-	ClassDB::bind_method(D_METHOD("blackboard_get_entry", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Variant>, DEFVAL(Variant()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_bool", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<bool>, DEFVAL(false), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_int", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<int64_t>, DEFVAL(0), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_float", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<real_t>, DEFVAL(0.0), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_string", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<String>, DEFVAL(""), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector2", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector2>, DEFVAL(Vector2()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector2i", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector2i>, DEFVAL(Vector2i()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_rect2", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Rect2>, DEFVAL(Rect2()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_rect2i", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Rect2i>, DEFVAL(Rect2i()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector3", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector3>, DEFVAL(Vector3()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector3i", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector3i>, DEFVAL(Vector3i()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_transform2d", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Transform2D>, DEFVAL(Transform2D()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector4", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector4>, DEFVAL(Vector4()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_vector4i", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector4i>, DEFVAL(Vector4i()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_plane", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Plane>, DEFVAL(Plane()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_quaternion", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Quaternion>, DEFVAL(Quaternion()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_aabb", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<AABB>, DEFVAL(AABB()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_basis", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Basis>, DEFVAL(Basis()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_transform3d", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Transform3D>, DEFVAL(Transform3D()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_projection", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Projection>, DEFVAL(Projection()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_color", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Color>, DEFVAL(Color()));
-	ClassDB::bind_method(D_METHOD("blackboard_get_string_name", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<StringName>, DEFVAL(""), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_node_path", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<NodePath>, DEFVAL(NodePath()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_rid", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<RID>, DEFVAL(RID()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_object", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_object, DEFVAL(nullptr), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_ref_counted", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Ref<RefCounted>>, DEFVAL(Ref<RefCounted>()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_callable", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Callable>, DEFVAL(Callable()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_signal", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Signal>, DEFVAL(Signal()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_dictionary", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Dictionary>, DEFVAL(Dictionary()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Array>, DEFVAL(Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_byte_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedByteArray>, DEFVAL(PackedByteArray()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_int32_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedInt32Array>, DEFVAL(PackedInt32Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_int64_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedInt64Array>, DEFVAL(PackedInt64Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_float32_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedFloat32Array>, DEFVAL(PackedFloat32Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_float64_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedFloat64Array>, DEFVAL(PackedFloat64Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_string_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedStringArray>, DEFVAL(PackedStringArray()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector2_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector2Array>, DEFVAL(PackedVector2Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector3_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector3Array>, DEFVAL(PackedVector3Array()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_color_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedColorArray>, DEFVAL(PackedColorArray()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector4_array", "rid", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector4Array>, DEFVAL(PackedVector4Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_entry", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Variant>, DEFVAL(Variant()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_bool", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<bool>, DEFVAL(false), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_int", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<int64_t>, DEFVAL(0), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_float", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<real_t>, DEFVAL(0.0), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_string", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<String>, DEFVAL(""), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector2", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector2>, DEFVAL(Vector2()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector2i", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector2i>, DEFVAL(Vector2i()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_rect2", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Rect2>, DEFVAL(Rect2()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_rect2i", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Rect2i>, DEFVAL(Rect2i()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector3", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector3>, DEFVAL(Vector3()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector3i", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector3i>, DEFVAL(Vector3i()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_transform2d", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Transform2D>, DEFVAL(Transform2D()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector4", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector4>, DEFVAL(Vector4()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_vector4i", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Vector4i>, DEFVAL(Vector4i()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_plane", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Plane>, DEFVAL(Plane()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_quaternion", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Quaternion>, DEFVAL(Quaternion()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_aabb", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<AABB>, DEFVAL(AABB()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_basis", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Basis>, DEFVAL(Basis()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_transform3d", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Transform3D>, DEFVAL(Transform3D()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_projection", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Projection>, DEFVAL(Projection()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_color", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Color>, DEFVAL(Color()));
+	ClassDB::bind_method(D_METHOD("blackboard_get_string_name", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<StringName>, DEFVAL(""), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_node_path", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<NodePath>, DEFVAL(NodePath()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_rid", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<RID>, DEFVAL(RID()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_object", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Object*>, DEFVAL(nullptr), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_ref_counted", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Ref<RefCounted>>, DEFVAL(Ref<RefCounted>()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_callable", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Callable>, DEFVAL(Callable()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_signal", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Signal>, DEFVAL(Signal()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_dictionary", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Dictionary>, DEFVAL(Dictionary()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<Array>, DEFVAL(Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_byte_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedByteArray>, DEFVAL(PackedByteArray()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_int32_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedInt32Array>, DEFVAL(PackedInt32Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_int64_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedInt64Array>, DEFVAL(PackedInt64Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_float32_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedFloat32Array>, DEFVAL(PackedFloat32Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_float64_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedFloat64Array>, DEFVAL(PackedFloat64Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_string_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedStringArray>, DEFVAL(PackedStringArray()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector2_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector2Array>, DEFVAL(PackedVector2Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector3_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector3Array>, DEFVAL(PackedVector3Array()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_color_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedColorArray>, DEFVAL(PackedColorArray()), DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_get_packed_vector4_array", "rid", "name", "default", "check_parents"), &_BehaviorServer::blackboard_get_entry<PackedVector4Array>, DEFVAL(PackedVector4Array()), DEFVAL(true));
 
 	ClassDB::bind_method(D_METHOD("blackboard_set_entry", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<Variant>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_bool", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<bool>);
@@ -247,7 +228,7 @@ void _BehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("blackboard_set_string_name", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<StringName>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_node_path", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<NodePath>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_rid", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<RID>);
-	ClassDB::bind_method(D_METHOD("blackboard_set_object", "rid", "name", "value"), &_BehaviorServer::blackboard_set_object);
+	ClassDB::bind_method(D_METHOD("blackboard_set_object", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<Object*>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_ref_counted", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<Ref<RefCounted>>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_callable", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<Callable>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_signal", "rid", "name", "value"), &_BehaviorServer::blackboard_set_entry<Signal>);
@@ -311,21 +292,6 @@ RID _BehaviorServer::blackboard_get_parent(RID p_rid) {
 
 bool _BehaviorServer::blackboard_is_ancestor(RID p_rid, RID p_candidate) {
 	return BehaviorServer::get_singleton()->blackboard_is_ancestor(p_rid, p_candidate);
-}
-
-template <typename T>
-bool _BehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_try_get(p_rid, p_name, p_out_result, p_check_parents);
-}
-
-template <typename T>
-T _BehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_get_entry(p_rid, p_name, p_default, p_check_parents);
-}
-
-template <typename T>
-void _BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, const T &p_value) {
-	BehaviorServer::get_singleton()->blackboard_set_entry(p_rid, p_name, p_value);
 }
 
 bool _BehaviorServer::blackboard_erase_entry(RID p_rid, const StringName &p_name) {
