@@ -17,9 +17,9 @@ using namespace godot;
 using namespace hydrogen;
 
 static BehaviorServer *behavior_server = nullptr;
-static _BehaviorServer *_behavior_server = nullptr;
+static HydrogenBehaviorServer *hydrogen_behavior_server = nullptr;
 
-static auto k_server_name = "BehaviorServer";
+const auto k_server_name = "BehaviorServer";
 
 void initialize_gdextension_types(ModuleInitializationLevel p_level)
 {
@@ -30,15 +30,15 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	Blackboard::registration_init();
 
 	GDREGISTER_INTERNAL_CLASS(BehaviorServer);
-	GDREGISTER_CLASS(_BehaviorServer);
+	GDREGISTER_CLASS(HydrogenBehaviorServer);
 	GDREGISTER_CLASS(HydrogenBlackboard);
 
 	behavior_server = memnew(BehaviorServer);
 	behavior_server->init();
 
-	_behavior_server = memnew(_BehaviorServer);
+	hydrogen_behavior_server = memnew(HydrogenBehaviorServer);
 
-	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
+	Engine::get_singleton()->register_singleton(k_server_name, HydrogenBehaviorServer::get_singleton());
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
@@ -48,8 +48,8 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 
 	Engine::get_singleton()->unregister_singleton(k_server_name);
 
-	if (_behavior_server) {
-		memdelete(_behavior_server);
+	if (hydrogen_behavior_server) {
+		memdelete(hydrogen_behavior_server);
 	}
 
 	if (behavior_server) {

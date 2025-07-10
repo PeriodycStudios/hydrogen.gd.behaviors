@@ -77,23 +77,23 @@ public:
 	// ---- Blackboard END ----
 };
 
-class _BehaviorServer final : public Object {
-	GDCLASS(_BehaviorServer, Object);
+class HydrogenBehaviorServer final : public Object {
+	GDCLASS(HydrogenBehaviorServer, Object);
 
 	friend class BehaviorServer;
-	static _BehaviorServer *singleton;
+	static HydrogenBehaviorServer *singleton;
 
 protected:
 	static void _bind_methods();
 
 public:
-	static _BehaviorServer *get_singleton();
+	static HydrogenBehaviorServer *get_singleton();
 
-	_BehaviorServer() {
+	HydrogenBehaviorServer() {
 		singleton = this;
 	};
 
-	~_BehaviorServer() override {
+	~HydrogenBehaviorServer() override {
 		singleton = nullptr;
 	};
 
@@ -112,6 +112,8 @@ public:
 
 	template<typename T>
 	bool blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
+
+	Variant blackboard_try_get_as_variant(RID p_rid, const StringName &p_name, bool p_check_parents = true);
 
 	template<typename T>
 	const T &blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
@@ -174,27 +176,33 @@ void BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, T
 }
 
 template <typename T>
-bool _BehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
+bool HydrogenBehaviorServer::blackboard_try_get(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
 	return BehaviorServer::get_singleton()->blackboard_try_get<T>(p_rid, p_name, p_out_result, p_check_parents);
 }
 
+inline Variant HydrogenBehaviorServer::blackboard_try_get_as_variant(RID p_rid, const StringName &p_name, bool p_check_parents) {
+	Variant out_variant = Variant();
+	blackboard_try_get(p_rid, p_name, out_variant, p_check_parents);
+	return out_variant;
+}
+
 template <typename T>
-const T &_BehaviorServer::blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
+const T &HydrogenBehaviorServer::blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
 	return BehaviorServer::get_singleton()->blackboard_get_entry_fast<T>(p_rid, p_name, p_default, p_check_parents);
 }
 
 template <typename T>
-T _BehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default, bool p_check_parents) {
+T HydrogenBehaviorServer::blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default, bool p_check_parents) {
 	return BehaviorServer::get_singleton()->blackboard_get_entry<T>(p_rid, p_name, p_default, p_check_parents);
 }
 
 template <typename T>
-void _BehaviorServer::blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value) {
+void HydrogenBehaviorServer::blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value) {
 	BehaviorServer::get_singleton()->blackboard_set_entry_fast<T>(p_rid, p_name, p_value);
 }
 
 template <typename T>
-void _BehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, T p_default) {
+void HydrogenBehaviorServer::blackboard_set_entry(RID p_rid, const StringName &p_name, T p_default) {
 	BehaviorServer::get_singleton()->blackboard_set_entry<T>(p_rid, p_name, p_default);
 }
 
