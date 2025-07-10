@@ -20,9 +20,8 @@ class BehaviorServer final : public Object {
 
 	static BehaviorServer *singleton;
 
-	RID_PtrOwner<Blackboard> blackboard_owner;
-
-	Mutex *mutex = nullptr;
+	RID_PtrOwner<Blackboard> blackboard_owner = {};
+	Ref<Mutex> mutex = {};
 
 protected:
 	static void _bind_methods();

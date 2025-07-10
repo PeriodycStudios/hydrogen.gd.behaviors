@@ -15,6 +15,9 @@
 namespace hydrogen::test {
 using namespace godot;
 
+// TODO: Multi-Threaded tests
+// TODO: Switch to using BehaviorServer API
+
 template<typename T>
 void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
 	blackboard->set_entry(p_name, p_value);

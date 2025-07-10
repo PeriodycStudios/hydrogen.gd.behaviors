@@ -3,7 +3,6 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/godot.hpp>
 #include <godot_cpp/classes/engine.hpp>
-#include <godot_cpp/core/print_string.hpp>
 
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
@@ -28,7 +27,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 		return;
 	}
 
-	Blackboard::register_core_variant_types();
+	Blackboard::registration_init();
 
 	GDREGISTER_INTERNAL_CLASS(BehaviorServer);
 	GDREGISTER_CLASS(_BehaviorServer);
@@ -40,11 +39,6 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	_behavior_server = memnew(_BehaviorServer);
 
 	Engine::get_singleton()->register_singleton(k_server_name, _BehaviorServer::get_singleton());
-
-// #if TESTS_ENABLED
-// 	auto result = tests::behavior_test_runner();
-// 	print_line("Result of tests: ", result == 0 ? "Success" : "Failure");
-// #endif
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
@@ -62,6 +56,8 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 		behavior_server->finish();
 		memdelete(behavior_server);
 	}
+
+	Blackboard::registration_finish();
 }
 
 extern "C"

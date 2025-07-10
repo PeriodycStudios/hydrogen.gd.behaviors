@@ -26,18 +26,13 @@ BehaviorServer::~BehaviorServer() {
 }
 
 void BehaviorServer::lock() const {
-	if (!mutex) {
-		return;
-	}
+	ERR_FAIL_COND(mutex.is_null());
 
 	mutex->lock();
 }
 
 void BehaviorServer::unlock() const {
-	if (!mutex) {
-		return;
-	}
-
+	ERR_FAIL_COND(mutex.is_null());
 	mutex->unlock();
 }
 
@@ -81,16 +76,13 @@ RID BehaviorServer::agent_create() {
 }
 
 Error BehaviorServer::init() {
- 	mutex = memnew(Mutex);
+ 	mutex.instantiate();
  	return OK;
 }
 
 void BehaviorServer::finish() {
 
-	if (mutex) {
-		memdelete(mutex);
-		mutex = nullptr;
-	}
+	mutex.unref();
 }
 
 // ---- Blackboard ----
@@ -106,7 +98,7 @@ bool BehaviorServer::blackboard_set_parent(RID p_rid, RID p_parent) {
 RID BehaviorServer::blackboard_get_parent(RID p_rid) {
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(blackboard, RID());
-	Blackboard *parent = blackboard->get_parent();
+	const Blackboard *parent = blackboard->get_parent();
 	return parent ? parent->get_self() : RID();
 }
 

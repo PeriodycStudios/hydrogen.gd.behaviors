@@ -8,17 +8,60 @@ namespace hydrogen {
 
 // TODO: tkey250628 - need a custom allocator so the Entries aren't fragmented.
 
+Ref<Mutex> Blackboard::register_mutex = {};
 HashMap<int64_t, StringName> Blackboard::TypeInfo::type_names = {};
 Blackboard::TypeInfoMap Blackboard::type_infos = {};
 Blackboard::TypeInfoMap Blackboard::object_class_infos = {};
 Blackboard::FallbackTable Blackboard::variant_fallbacks = {nullptr};
 const Blackboard::TypeInfo *Blackboard::ref_fallback_type_info = nullptr;
-bool Blackboard::core_variants_registered = false;
+bool Blackboard::is_registration_ready = false;
 
-void Blackboard::register_core_variant_types() {
-	if (core_variants_registered) {
+void Blackboard::registration_init() {
+
+	if (is_registration_ready) {
 		return;
 	}
+
+	register_mutex.instantiate();
+
+	register_core_variant_types();
+	is_registration_ready = true;
+}
+
+void Blackboard::registration_finish() {
+
+	if (!is_registration_ready) {
+		return;
+	}
+
+	registration_clear();
+
+	register_mutex.unref();
+	is_registration_ready = false;
+}
+
+void Blackboard::registration_clear() {
+	registration_lock();
+
+	for (auto& kvp : type_infos) {
+		TypeInfo* type_info = const_cast<TypeInfo *>(kvp.value);
+		*type_info = TypeInfo();
+	}
+
+	TypeInfo::type_names.clear();
+	type_infos.clear();
+	object_class_infos.clear();
+	for (int i = 0; i < Variant::VARIANT_MAX; ++i) {
+		variant_fallbacks[i] = nullptr;
+	}
+	ref_fallback_type_info = nullptr;
+
+	registration_unlock();
+}
+
+void Blackboard::register_core_variant_types() {
+
+	registration_lock();
 
 	register_type<bool>();
 	register_type<uint8_t>();
@@ -121,18 +164,28 @@ void Blackboard::register_core_variant_types() {
 
 	ref_fallback_type_info = RegisteredTypeInfo<Ref<RefCounted>>::get_info_ptr();
 
-	core_variants_registered = true;
+	registration_unlock();
+}
+
+Blackboard::Blackboard() {
+	mutex.instantiate();
 }
 
 Blackboard::~Blackboard() {
+	lock();
+
 	for (const auto& entry_kvp : entries) {
 		const auto entry = entry_kvp.value;
 		const RID rid = entry->get_self();
 		entries_owner.free(rid);
 		memdelete(entry);
 	}
-
 	entries.clear();
+	parent = nullptr;
+
+	unlock();
+
+	mutex.unref();
 }
 
 bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const {
@@ -148,23 +201,67 @@ bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const 
 	const Blackboard * current = p_candidate->parent;
 
 	while (current) {
+		current->lock();
+
 		if (unlikely(current == this)) {
+			current->unlock();
+			unlock();
 			return false;
 		}
-		current = current->parent;
+
+		const Blackboard * next = current->parent;
+		current->unlock();
+
+		current = next;
 	}
 
 	return true;
 }
 
-bool Blackboard::is_ancestor(Blackboard *p_candidate) const {
-	Blackboard *current = parent;
+// FIXME: Blackboard's have no idea if their parents are being deleted before they are.
+bool Blackboard::set_parent(Blackboard *p_parent) {
+
+	lock();
+
+	if (likely(p_parent != parent && validate_candidate_parent(p_parent))) {
+		parent = p_parent;
+
+		unlock();
+		return true;
+	}
+
+	unlock();
+	return false;
+}
+
+Blackboard *Blackboard::get_parent() const {
+	lock();
+	Blackboard *p = parent;
+	unlock();
+	return p;
+}
+
+bool Blackboard::is_ancestor(const Blackboard *p_candidate) const {
+
+	lock();
+	const Blackboard *current = parent;
+
 	while (current != nullptr) {
-		if (current->get_self() == p_candidate) {
+		current->lock();
+
+		if (current == p_candidate) {
+			current->unlock();
+			unlock();
 			return true;
 		}
-		current = current->parent;
+
+		const Blackboard * next = current->parent;
+		current->unlock();
+
+		current = next;
 	}
+
+	unlock();
 	return false;
 }
 
@@ -181,29 +278,43 @@ void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 
 bool Blackboard::erase_entry(const StringName &p_name) {
 
+	lock();
+
 	auto iter = entries.find(p_name);
 	if (unlikely(iter == entries.end())) {
+		unlock();
 		return false;
 	}
 
 	free_entry(iter);
+
+	unlock();
 	return true;
 }
 
 bool Blackboard::has_entry(const StringName &p_name, const bool p_check_parents) const {
+	lock();
 	bool result = entries.has(p_name);
 
 	if (!result && p_check_parents) {
 		const Blackboard *current = parent;
 		while (current != nullptr) {
-			result = current->entries.has(p_name);
-			if (result) {
+			current->lock();
+
+			if (current->entries.has(p_name)) {
+				current->unlock();
+				unlock();
 				return true;
 			}
-			current = current->parent;
+
+			const Blackboard *next = current->parent;
+			current->unlock();
+
+			current = next;
 		}
 	}
 
+	unlock();
 	return result;
 }
 
@@ -211,9 +322,11 @@ Dictionary Blackboard::export_entries() const {
 
 	Dictionary dict = {};
 
+	lock();
 	for (const auto &kvp : entries) {
 		dict[kvp.key] = kvp.value->as_variant();
 	}
+	unlock();
 
 	return dict;
 }
@@ -221,6 +334,7 @@ Dictionary Blackboard::export_entries() const {
 Dictionary Blackboard::export_type_infos() {
 	Dictionary results = {};
 
+	registration_lock();
 	for (const auto &kvp : type_infos) {
 		const TypeInfo * info = kvp.value;
 		Dictionary dict = {};
@@ -238,6 +352,7 @@ Dictionary Blackboard::export_type_infos() {
 
 		results[type_name] = dict;
 	}
+	registration_unlock();
 
 	return results;
 }
