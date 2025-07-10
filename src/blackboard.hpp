@@ -11,9 +11,6 @@
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/variant.hpp>
 #include <godot_cpp/classes/mutex.hpp>
-#if BLACKBOARD_VERBOSE
-#include <godot_cpp/core/print_string.hpp>
-#endif
 
 #include <functional>
 
@@ -334,6 +331,8 @@ public:
 	template <typename T>
 	void set_entry(const StringName &p_name, T p_value);
 
+	bool set_from_dictionary(Dictionary p_data);
+
 	bool erase_entry(const StringName &p_name);
 
 	[[nodiscard]] bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
@@ -420,26 +419,6 @@ void Blackboard::register_type() {
 	if (type_info.object_class_key != 0) {
 		object_class_infos[type_info.object_class_key] = RegisteredTypeInfo<type>::get_info_ptr();
 	}
-
-#if BLACKBOARD_VERBOSE
-	print_line("Type [", name, "] fully registered with key: ", type_info.type_key);
-	if (type_info.variant_type != Variant::NIL) {
-		const String variant_name = Variant::get_type_name(type_info.variant_type);
-		print_line("- Type associated with: ", variant_name);
-		if (type_info.is_convertible()) {
-			print_line("- Is Convertible");
-		}
-		if (type_info.is_gd_object()) {
-			if (type_info.is_object_ptr_type()) {
-				print_line("- Is Object pointer type");
-			}
-			if (type_info.is_ref_counted()) {
-				print_line("- Is Ref-Counted");
-			}
-		}
-	}
-	print_line("");
-#endif
 
 	registration_unlock();
 }

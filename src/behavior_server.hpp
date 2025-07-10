@@ -66,6 +66,8 @@ public:
 	template <typename T>
 	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_value);
 
+	bool blackboard_set_from_dictionary(RID p_rid, Dictionary p_data);
+
 	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
 
 	bool blackboard_has_entry(RID p_rid, const StringName &p_name, bool p_check_parents = true);
@@ -126,6 +128,8 @@ public:
 
 	template <typename T>
 	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_default = {});
+
+	bool blackboard_set_from_dictionary(RID p_rid, Dictionary p_data);
 
 	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
 

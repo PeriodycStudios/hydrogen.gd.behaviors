@@ -276,6 +276,28 @@ void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 	memdelete(entry);
 }
 
+bool Blackboard::set_from_dictionary(Dictionary p_data) {
+
+	if (p_data.is_empty() || !p_data.is_typed() ||
+		p_data.get_typed_key_builtin() != Variant::STRING_NAME) {
+		return false;
+	}
+
+	lock();
+
+	const Array keys = p_data.keys();
+	const Array values = p_data.values();
+
+	for (int i = 0; i < p_data.size(); ++i) {
+		const StringName key_name = keys[i];
+		set_entry_fast<Variant>(key_name, values[i]);
+	}
+
+	unlock();
+
+	return true;
+}
+
 bool Blackboard::erase_entry(const StringName &p_name) {
 
 	lock();

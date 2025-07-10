@@ -110,6 +110,12 @@ bool BehaviorServer::blackboard_is_ancestor(RID p_rid, RID p_candidate) {
 	return blackboard->is_ancestor(candidate);
 }
 
+bool BehaviorServer::blackboard_set_from_dictionary(RID p_rid, Dictionary p_data) {
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	ERR_FAIL_NULL_V(blackboard, false);
+	return blackboard->set_from_dictionary(p_data);
+}
+
 bool BehaviorServer::blackboard_erase_entry(RID p_rid, const StringName &p_name) {
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
 	ERR_FAIL_NULL_V(blackboard, false);
@@ -237,6 +243,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("blackboard_set_packed_color_array", "rid", "name", "value"), &HydrogenBehaviorServer::blackboard_set_entry<PackedColorArray>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_packed_vector4_array", "rid", "name", "value"), &HydrogenBehaviorServer::blackboard_set_entry<PackedVector4Array>);
 
+	ClassDB::bind_method(D_METHOD("blackboard_set_from_dictionary", "rid", "data"), &HydrogenBehaviorServer::blackboard_set_from_dictionary);
 
 	ClassDB::bind_method(D_METHOD("blackboard_erase_entry", "rid", "name"), &HydrogenBehaviorServer::blackboard_erase_entry);
 	ClassDB::bind_method(D_METHOD("blackboard_has_entry", "rid", "name"), &HydrogenBehaviorServer::blackboard_has_entry);
@@ -284,6 +291,10 @@ RID HydrogenBehaviorServer::blackboard_get_parent(RID p_rid) {
 
 bool HydrogenBehaviorServer::blackboard_is_ancestor(RID p_rid, RID p_candidate) {
 	return BehaviorServer::get_singleton()->blackboard_is_ancestor(p_rid, p_candidate);
+}
+
+bool HydrogenBehaviorServer::blackboard_set_from_dictionary(RID p_rid, Dictionary p_data) {
+	return BehaviorServer::get_singleton()->blackboard_set_from_dictionary(p_rid, p_data);
 }
 
 bool HydrogenBehaviorServer::blackboard_erase_entry(RID p_rid, const StringName &p_name) {
