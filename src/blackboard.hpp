@@ -372,6 +372,8 @@ void Blackboard::register_type() {
 	type_info.type_key = name.hash();
 	TypeInfo::type_names[type_info.type_key] = name;
 
+	constexpr bool is_const_obj_type = std::is_const_v<without_ptr>;
+
 	if constexpr (traits::convertible_info_needs_conversion_v<type>) {
 		typedef typename traits::convertible_info<type>::conversion_type conversion_type;
 		
@@ -389,20 +391,24 @@ void Blackboard::register_type() {
 		type_info.variant_type = static_cast<Variant::Type>(GetTypeInfo<type>::VARIANT_TYPE);
 
 		if constexpr (traits::is_exactly_gd_object_v<without_ptr>) {
-			type_info.object_class_key = Object::get_class_static().hash();
+			if constexpr (!is_const_obj_type) {
+				type_info.object_class_key = Object::get_class_static().hash();
+			}
 			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
 			type_info.create = create_entry<EntryVariant<type>>;
-			print_line("*** creating exactly gd object type ", type_info.object_class_key, " ", name);
 		}
 		else if constexpr (traits::is_gd_object_type_v<without_ptr>) {
-			type_info.object_class_key = without_ptr::get_class_static().hash();
+			if constexpr (!is_const_obj_type) {
+				type_info.object_class_key = without_ptr::get_class_static().hash();
+			}
 			type_info.enable_flag(TypeInfo::Flags::IS_OBJECT_PTR_TYPE);
 			type_info.create = create_entry<EntryVariantObject<type>>;
-			print_line("*** creating object type ", type_info.object_class_key, " ", name);
 		}
 		else if constexpr (traits::is_gd_ref_helper_v<type>) {
 			typedef traits::extract_ref_counted_type_t<type> ref_counted_type;
-			type_info.object_class_key = ref_counted_type::get_class_static().hash();
+			if constexpr (!is_const_obj_type && !std::is_const_v<ref_counted_type>) {
+				type_info.object_class_key = ref_counted_type::get_class_static().hash();
+			}
 			type_info.enable_flag(TypeInfo::Flags::IS_REF_COUNTED);
 			type_info.create = create_entry<EntryVariant<type>>;
 		}
@@ -489,8 +495,6 @@ inline const Variant &Blackboard::get_entry_fast<Variant>(const StringName &p_na
 }
 
 inline void Blackboard::create_new_variant_entry(const StringName &p_name, const Variant &p_value, const Variant::Type variant_type, EntryBase* previous) {
-
-	print_line("create_new_variant_entry ", p_name, " ", Variant::get_type_name(variant_type));
 	registration_lock();
 
 	const TypeInfo *type_info;
@@ -498,15 +502,12 @@ inline void Blackboard::create_new_variant_entry(const StringName &p_name, const
 		const Object *obj = p_value;
 		const String class_name = obj->get_class();
 		const int64_t object_class_key = class_name.hash();
-		print_line("create new variant entry: ", p_name, " ", p_value, " ", class_name, " ", object_class_key);
 
 		const auto type_info_iter = object_class_infos.find(object_class_key);
 		if (likely(type_info_iter == object_class_infos.end())) {
 			const Ref<RefCounted> ref = p_value;
-			print_line("is ref info: ", !ref.is_null());
 			type_info = ref.is_null() ? variant_fallbacks[Variant::Type::OBJECT] : ref_fallback_type_info;
 		} else {
-			print_line("known type info");
 			type_info = type_info_iter->value;
 		}
 	} else {
@@ -515,15 +516,12 @@ inline void Blackboard::create_new_variant_entry(const StringName &p_name, const
 
 	registration_unlock();
 
-	print_line("type info: ", type_info->get_name());
-
 	EntryBase *entry = type_info->create(p_name, entries_owner, entries, previous);
 	entry->set_from(p_value);
 }
 
 template <>
 inline void Blackboard::set_entry_fast<Variant>(const StringName &p_name, const Variant& p_value) {
-	print_line("set entry fast ", p_name, " ", p_value);
 	lock();
 
 	const Variant::Type variant_type = p_value.get_type();
@@ -578,7 +576,6 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, Variant p_v
 
 template <typename T>
 bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
-	print_line("finding entry: ", p_name);
 	registration_lock();
 
 	typedef traits::resolved_type_t<T> type;
@@ -591,20 +588,16 @@ bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p
 	const auto type_key = type_info.type_key;
 	registration_unlock();
 
-	print_line("found type info: ", type_info.get_name());
-
 	lock();
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
-		print_line("found result ", iter->value->get_type_name());
 		p_out_result = iter;
 		unlock();
 		return true;
 	}
 
 	if (likely(p_check_parents)) {
-		print_line("check parent ", p_name);
 		const Blackboard *current = parent;
 		while (current != nullptr) {
 			current->lock();
@@ -613,13 +606,11 @@ bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p
 				const auto entry_type_key = iter->value->get_type_key();
 
 				if (entry_type_key != type_key) {
-					print_line("type mismatch! ", iter->value->get_type_name());
 					current->unlock();
 					unlock();
 					return false;
 				}
 
-				print_line("found result in parent: ", iter->value->get_type_name());
 				p_out_result = iter;
 				current->unlock();
 				unlock();
@@ -632,7 +623,6 @@ bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p
 		}
 	}
 
-	print_line("not found: ", p_name);
 	unlock();
 	return false;
 }
@@ -663,7 +653,6 @@ bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const 
 
 template <typename T>
 const T &Blackboard::get_entry_fast(const StringName &p_name, const T &p_default, const bool p_check_parents) const {
-	print_line("get entry fast: ", p_name);
 	lock();
 
 	EntryMap::ConstIterator iter;
