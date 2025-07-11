@@ -121,7 +121,7 @@ void Blackboard::register_core_variant_types() {
 
 #define SET_VARIANT_FALLBACK(type) variant_fallbacks[GetTypeInfo<type>::VARIANT_TYPE] = RegisteredTypeInfo<type>::get_info_ptr();
 	SET_VARIANT_FALLBACK(bool)
-	SET_VARIANT_FALLBACK(uint64_t)
+	SET_VARIANT_FALLBACK(int64_t)
 	SET_VARIANT_FALLBACK(double)
 	SET_VARIANT_FALLBACK(String)
 	SET_VARIANT_FALLBACK(Vector2)
@@ -278,10 +278,11 @@ void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 
 bool Blackboard::set_from_dictionary(Dictionary p_data) {
 
-	if (p_data.is_empty() || !p_data.is_typed() ||
-		p_data.get_typed_key_builtin() != Variant::STRING_NAME) {
-		return false;
-	}
+	ERR_FAIL_COND_V_MSG(p_data.is_empty() || !p_data.is_typed() ||
+		p_data.get_typed_key_builtin() != Variant::STRING_NAME ||
+		p_data.get_typed_value_builtin() != Variant::NIL,
+		false,
+		"Dictionary must be typed [String, Variant]");
 
 	lock();
 
@@ -289,8 +290,9 @@ bool Blackboard::set_from_dictionary(Dictionary p_data) {
 	const Array values = p_data.values();
 
 	for (int i = 0; i < p_data.size(); ++i) {
-		const StringName key_name = keys[i];
-		set_entry_fast<Variant>(key_name, values[i]);
+		const StringName key = keys[i];
+		const Variant& value = values[i];
+		set_entry_fast<Variant>(key, value);
 	}
 
 	unlock();

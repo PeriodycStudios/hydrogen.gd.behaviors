@@ -46,6 +46,8 @@ public:
 	template <typename T>
 	void set_entry(const StringName &p_name, T p_value);
 
+	bool set_from_dictionary(Dictionary data) const;
+
 	[[nodiscard]] bool erase_entry(const StringName &p_name) const;
 
 	[[nodiscard]] bool has_entry(const StringName &p_name) const;
@@ -57,7 +59,7 @@ public:
 
 template <typename T>
 _FORCE_INLINE_ bool HydrogenBlackboard::try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents) {
-	return hydrogen::BehaviorServer::get_singleton()->blackboard_try_get(blackboard, p_name, p_out_result, p_check_parents);
+	return hydrogen::BehaviorServer::get_singleton()->blackboard_try_get_entry(blackboard, p_name, p_out_result, p_check_parents);
 }
 
 template <typename T>

@@ -1,4 +1,6 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_DLL
+#include "behavior_server.hpp"
+
 #include <doctest.h>
 
 #include "blackboard.hpp"
@@ -19,17 +21,19 @@ using namespace godot;
 // TODO: Switch to using BehaviorServer API
 
 template<typename T>
-void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
-	blackboard->set_entry(p_name, p_value);
-	CHECK(blackboard->has_entry(p_name));
+void test_simple_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, T p_value) {
+	server->blackboard_set_entry_fast(blackboard, p_name, p_value);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(blackboard->try_get_entry<T>(p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
 		CHECK(result == p_value);
 	}
 
-	CHECK(blackboard->get_entry<T>(p_name) == p_value);
+	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value);
+	server->blackboard_erase_entry(blackboard, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (
 		!traits::is_exactly_gd_object_v<T> &&
@@ -38,159 +42,152 @@ void test_simple_get_set(Blackboard *blackboard, const StringName &p_name, T p_v
 		traits::is_gd_object_type_v<std::remove_pointer_t<T>>
 		) {
 
-		blackboard->erase_entry(p_name);
-		CHECK_FALSE(blackboard->has_entry(p_name));
-
 		typedef traits::resolve_object_ptr_type_t<T> obj_ptr_t;
 		typedef std::remove_pointer_t<obj_ptr_t> obj_without_ptr;
 		typedef std::remove_pointer_t<T> without_ptr;
 
 		obj_ptr_t obj = Object::cast_to<obj_without_ptr>(p_value);
 		Variant v1 = obj;
-		blackboard->set_entry(p_name, v1);
-		CHECK(blackboard->has_entry(p_name));
+		server->blackboard_set_entry(blackboard, p_name, v1);
+		CHECK(server->blackboard_has_entry(blackboard, p_name));
 
-		Variant v2 = blackboard->get_entry<Variant>(p_name);
+		Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
 		obj_ptr_t obj2 = v2;
 		T result = Object::cast_to<without_ptr>(obj);
 		CHECK(result == p_value);
 	}
 	else if constexpr (traits::is_variant_type_v<T>) {
-		blackboard->erase_entry(p_name);
-		CHECK_FALSE(blackboard->has_entry(p_name));
-
 		Variant v1 = p_value;
-		blackboard->set_entry(p_name, v1);
-		CHECK(blackboard->has_entry(p_name));
+		server->blackboard_set_entry(blackboard, p_name, v1);
+		CHECK(server->blackboard_has_entry(blackboard, p_name));
 
-		Variant v2 = blackboard->get_entry<Variant>(p_name);
+		Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
 		T result = v2;
 		CHECK(result == p_value);
 	}
-	else {
-		blackboard->erase_entry(p_name);
-		CHECK_FALSE(blackboard->has_entry(p_name));
-	}
 
-	blackboard->set_entry(p_name, p_value);
-	CHECK(blackboard->has_entry(p_name));
-	blackboard->set_entry(p_name, Variant());
-	CHECK(!blackboard->has_entry(p_name));
+	server->blackboard_set_entry(blackboard, p_name, p_value);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry(blackboard, p_name, Variant());
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
 }
 
 template<typename T, typename U>
-void test_convertable_get_set(Blackboard *blackboard, const StringName &p_name, T p_value) {
+void test_convertable_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, T p_value) {
 	static_assert(traits::is_variant_type_v<U>, "U must have a supported Variant conversion.");
 
-	blackboard->set_entry(p_name, p_value);
-	CHECK(blackboard->has_entry(p_name));
+	server->blackboard_set_entry_fast(blackboard, p_name, p_value);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(blackboard->try_get_entry<T>(p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
 		CHECK(result == p_value);
 	}
 
-	CHECK(blackboard->get_entry<T>(p_name) == p_value);
-	blackboard->erase_entry(p_name);
-	CHECK_FALSE(blackboard->has_entry(p_name));
+	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value);
+	server->blackboard_erase_entry(blackboard, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
 
 	U conversion = p_value;
 	Variant v1 = conversion;
-	blackboard->set_entry(p_name, v1);
+	server->blackboard_set_entry(blackboard, p_name, v1);
 
-	CHECK(blackboard->has_entry(p_name));
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
-	Variant v2 = blackboard->get_entry<Variant>(p_name);
+	Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
 	U conversion_result = v2;
 	T result = conversion_result;
 	CHECK(result == p_value);
 
-	blackboard->erase_entry(p_name);
-	CHECK_FALSE(blackboard->has_entry(p_name));
+	server->blackboard_erase_entry(blackboard, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
 }
 
 template <typename T, typename U>
-void test_overwrite_get_set(Blackboard *blackboard, const StringName &p_name, const T &p_value_1, const T &p_value_2, const U &p_value_3) {
+void test_overwrite_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, const T &p_value_1, const T &p_value_2, const U &p_value_3) {
 
-	blackboard->set_entry(p_name, p_value_1);
-	CHECK(blackboard->has_entry(p_name));
+	server->blackboard_set_entry_fast(blackboard, p_name, p_value_1);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(blackboard->try_get_entry<T>(p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
 		CHECK(result == p_value_1);
 	}
 
-	CHECK(blackboard->get_entry<T>(p_name) == p_value_1);
-	blackboard->set_entry(p_name, p_value_2);
-	CHECK(blackboard->has_entry(p_name));
+	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value_1);
+	server->blackboard_set_entry(blackboard, p_name, p_value_2);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(blackboard->try_get_entry<T>(p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
 		CHECK(result == p_value_2);
 	}
 
-	CHECK(blackboard->get_entry<T>(p_name) == p_value_2);
+	CHECK(server->blackboard_get_entry<T>(blackboard, p_name) == p_value_2);
 
-	blackboard->set_entry(p_name, p_value_3);
-	CHECK(blackboard->has_entry(p_name));
+	server->blackboard_set_entry(blackboard, p_name, p_value_3);
+	CHECK(server->blackboard_has_entry(blackboard, p_name));
 
 	if constexpr (!std::is_const_v<U>) {
 		U result;
-		CHECK(blackboard->try_get_entry<U>(p_name, result));
+		CHECK(server->blackboard_try_get_entry<U>(blackboard, p_name, result));
 		CHECK(result == p_value_3);
 	}
 
-	CHECK(blackboard->get_entry<U>(p_name) == p_value_3);
+	CHECK(server->blackboard_get_entry<U>(blackboard, p_name) == p_value_3);
 
 	Variant v1 = Variant();
 
-	blackboard->set_entry(p_name, v1);
-	CHECK(!blackboard->has_entry(p_name));
+	server->blackboard_set_entry(blackboard, p_name, v1);
+	CHECK(!server->blackboard_has_entry(blackboard, p_name));
 }
 
 template <typename T>
-void test_default_get(Blackboard *blackboard, const StringName &p_name, const T &p_value) {
-	CHECK(blackboard->get_entry<T>(p_name, p_value) == p_value);
+void test_default_get(BehaviorServer *server, RID blackboard, const StringName &p_name, const T &p_value) {
+	CHECK(server->blackboard_get_entry<T>(blackboard, p_name, p_value) == p_value);
 
 	if constexpr (std::is_default_constructible_v<T>) {
 		const T default_result = {};
-		CHECK(blackboard->get_entry<T>(p_name) == default_result);
+		CHECK(server->blackboard_get_entry<T>(blackboard, p_name) == default_result);
 	}
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK_FALSE(blackboard->try_get_entry(p_name, result));
+		CHECK_FALSE(server->blackboard_try_get_entry(blackboard, p_name, result));
 	}
 
-	CHECK_FALSE(blackboard->has_entry(p_name));
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
 }
 
 template <typename T>
-void test_blackboard_get_ignore_parents(Blackboard *blackboard, const StringName &p_name, const T &p_value) {
-	CHECK_FALSE(blackboard->has_entry(p_name, false));
+void test_blackboard_get_ignore_parents(BehaviorServer* server, RID blackboard, const StringName &p_name, const T &p_value) {
+	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name, false));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK_FALSE(blackboard->try_get_entry<T>(p_name, result, false));
+		CHECK_FALSE(server->blackboard_try_get_entry<T>(blackboard, p_name, result, false));
 	}
 
-	CHECK(blackboard->get_entry<T>(p_name, p_value, false) == p_value);
+	CHECK(server->blackboard_get_entry<T>(blackboard, p_name, p_value, false) == p_value);
 }
 
-#define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(blackboard, #type, value);
+#define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(server, blackboard, #type, value);
 
-#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) test_convertable_get_set<type, convert_type>(blackboard, #type, value);
+#define TEST_CONVERTABLE_GET_SET(type, convert_type, value) test_convertable_get_set<type, convert_type>(server, blackboard, #type, value);
 
-#define TEST_OVERWRITE_GET_SET(type, value1, value2, value3) test_overwrite_get_set(blackboard, #type, value1, value2, value3);
+#define TEST_OVERWRITE_GET_SET(type, value1, value2, value3) test_overwrite_get_set(server, blackboard, #type, value1, value2, value3);
 
-#define TEST_DEFAULT_GET(type, value) test_default_get<type>(blackboard, #type, value);
+#define TEST_DEFAULT_GET(type, value) test_default_get<type>(server, blackboard, #type, value);
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Simple Get and Set") {
+	BehaviorServer *server = BehaviorServer::get_singleton();
+	REQUIRE(server);
 
-	Blackboard* blackboard = memnew(Blackboard);
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
 
 	TEST_SIMPLE_GET_SET(bool, true)
 	TEST_SIMPLE_GET_SET(const bool, false)
@@ -347,14 +344,18 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Simple Get and Set") {
 	const Node* const_node = node;
 	TEST_SIMPLE_GET_SET(const Node*, const_node)
 
-	memdelete(blackboard);
+	server->free_rid(blackboard);
 	memdelete(node);
+	ref_obj.unref();
+	json.unref();
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set Overwrite") {
+	BehaviorServer *server = BehaviorServer::get_singleton();
+	REQUIRE(server);
 
-	Blackboard* blackboard = memnew(Blackboard);
-	REQUIRE(blackboard != nullptr);
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
 
 	uint8_t a = 128;
 	TEST_OVERWRITE_GET_SET(bool, true, false, a)
@@ -391,16 +392,20 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set Overwrite") {
 
 	TEST_OVERWRITE_GET_SET(Ref<JSON>, json, json2, node_3d)
 
-	memdelete(blackboard);
+	server->free_rid(blackboard);
 	memdelete(node_3d);
 	memdelete(node2);
 	memdelete(node);
+	json2.unref();
+	json.unref();
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Get default values") {
+	BehaviorServer* server = BehaviorServer::get_singleton();
+	REQUIRE(server != nullptr);
 
-	Blackboard * blackboard = memnew(Blackboard);
-	REQUIRE(blackboard != nullptr);
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
 
 	TEST_DEFAULT_GET(bool, true)
 	TEST_DEFAULT_GET(int8_t, std::numeric_limits<int8_t>::min())
@@ -556,76 +561,83 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Get default values") {
 	const Node* const_node = node;
 	TEST_DEFAULT_GET(const Node*, const_node)
 
-
-	memdelete(blackboard);
+	server->free_rid(blackboard);
 	memdelete(node);
+	json.unref();
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
+	BehaviorServer* server = BehaviorServer::get_singleton();
+	REQUIRE(server != nullptr);
 
-	Blackboard* blackboard = memnew(Blackboard);
-	REQUIRE(blackboard != nullptr);
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
 
-	blackboard->set_entry("First", 255ul);
+	server->blackboard_set_entry(blackboard, "First", 255ul);
 
-	Blackboard* blackboard2 = memnew(Blackboard);
-	REQUIRE(blackboard2 != nullptr);
-	blackboard2->set_entry("Second", String("42"));
+	RID blackboard2 = server->blackboard_create();
+	REQUIRE(blackboard2 != RID());
+	server->blackboard_set_entry(blackboard2, "Second", String("42"));
 
-	Blackboard* blackboard3 = memnew(Blackboard);
-	REQUIRE(blackboard3 != nullptr);
+	RID blackboard3 = server->blackboard_create();
+	REQUIRE(blackboard3 != RID());
 	Array array = Array();
 	array.push_back(255ul);
 	array.push_back(42ul);
-	blackboard3->set_entry("Third", array);
+	server->blackboard_set_entry(blackboard3, "Third", array);
 
-	Blackboard* blackboard4 = memnew(Blackboard);
-	REQUIRE(blackboard4 != nullptr);
+	RID blackboard4 = server->blackboard_create();
+	REQUIRE(blackboard4 != RID());
 
 	Ref<JSON> json = {};
 	json.instantiate();
-	blackboard4->set_entry("Fourth", json);
+	server->blackboard_set_entry(blackboard4, "Fourth", json);
 
-	CHECK(blackboard->set_parent(blackboard2));
-	CHECK(blackboard2->set_parent(blackboard3));
-	CHECK(blackboard3->set_parent(blackboard4));
-	CHECK_FALSE(blackboard4->set_parent(blackboard));
+	CHECK(server->blackboard_set_parent(blackboard, blackboard2));
+	CHECK(server->blackboard_set_parent(blackboard2, blackboard3));
+	CHECK(server->blackboard_set_parent(blackboard3, blackboard4));
+	CHECK_FALSE(server->blackboard_set_parent(blackboard4, blackboard));
 
-	CHECK(blackboard->get_parent() == blackboard2);
-	CHECK(blackboard2->get_parent() == blackboard3);
-	CHECK(blackboard3->get_parent() == blackboard4);
-	CHECK(blackboard4->get_parent() == nullptr);
+	CHECK(server->blackboard_get_parent(blackboard) == blackboard2);
+	CHECK(server->blackboard_get_parent(blackboard2) == blackboard3);
+	CHECK(server->blackboard_get_parent(blackboard3) == blackboard4);
+	CHECK(server->blackboard_get_parent(blackboard4) == RID());
 
-	CHECK(blackboard->get_entry<String>("Second") == String("42"));
-	CHECK(blackboard->get_entry<Array>("Third") == array);
-	CHECK(blackboard->get_entry<Variant>("Fourth") == json);
+	CHECK(server->blackboard_get_entry<String>(blackboard, "Second") == String("42"));
+	CHECK(server->blackboard_get_entry<Array>(blackboard,"Third") == array);
+	CHECK(server->blackboard_get_entry<Variant>(blackboard, "Fourth") == json);
 
-	test_blackboard_get_ignore_parents(blackboard, "Second", String("FooBarBazQux"));
-	test_blackboard_get_ignore_parents(blackboard, "Third", 512);
-	test_blackboard_get_ignore_parents(blackboard, "Fourth", 42.0);
+	test_blackboard_get_ignore_parents(server, blackboard, "Second", String("FooBarBazQux"));
+	test_blackboard_get_ignore_parents(server, blackboard,"Third", 512);
+	test_blackboard_get_ignore_parents(server, blackboard,"Fourth", 42.0);
 
-	memdelete(blackboard);
-	memdelete(blackboard2);
-	memdelete(blackboard3);
-	memdelete(blackboard4);
+	server->free_rid(blackboard);
+	server->free_rid(blackboard2);
+	server->free_rid(blackboard3);
+	server->free_rid(blackboard4);
+
+	json.unref();
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
-	Blackboard* blackboard = memnew(Blackboard);
-	REQUIRE(blackboard != nullptr);
+	BehaviorServer* server = BehaviorServer::get_singleton();
+	REQUIRE(server != nullptr);
 
-	Dictionary entries = blackboard->export_entries();
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
+
+	Dictionary entries = server->blackboard_export_entries(blackboard);
 	CHECK(entries.size() == 0);
 
 	Node *node = memnew(Node);
 	Ref json = memnew(JSON);
 
-	blackboard->set_entry("First", 255ul);
-	blackboard->set_entry("Second", String("42"));
-	blackboard->set_entry("Third", 512);
-	blackboard->set_entry("Fourth", json);
-	blackboard->set_entry("Fifth", node);
-	entries = blackboard->export_entries();
+	server->blackboard_set_entry(blackboard, "First", 255ul);
+	server->blackboard_set_entry(blackboard, "Second", String("42"));
+	server->blackboard_set_entry(blackboard, "Third", 512);
+	server->blackboard_set_entry(blackboard, "Fourth", json);
+	server->blackboard_set_entry(blackboard, "Fifth", node);
+	entries = server->blackboard_export_entries(blackboard);
 	CHECK(entries.size() == 5);
 
 	uint64_t first = entries["First"];
@@ -638,8 +650,9 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
 	CHECK(entries["Fourth"] == json);
 	CHECK(fifth == node);
 
-	memdelete(blackboard);
+	server->free_rid(blackboard);
 	memdelete(node);
+	json.unref();
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Type Infos") {
@@ -652,6 +665,55 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Type Infos") {
 	REQUIRE(unsigned_long.get("type_name") == ulong_name);
 	int64_t hash_candidate = unsigned_long.get("type_key");
 	CHECK(hash_candidate == ulong_name.hash());
+}
+
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
+	Blackboard::register_type<Ref<JSON>>();
+	Blackboard::register_type<Ref<RefCounted>>();
+	Blackboard::register_type<Node*>();
+	Blackboard::register_type<const Node*>();
+
+	BehaviorServer* server = BehaviorServer::get_singleton();
+	REQUIRE(server != nullptr);
+
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
+
+	Dictionary dict = Dictionary();
+	dict.set_typed(Variant::STRING_NAME, "", {}, Variant::NIL, "", {});
+
+	REQUIRE(dict.get_typed_key_builtin() == Variant::STRING_NAME);
+	REQUIRE(dict.get_typed_value_builtin() == Variant::NIL);
+
+	Node *node = memnew(Node);
+	REQUIRE(node != nullptr);
+
+	Ref json = memnew(JSON);
+	REQUIRE(json.is_valid());
+
+	StringName first = "First";
+	StringName second = "Second";
+	StringName third = "Third";
+	StringName fourth = "Fourth";
+	StringName fifth = "Fifth";
+
+	dict[first] = 255ul;
+	dict[second] = String("42");
+	dict[third] = -512;
+	dict[fourth] = json;
+	dict[fifth] = node;
+
+	server->blackboard_set_from_dictionary(blackboard, dict);
+
+	// CHECK(server->blackboard_get_entry<int64_t>(blackboard, first) == 255ul);
+	// CHECK(server->blackboard_get_entry<String>(blackboard, second) == String("42"));
+	// CHECK(server->blackboard_get_entry<int64_t>(blackboard, third) == -512);
+	// CHECK(server->blackboard_get_entry<Ref<JSON>>(blackboard, fourth) == json);
+	CHECK(server->blackboard_get_entry<Node*>(blackboard, fifth) == node);
+
+	server->free_rid(blackboard);
+	memdelete(node);
+	json.unref();
 }
 
 } //namespace hydrogen::test

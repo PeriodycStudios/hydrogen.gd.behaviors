@@ -159,7 +159,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("blackboard_get_parent", "rid"), &HydrogenBehaviorServer::blackboard_get_parent);
 	ClassDB::bind_method(D_METHOD("blackboard_is_ancestor", "rid", "candidate"), &HydrogenBehaviorServer::blackboard_is_ancestor);
 
-	ClassDB::bind_method(D_METHOD("blackboard_try_get", "rid", "name", "check_parents"), &HydrogenBehaviorServer::blackboard_try_get_as_variant, DEFVAL(true));
+	ClassDB::bind_method(D_METHOD("blackboard_try_get_entry", "rid", "name", "check_parents"), &HydrogenBehaviorServer::blackboard_try_get_as_variant, DEFVAL(true));
 
 	ClassDB::bind_method(D_METHOD("blackboard_get_entry", "rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Variant>, DEFVAL(Variant()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_bool", "rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<bool>, DEFVAL(false), DEFVAL(true));

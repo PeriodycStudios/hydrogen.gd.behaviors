@@ -101,6 +101,8 @@ void HydrogenBlackboard::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_packed_color_array", "name", "value"), &HydrogenBlackboard::set_entry<PackedColorArray>);
 	ClassDB::bind_method(D_METHOD("set_packed_vector4_array", "name", "value"), &HydrogenBlackboard::set_entry<PackedVector4Array>);
 
+	ClassDB::bind_method(D_METHOD("set_from_dictionary", "data"), &HydrogenBlackboard::set_from_dictionary);
+
 	ClassDB::bind_method(D_METHOD("erase_entry", "name"), &HydrogenBlackboard::erase_entry);
 	ClassDB::bind_method(D_METHOD("has_entry", "name"), &HydrogenBlackboard::has_entry);
 
@@ -135,6 +137,11 @@ Ref<HydrogenBlackboard> HydrogenBlackboard::get_parent() const {
 	ERR_FAIL_COND_V(parent.is_null(), parent);
 	return parent;
 }
+
+_FORCE_INLINE_ bool HydrogenBlackboard::set_from_dictionary(Dictionary data) const {
+	return BehaviorServer::get_singleton()->blackboard_set_from_dictionary(blackboard, data);
+}
+
 
 _FORCE_INLINE_ bool HydrogenBlackboard::erase_entry(const StringName &p_name) const {
 	return BehaviorServer::get_singleton()->blackboard_erase_entry(blackboard, p_name);
