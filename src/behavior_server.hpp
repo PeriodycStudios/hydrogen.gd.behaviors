@@ -8,6 +8,8 @@
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/core/object.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
 
 #include "blackboard.hpp"
 
@@ -20,8 +22,13 @@ class BehaviorServer final : public Object {
 
 	static BehaviorServer *singleton;
 
+	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
-	Ref<Mutex> mutex = {};
+	Ref<Mutex> blackboard_mutex = {};
+
+	void blackboard_add_child(RID parent, RID child);
+	void blackboard_remove_child(RID parent, RID child);
+	void blackboard_erase(Blackboard *blackboard);
 
 protected:
 	static void _bind_methods();
@@ -32,8 +39,8 @@ public:
 	BehaviorServer();
 	~BehaviorServer() override;
 
-	void lock() const;
-	void unlock() const;
+	void blackboards_lock() const;
+	void blackboards_unlock() const;
 
 	void free_rid(RID p_rid);
 
@@ -107,6 +114,9 @@ public:
 	RID agent_create();
 
 	// ---- Blackboard ----
+
+	void blackboards_lock() const;
+	void blackboards_unlock() const;
 
 	bool blackboard_set_parent(RID p_rid, RID p_parent);
 	RID blackboard_get_parent(RID p_rid);

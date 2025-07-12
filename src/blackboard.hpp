@@ -252,7 +252,7 @@ class Blackboard final : public RidData {
 
 	EntryOwner entries_owner = {};
 	EntryMap entries = {};
-	Blackboard *parent = nullptr;
+	const Blackboard *parent = nullptr;
 	Ref<Mutex> mutex = {};
 
 	template <typename T>
@@ -302,8 +302,8 @@ public:
 	explicit Blackboard();
 	~Blackboard();
 
-	bool set_parent(Blackboard *p_parent);
-	[[nodiscard]] Blackboard *get_parent() const;
+	bool set_parent(const Blackboard *p_parent);
+	[[nodiscard]] const Blackboard *get_parent() const;
 	[[nodiscard]] bool is_ancestor(const Blackboard *p_candidate) const;
 
 	_FORCE_INLINE_ void lock() const {

@@ -611,9 +611,14 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	test_blackboard_get_ignore_parents(server, blackboard,"Third", 512);
 	test_blackboard_get_ignore_parents(server, blackboard,"Fourth", 42.0);
 
+	server->free_rid(blackboard3);
+
+	CHECK_FALSE(server->blackboard_is_ancestor(blackboard, blackboard4));
+	CHECK_FALSE(server->blackboard_is_ancestor(blackboard2, blackboard4));
+	CHECK(server->blackboard_get_parent(blackboard2) == RID());
+
 	server->free_rid(blackboard);
 	server->free_rid(blackboard2);
-	server->free_rid(blackboard3);
 	server->free_rid(blackboard4);
 
 	json.unref();
@@ -715,5 +720,8 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
 	memdelete(node);
 	json.unref();
 }
+
+// TODO: Create / Get / Set from multiple threads
+// TODO: Spread Heirarchy across multiple threads
 
 } //namespace hydrogen::test

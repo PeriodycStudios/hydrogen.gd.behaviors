@@ -218,8 +218,7 @@ bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const 
 	return true;
 }
 
-// FIXME: Blackboard's have no idea if their parents are being deleted before they are.
-bool Blackboard::set_parent(Blackboard *p_parent) {
+bool Blackboard::set_parent(const Blackboard *p_parent) {
 
 	lock();
 
@@ -234,9 +233,9 @@ bool Blackboard::set_parent(Blackboard *p_parent) {
 	return false;
 }
 
-Blackboard *Blackboard::get_parent() const {
+const Blackboard *Blackboard::get_parent() const {
 	lock();
-	Blackboard *p = parent;
+	const Blackboard *p = parent;
 	unlock();
 	return p;
 }

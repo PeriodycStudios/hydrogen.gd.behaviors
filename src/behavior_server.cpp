@@ -25,26 +25,27 @@ BehaviorServer::~BehaviorServer() {
 	singleton = nullptr;
 }
 
-void BehaviorServer::lock() const {
-	ERR_FAIL_COND(mutex.is_null());
+void BehaviorServer::blackboards_lock() const {
+	ERR_FAIL_COND(blackboard_mutex.is_null());
 
-	mutex->lock();
+	blackboard_mutex->lock();
 }
 
-void BehaviorServer::unlock() const {
-	ERR_FAIL_COND(mutex.is_null());
-	mutex->unlock();
+void BehaviorServer::blackboards_unlock() const {
+	ERR_FAIL_COND(blackboard_mutex.is_null());
+	blackboard_mutex->unlock();
 }
 
 void BehaviorServer::free_rid(RID p_rid) {
 	if (blackboard_owner.owns(p_rid)) {
-		lock();
+		blackboards_lock();
 
 		Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+		blackboard_erase(blackboard);
 		blackboard_owner.free(p_rid);
 		memdelete(blackboard);
 
-		unlock();
+		blackboards_unlock();
 	}
 	else {
 		ERR_FAIL_MSG("Invalid ID.");
@@ -52,13 +53,13 @@ void BehaviorServer::free_rid(RID p_rid) {
 }
 
 RID BehaviorServer::blackboard_create() {
-	lock();
+	blackboards_lock();
 
 	Blackboard *blackboard = memnew(Blackboard);
 	RID rid = blackboard_owner.make_rid(blackboard);
 	blackboard->set_self(rid);
 
-	unlock();
+	blackboards_unlock();
 
 	return rid;
 }
@@ -76,60 +77,150 @@ RID BehaviorServer::agent_create() {
 }
 
 Error BehaviorServer::init() {
- 	mutex.instantiate();
+ 	blackboard_mutex.instantiate();
  	return OK;
 }
 
 void BehaviorServer::finish() {
 
-	mutex.unref();
+	blackboard_mutex.unref();
 }
 
 // ---- Blackboard ----
 
+void BehaviorServer::blackboard_add_child(RID parent, RID child) {
+	blackboards_lock();
+	const auto iter = blackboard_parents_to_children.find(parent);
+	if (iter == blackboard_parents_to_children.end()) {
+		blackboard_parents_to_children[parent] = LocalVector{child};
+	}
+	else {
+		LocalVector<RID> &children = iter->value;
+		children.push_back(child);
+	}
+	blackboards_unlock();
+}
+
+void BehaviorServer::blackboard_remove_child(RID parent, RID child) {
+	blackboards_lock();
+	const auto iter = blackboard_parents_to_children.find(parent);
+	if (iter == blackboard_parents_to_children.end()) {
+		blackboards_unlock();
+		return;
+	}
+
+	LocalVector<RID> &children = iter->value;
+	children.erase(child);
+	if (children.is_empty()) {
+		blackboard_parents_to_children.remove(iter);
+	}
+	blackboards_unlock();
+}
+
+void BehaviorServer::blackboard_erase(Blackboard *blackboard) {
+
+	blackboards_lock();
+	const RID self = blackboard->get_self();
+
+	if (const Blackboard *parent = blackboard->get_parent()) {
+		const RID parent_rid = parent->get_self();
+		const auto iter = blackboard_parents_to_children.find(parent_rid);
+		if (iter != blackboard_parents_to_children.end()) {
+			LocalVector<RID> &children = iter->value;
+			children.erase(self);
+
+			if (children.is_empty()) {
+				blackboard_parents_to_children.remove(iter);
+			}
+		}
+	}
+
+	const auto iter = blackboard_parents_to_children.find(self);
+	if (iter != blackboard_parents_to_children.end()) {
+		LocalVector<RID> &children = iter->value;
+		for (const RID& child_rid : children) {
+			Blackboard *child = blackboard_owner.get_or_null(child_rid);
+			ERR_CONTINUE(child == nullptr);
+			child->set_parent(nullptr);
+		}
+		children.clear();
+		blackboard_parents_to_children.remove(iter);
+	}
+	blackboards_unlock();
+}
+
+
+
 bool BehaviorServer::blackboard_set_parent(RID p_rid, RID p_parent) {
+	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-	Blackboard *parent = blackboard_owner.get_or_null(p_parent);
+	const Blackboard *parent = blackboard_owner.get_or_null(p_parent);
+	blackboards_unlock();
+
 	ERR_FAIL_NULL_V(blackboard, false);
-	ERR_FAIL_NULL_V(parent, false);
-	return blackboard->set_parent(parent);
+
+	const Blackboard *previous = blackboard->get_parent();
+
+	const bool success = blackboard->set_parent(parent);
+
+	if (previous) {
+		blackboard_remove_child(previous->get_self(), p_rid);
+	}
+
+	if (success && parent) {
+		blackboard_add_child(p_parent, p_rid);
+	}
+
+	return success;
 }
 
 RID BehaviorServer::blackboard_get_parent(RID p_rid) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_lock();
+	const Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, RID());
 	const Blackboard *parent = blackboard->get_parent();
 	return parent ? parent->get_self() : RID();
 }
 
 bool BehaviorServer::blackboard_is_ancestor(RID p_rid, RID p_candidate) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-	Blackboard *candidate = blackboard_owner.get_or_null(p_candidate);
+	blackboards_lock();
+	const Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	const Blackboard *candidate = blackboard_owner.get_or_null(p_candidate);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, false);
 	ERR_FAIL_NULL_V(candidate, false);
-	return blackboard->is_ancestor(candidate);
+	return  blackboard->is_ancestor(candidate);
 }
 
 bool BehaviorServer::blackboard_set_from_dictionary(RID p_rid, Dictionary p_data) {
+	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, false);
 	return blackboard->set_from_dictionary(p_data);
 }
 
 bool BehaviorServer::blackboard_erase_entry(RID p_rid, const StringName &p_name) {
+	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, false);
 	return blackboard->erase_entry(p_name);
 }
 
 bool BehaviorServer::blackboard_has_entry(RID p_rid, const StringName &p_name, bool p_check_parents) {
+	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, false);
 	return blackboard->has_entry(p_name, p_check_parents);
 }
 
 Dictionary BehaviorServer::blackboard_export_entries(RID p_rid) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_lock();
+	const Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
+	blackboards_unlock();
 	ERR_FAIL_NULL_V(blackboard, Dictionary());
 	return blackboard->export_entries();
 }
@@ -154,6 +245,9 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("agent_create"), &HydrogenBehaviorServer::agent_create);
 
 	// ---- Blackboard ----
+
+	ClassDB::bind_method(D_METHOD("blackboards_lock"), &HydrogenBehaviorServer::blackboards_lock);
+	ClassDB::bind_method(D_METHOD("blackboards_unlock"), &HydrogenBehaviorServer::blackboards_unlock);
 
 	ClassDB::bind_method(D_METHOD("blackboard_set_parent", "rid", "parent"), &HydrogenBehaviorServer::blackboard_set_parent);
 	ClassDB::bind_method(D_METHOD("blackboard_get_parent", "rid"), &HydrogenBehaviorServer::blackboard_get_parent);
@@ -280,6 +374,15 @@ RID HydrogenBehaviorServer::agent_create() {
 }
 
 // ---- Blackboard ----
+
+void HydrogenBehaviorServer::blackboards_lock() const {
+	BehaviorServer::get_singleton()->blackboards_lock();
+}
+
+void HydrogenBehaviorServer::blackboards_unlock() const {
+	BehaviorServer::get_singleton()->blackboards_unlock();
+}
+
 
 bool HydrogenBehaviorServer::blackboard_set_parent(RID p_rid, RID p_parent) {
 	return BehaviorServer::get_singleton()->blackboard_set_parent(p_rid, p_parent);
