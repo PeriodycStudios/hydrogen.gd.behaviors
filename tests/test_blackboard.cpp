@@ -1,18 +1,19 @@
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_DLL
-#include "behavior_server.hpp"
-
 #include <doctest.h>
 
-#include "blackboard.hpp"
-#include "godot_cpp/classes/json.hpp"
-#include "godot_cpp/classes/node3d.hpp"
-
+#include <godot_cpp/classes/json.hpp>
+#include <godot_cpp/classes/node3d.hpp>
+#include <godot_cpp/classes/thread.hpp>
 #include <godot_cpp/classes/box_mesh.hpp>
 #include <godot_cpp/classes/fast_noise_lite.hpp>
 #include <godot_cpp/classes/mesh.hpp>
 #include <godot_cpp/classes/node.hpp>
+#include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/variant/string.hpp>
 #include <godot_cpp/variant/variant.hpp>
+
+#include "behavior_server.hpp"
+#include "blackboard.hpp"
 
 namespace hydrogen::test {
 using namespace godot;
@@ -21,19 +22,19 @@ using namespace godot;
 // TODO: Switch to using BehaviorServer API
 
 template<typename T>
-void test_simple_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, T p_value) {
-	server->blackboard_set_entry_fast(blackboard, p_name, p_value);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+void test_simple_get_set(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, T p_value) {
+	server->blackboard_set_entry_fast(p_blackboard_rid, p_name, p_value);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, result));
 		CHECK(result == p_value);
 	}
 
-	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value);
-	server->blackboard_erase_entry(blackboard, p_name);
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
+	CHECK(server->blackboard_get_entry_fast<T>(p_blackboard_rid, p_name) == p_value);
+	server->blackboard_erase_entry(p_blackboard_rid, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (
 		!traits::is_exactly_gd_object_v<T> &&
@@ -48,130 +49,130 @@ void test_simple_get_set(BehaviorServer *server, RID blackboard, const StringNam
 
 		obj_ptr_t obj = Object::cast_to<obj_without_ptr>(p_value);
 		Variant v1 = obj;
-		server->blackboard_set_entry(blackboard, p_name, v1);
-		CHECK(server->blackboard_has_entry(blackboard, p_name));
+		server->blackboard_set_entry(p_blackboard_rid, p_name, v1);
+		CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
-		Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
+		Variant v2 = server->blackboard_get_entry<Variant>(p_blackboard_rid, p_name);
 		obj_ptr_t obj2 = v2;
 		T result = Object::cast_to<without_ptr>(obj);
 		CHECK(result == p_value);
 	}
 	else if constexpr (traits::is_variant_type_v<T>) {
 		Variant v1 = p_value;
-		server->blackboard_set_entry(blackboard, p_name, v1);
-		CHECK(server->blackboard_has_entry(blackboard, p_name));
+		server->blackboard_set_entry(p_blackboard_rid, p_name, v1);
+		CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
-		Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
+		Variant v2 = server->blackboard_get_entry<Variant>(p_blackboard_rid, p_name);
 		T result = v2;
 		CHECK(result == p_value);
 	}
 
-	server->blackboard_set_entry(blackboard, p_name, p_value);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
-	server->blackboard_set_entry(blackboard, p_name, Variant());
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry(p_blackboard_rid, p_name, p_value);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
+	server->blackboard_set_entry(p_blackboard_rid, p_name, Variant());
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name));
 }
 
 template<typename T, typename U>
-void test_convertable_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, T p_value) {
+void test_convertable_get_set(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, T p_value) {
 	static_assert(traits::is_variant_type_v<U>, "U must have a supported Variant conversion.");
 
-	server->blackboard_set_entry_fast(blackboard, p_name, p_value);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry_fast(p_blackboard_rid, p_name, p_value);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, result));
 		CHECK(result == p_value);
 	}
 
-	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value);
-	server->blackboard_erase_entry(blackboard, p_name);
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
+	CHECK(server->blackboard_get_entry_fast<T>(p_blackboard_rid, p_name) == p_value);
+	server->blackboard_erase_entry(p_blackboard_rid, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	U conversion = p_value;
 	Variant v1 = conversion;
-	server->blackboard_set_entry(blackboard, p_name, v1);
+	server->blackboard_set_entry(p_blackboard_rid, p_name, v1);
 
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
-	Variant v2 = server->blackboard_get_entry<Variant>(blackboard, p_name);
+	Variant v2 = server->blackboard_get_entry<Variant>(p_blackboard_rid, p_name);
 	U conversion_result = v2;
 	T result = conversion_result;
 	CHECK(result == p_value);
 
-	server->blackboard_erase_entry(blackboard, p_name);
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_erase_entry(p_blackboard_rid, p_name);
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name));
 }
 
 template <typename T, typename U>
-void test_overwrite_get_set(BehaviorServer *server, RID blackboard, const StringName &p_name, const T &p_value_1, const T &p_value_2, const U &p_value_3) {
+void test_overwrite_get_set(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, const T &p_value_1, const T &p_value_2, const U &p_value_3) {
 
-	server->blackboard_set_entry_fast(blackboard, p_name, p_value_1);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry_fast(p_blackboard_rid, p_name, p_value_1);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, result));
 		CHECK(result == p_value_1);
 	}
 
-	CHECK(server->blackboard_get_entry_fast<T>(blackboard, p_name) == p_value_1);
-	server->blackboard_set_entry(blackboard, p_name, p_value_2);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	CHECK(server->blackboard_get_entry_fast<T>(p_blackboard_rid, p_name) == p_value_1);
+	server->blackboard_set_entry(p_blackboard_rid, p_name, p_value_2);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK(server->blackboard_try_get_entry<T>(blackboard, p_name, result));
+		CHECK(server->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, result));
 		CHECK(result == p_value_2);
 	}
 
-	CHECK(server->blackboard_get_entry<T>(blackboard, p_name) == p_value_2);
+	CHECK(server->blackboard_get_entry<T>(p_blackboard_rid, p_name) == p_value_2);
 
-	server->blackboard_set_entry(blackboard, p_name, p_value_3);
-	CHECK(server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry(p_blackboard_rid, p_name, p_value_3);
+	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<U>) {
 		U result;
-		CHECK(server->blackboard_try_get_entry<U>(blackboard, p_name, result));
+		CHECK(server->blackboard_try_get_entry<U>(p_blackboard_rid, p_name, result));
 		CHECK(result == p_value_3);
 	}
 
-	CHECK(server->blackboard_get_entry<U>(blackboard, p_name) == p_value_3);
+	CHECK(server->blackboard_get_entry<U>(p_blackboard_rid, p_name) == p_value_3);
 
 	Variant v1 = Variant();
 
-	server->blackboard_set_entry(blackboard, p_name, v1);
-	CHECK(!server->blackboard_has_entry(blackboard, p_name));
+	server->blackboard_set_entry(p_blackboard_rid, p_name, v1);
+	CHECK(!server->blackboard_has_entry(p_blackboard_rid, p_name));
 }
 
 template <typename T>
-void test_default_get(BehaviorServer *server, RID blackboard, const StringName &p_name, const T &p_value) {
-	CHECK(server->blackboard_get_entry<T>(blackboard, p_name, p_value) == p_value);
+void test_default_get(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, const T &p_value) {
+	CHECK(server->blackboard_get_entry<T>(p_blackboard_rid, p_name, p_value) == p_value);
 
 	if constexpr (std::is_default_constructible_v<T>) {
 		const T default_result = {};
-		CHECK(server->blackboard_get_entry<T>(blackboard, p_name) == default_result);
+		CHECK(server->blackboard_get_entry<T>(p_blackboard_rid, p_name) == default_result);
 	}
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK_FALSE(server->blackboard_try_get_entry(blackboard, p_name, result));
+		CHECK_FALSE(server->blackboard_try_get_entry(p_blackboard_rid, p_name, result));
 	}
 
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name));
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name));
 }
 
 template <typename T>
-void test_blackboard_get_ignore_parents(BehaviorServer* server, RID blackboard, const StringName &p_name, const T &p_value) {
-	CHECK_FALSE(server->blackboard_has_entry(blackboard, p_name, false));
+void test_blackboard_get_ignore_parents(BehaviorServer* server, RID p_blackboard_rid, const StringName &p_name, const T &p_value) {
+	CHECK_FALSE(server->blackboard_has_entry(p_blackboard_rid, p_name, false));
 
 	if constexpr (!std::is_const_v<T>) {
 		T result;
-		CHECK_FALSE(server->blackboard_try_get_entry<T>(blackboard, p_name, result, false));
+		CHECK_FALSE(server->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, result, false));
 	}
 
-	CHECK(server->blackboard_get_entry<T>(blackboard, p_name, p_value, false) == p_value);
+	CHECK(server->blackboard_get_entry<T>(p_blackboard_rid, p_name, p_value, false) == p_value);
 }
 
 #define TEST_SIMPLE_GET_SET(type, value) test_simple_get_set<type>(server, blackboard, #type, value);
@@ -566,28 +567,60 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Get default values") {
 	json.unref();
 }
 
+void blackboard_on_created(RID p_bb_rid) {
+	CHECK(p_bb_rid != RID());
+}
+
+void blackboard_on_destroyed(RID p_bb_rid) {
+	CHECK(p_bb_rid != RID());
+}
+
+void blackboard_on_parent_set(RID p_child_rid, RID p_parent_rid) {
+	CHECK(p_child_rid != RID());
+
+	if (p_parent_rid != RID()) {
+		BehaviorServer *server = BehaviorServer::get_singleton();
+		CHECK(server);
+		if (server) {
+			CHECK(server->blackboard_get_parent(p_child_rid) == p_parent_rid);
+			CHECK(server->blackboard_is_ancestor(p_child_rid, p_parent_rid));
+		}
+	}
+}
+
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	BehaviorServer* server = BehaviorServer::get_singleton();
 	REQUIRE(server != nullptr);
 
+	HydrogenBehaviorServer *h_server = HydrogenBehaviorServer::get_singleton();
+	REQUIRE(h_server != nullptr);
+
+	auto on_create_callable = create_custom_callable_static_function_pointer(&blackboard_on_created);
+	auto on_destroyed_callable = create_custom_callable_static_function_pointer(&blackboard_on_destroyed);
+	auto on_parent_set_callable = create_custom_callable_static_function_pointer(&blackboard_on_parent_set);
+
+	h_server->connect("blackboard_created", on_create_callable);
+	h_server->connect("blackboard_destroyed", on_destroyed_callable);
+	h_server->connect("blackboard_parent_set", on_parent_set_callable);
+
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	CHECK(blackboard != RID());
 
 	server->blackboard_set_entry(blackboard, "First", 255ul);
 
 	RID blackboard2 = server->blackboard_create();
-	REQUIRE(blackboard2 != RID());
+	CHECK(blackboard2 != RID());
 	server->blackboard_set_entry(blackboard2, "Second", String("42"));
 
 	RID blackboard3 = server->blackboard_create();
-	REQUIRE(blackboard3 != RID());
+	CHECK(blackboard3 != RID());
 	Array array = Array();
 	array.push_back(255ul);
 	array.push_back(42ul);
 	server->blackboard_set_entry(blackboard3, "Third", array);
 
 	RID blackboard4 = server->blackboard_create();
-	REQUIRE(blackboard4 != RID());
+	CHECK(blackboard4 != RID());
 
 	Ref<JSON> json = {};
 	json.instantiate();
@@ -620,6 +653,10 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	server->free_rid(blackboard);
 	server->free_rid(blackboard2);
 	server->free_rid(blackboard4);
+
+	h_server->disconnect("blackboard_created", on_create_callable);
+	h_server->disconnect("blackboard_destroyed", on_destroyed_callable);
+	h_server->disconnect("blackboard_parent_set", on_parent_set_callable);
 
 	json.unref();
 }
@@ -719,6 +756,29 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
 	server->free_rid(blackboard);
 	memdelete(node);
 	json.unref();
+}
+
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Multiple Threads" * doctest::skip(true)) {
+	BehaviorServer* server = BehaviorServer::get_singleton();
+	REQUIRE(server != nullptr);
+
+	HydrogenBehaviorServer *h_server = HydrogenBehaviorServer::get_singleton();
+	REQUIRE(h_server != nullptr);
+
+	auto on_create_callable = create_custom_callable_static_function_pointer(&blackboard_on_created);
+	auto on_destroyed_callable = create_custom_callable_static_function_pointer(&blackboard_on_destroyed);
+	auto on_parent_set_callable = create_custom_callable_static_function_pointer(&blackboard_on_parent_set);
+
+	h_server->connect("blackboard_created", on_create_callable);
+	h_server->connect("blackboard_destroyed", on_destroyed_callable);
+	h_server->connect("blackboard_parent_set", on_parent_set_callable);
+
+
+	h_server->disconnect("blackboard_created", on_create_callable);
+	h_server->disconnect("blackboard_destroyed", on_destroyed_callable);
+	h_server->disconnect("blackboard_parent_set", on_parent_set_callable);
+
+
 }
 
 // TODO: Create / Get / Set from multiple threads
