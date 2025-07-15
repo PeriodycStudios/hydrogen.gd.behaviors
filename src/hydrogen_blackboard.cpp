@@ -2,6 +2,9 @@
 #include "hydrogen_blackboard.hpp"
 
 #include "behavior_server.hpp"
+#include "godot_cpp/classes/engine.hpp"
+
+#include <filesystem>
 
 using namespace hydrogen;
 
@@ -16,8 +19,15 @@ HydrogenBlackboard *HydrogenBlackboard::get_by_rid(RID rid) {
 }
 
 void HydrogenBlackboard::_bind_methods() {
+
+	ClassDB::bind_method(D_METHOD("is_empty"), &HydrogenBlackboard::is_empty);
+	ClassDB::bind_method(D_METHOD("size"), &HydrogenBlackboard::size);
+
 	ClassDB::bind_method(D_METHOD("set_parent", "parent"), &HydrogenBlackboard::set_parent);
 	ClassDB::bind_method(D_METHOD("get_parent"), &HydrogenBlackboard::get_parent);
+	ClassDB::bind_method(D_METHOD("is_ancestor", "candidate"), &HydrogenBlackboard::is_ancestor);
+
+	ClassDB::bind_method(D_METHOD("try_get_entry", "name"), &HydrogenBlackboard::try_get_entry_variant, DEFVAL(true));
 
 	ClassDB::bind_method(D_METHOD("get_entry", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Variant>, DEFVAL(Variant()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_bool", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<bool>, DEFVAL(false), DEFVAL(true));
@@ -39,7 +49,7 @@ void HydrogenBlackboard::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_basis", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Basis>, DEFVAL(Basis()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_transform3d", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Transform3D>, DEFVAL(Transform3D()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_projection", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Projection>, DEFVAL(Projection()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("get_color", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Color>, DEFVAL(Color()));
+	ClassDB::bind_method(D_METHOD("get_color", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<Color>, DEFVAL(Color()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_string_name", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<StringName>, DEFVAL(""), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_node_path", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<NodePath>, DEFVAL(NodePath()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("get_rid", "name", "default", "check_parents"), &HydrogenBlackboard::get_entry<RID>, DEFVAL(RID()), DEFVAL(true));
@@ -101,14 +111,19 @@ void HydrogenBlackboard::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_packed_color_array", "name", "value"), &HydrogenBlackboard::set_entry<PackedColorArray>);
 	ClassDB::bind_method(D_METHOD("set_packed_vector4_array", "name", "value"), &HydrogenBlackboard::set_entry<PackedVector4Array>);
 
-	ClassDB::bind_method(D_METHOD("set_from_dictionary", "data"), &HydrogenBlackboard::set_from_dictionary);
-
 	ClassDB::bind_method(D_METHOD("erase_entry", "name"), &HydrogenBlackboard::erase_entry);
 	ClassDB::bind_method(D_METHOD("has_entry", "name"), &HydrogenBlackboard::has_entry);
 
-	ClassDB::bind_method(D_METHOD("export_entries"), &HydrogenBlackboard::export_entries);
+	ClassDB::bind_method(D_METHOD("import_entries", "data"), &HydrogenBlackboard::import_entries);
+	ClassDB::bind_method(D_METHOD("export_entries", "include_parents"), &HydrogenBlackboard::export_entries, DEFVAL(true));
 
 	ClassDB::bind_static_method("HydrogenBlackboard", D_METHOD("export_type_infos"), &HydrogenBlackboard::export_type_infos);
+
+	ClassDB::bind_method(D_METHOD("set_initial_values", "values"), &HydrogenBlackboard::set_initial_values);
+	ClassDB::bind_method(D_METHOD("get_initial_values"), &HydrogenBlackboard::get_initial_values);
+
+	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "parent", PROPERTY_HINT_RESOURCE_TYPE, "HydrogenBlackboard", PROPERTY_USAGE_DEFAULT), "set_parent", "get_parent");
+	ADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "initial_values", PROPERTY_HINT_DICTIONARY_TYPE, "StringName;Variant", PROPERTY_USAGE_DEFAULT), "set_initial_values", "get_initial_values");
 }
 
 HydrogenBlackboard::HydrogenBlackboard() {
@@ -122,26 +137,54 @@ HydrogenBlackboard::~HydrogenBlackboard() {
 	BehaviorServer::get_singleton()->free_rid(blackboard);
 }
 
-_FORCE_INLINE_ bool HydrogenBlackboard::set_parent(Ref<HydrogenBlackboard> parent) const {
-	RID parent_rid = parent.is_valid() ? parent->_get_rid() : RID();
-	return BehaviorServer::get_singleton()->blackboard_set_parent(blackboard, parent_rid);
+_FORCE_INLINE_ bool HydrogenBlackboard::is_empty() const {
+	return BehaviorServer::get_singleton()->blackboard_is_empty(blackboard);
 }
 
-Ref<HydrogenBlackboard> HydrogenBlackboard::get_parent() const {
-	RID parent_rid = BehaviorServer::get_singleton()->blackboard_get_parent(blackboard);
-	if (parent_rid == RID()) {
-		return {};
+_FORCE_INLINE_ uint32_t HydrogenBlackboard::size() const {
+	return BehaviorServer::get_singleton()->blackboard_get_size(blackboard);
+}
+
+_FORCE_INLINE_ void HydrogenBlackboard::set_initial_values(TypedDictionary<StringName, Variant> p_initial_values) {
+	initial_values = p_initial_values;
+	if (is_empty()) {
+		BehaviorServer::get_singleton()->blackboard_import_entries(blackboard, p_initial_values);
+	}
+}
+
+bool HydrogenBlackboard::set_parent(const Ref<HydrogenBlackboard> &p_parent) {
+
+	if (p_parent == parent) {
+		return true;
 	}
 
-	Ref parent = get_by_rid(parent_rid);
-	ERR_FAIL_COND_V(parent.is_null(), parent);
-	return parent;
+	RID parent_rid = p_parent.is_valid() ? p_parent->_get_rid() : RID();
+	const bool success = BehaviorServer::get_singleton()->blackboard_set_parent(blackboard, parent_rid);
+
+	if (likely(success)) {
+		parent = p_parent;
+	}
+
+	return success;
 }
 
-_FORCE_INLINE_ bool HydrogenBlackboard::set_from_dictionary(Dictionary data) const {
-	return BehaviorServer::get_singleton()->blackboard_set_from_dictionary(blackboard, data);
+_FORCE_INLINE_ bool HydrogenBlackboard::is_ancestor(const Ref<HydrogenBlackboard> &p_candidate) const {
+	if (unlikely(p_candidate.is_null())) {
+		return false;
+	}
+
+	return BehaviorServer::get_singleton()->blackboard_is_ancestor(blackboard, p_candidate->_get_rid());
 }
 
+_FORCE_INLINE_ Variant HydrogenBlackboard::try_get_entry_variant(const StringName &p_name, bool p_check_parents) const {
+	Variant out_variant = Variant();
+	BehaviorServer::get_singleton()->blackboard_try_get_entry(blackboard, p_name, out_variant, p_check_parents);
+	return out_variant;
+}
+
+_FORCE_INLINE_ bool HydrogenBlackboard::import_entries(const TypedDictionary<StringName, Variant> &p_values) const {
+	return BehaviorServer::get_singleton()->blackboard_import_entries(blackboard, p_values);
+}
 
 _FORCE_INLINE_ bool HydrogenBlackboard::erase_entry(const StringName &p_name) const {
 	return BehaviorServer::get_singleton()->blackboard_erase_entry(blackboard, p_name);
@@ -151,8 +194,10 @@ _FORCE_INLINE_ bool HydrogenBlackboard::has_entry(const StringName &p_name) cons
 	return BehaviorServer::get_singleton()->blackboard_has_entry(blackboard, p_name);
 }
 
-_FORCE_INLINE_ Dictionary HydrogenBlackboard::export_entries() const {
-	return BehaviorServer::get_singleton()->blackboard_export_entries(blackboard);
+// HACK: The binding system doesn't yet seem to like TypedDictionary<StringName, Variant> as a return value
+// check this later and see if it's still broken in a future godot version
+_FORCE_INLINE_ Dictionary HydrogenBlackboard::export_entries(const bool p_include_parents) const {
+	return BehaviorServer::get_singleton()->blackboard_export_entries(blackboard, p_include_parents);
 }
 
 _FORCE_INLINE_ Dictionary HydrogenBlackboard::export_type_infos() {

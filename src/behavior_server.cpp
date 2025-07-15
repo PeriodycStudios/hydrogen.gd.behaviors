@@ -6,6 +6,7 @@
 #endif
 
 #include <godot_cpp/core/class_db.hpp>
+#include <godot_cpp/variant/typed_dictionary.hpp>
 
 namespace hydrogen {
 
@@ -168,6 +169,26 @@ _FORCE_INLINE_ void BehaviorServer::blackboard_emit_destroyed(RID p_blackboard_r
 	HydrogenBehaviorServer::get_singleton()->_blackboard_emit_destroyed(p_blackboard_rid);
 }
 
+bool BehaviorServer::blackboard_is_empty(RID p_blackboard_rid) {
+	blackboards_lock();
+	const Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
+	blackboards_unlock();
+
+	ERR_FAIL_NULL_V(blackboard, false);
+
+	return blackboard->is_empty();
+}
+
+uint32_t BehaviorServer::blackboard_get_size(RID p_blackboard_rid) {
+	blackboards_lock();
+	const Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
+	blackboards_unlock();
+
+	ERR_FAIL_NULL_V(blackboard, 0);
+
+	return blackboard->size();
+}
+
 bool BehaviorServer::blackboard_set_parent(RID p_blackboard_rid, RID p_parent_rid) {
 	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
@@ -177,7 +198,6 @@ bool BehaviorServer::blackboard_set_parent(RID p_blackboard_rid, RID p_parent_ri
 	ERR_FAIL_NULL_V(blackboard, false);
 
 	const Blackboard *previous = blackboard->get_parent();
-
 	const bool success = blackboard->set_parent(parent);
 
 	if (previous) {
@@ -214,14 +234,6 @@ bool BehaviorServer::blackboard_is_ancestor(RID p_blackboard_rid, RID p_candidat
 	return  blackboard->is_ancestor(candidate);
 }
 
-bool BehaviorServer::blackboard_set_from_dictionary(RID p_blackboard_rid, Dictionary p_data) {
-	blackboards_lock();
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	blackboards_unlock();
-	ERR_FAIL_NULL_V(blackboard, false);
-	return blackboard->set_from_dictionary(p_data);
-}
-
 bool BehaviorServer::blackboard_erase_entry(RID p_blackboard_rid, const StringName &p_name) {
 	blackboards_lock();
 	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
@@ -238,12 +250,20 @@ bool BehaviorServer::blackboard_has_entry(RID p_blackboard_rid, const StringName
 	return blackboard->has_entry(p_name, p_check_parents);
 }
 
-Dictionary BehaviorServer::blackboard_export_entries(RID p_blackboard_rid) {
+bool BehaviorServer::blackboard_import_entries(RID p_blackboard_rid, const TypedDictionary<StringName, Variant> &p_values) {
+	blackboards_lock();
+	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
+	blackboards_unlock();
+	ERR_FAIL_NULL_V(blackboard, false);
+	return blackboard->import_entries(p_values);
+}
+
+Dictionary BehaviorServer::blackboard_export_entries(RID p_blackboard_rid, const bool p_include_parents) {
 	blackboards_lock();
 	const Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
 	blackboards_unlock();
-	ERR_FAIL_NULL_V(blackboard, Dictionary());
-	return blackboard->export_entries();
+	ERR_FAIL_NULL_V(blackboard, {});
+	return blackboard->export_entries(p_include_parents);
 }
 
 Dictionary BehaviorServer::blackboard_export_type_infos() {
@@ -269,6 +289,9 @@ void HydrogenBehaviorServer::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("blackboards_lock"), &HydrogenBehaviorServer::blackboards_lock);
 	ClassDB::bind_method(D_METHOD("blackboards_unlock"), &HydrogenBehaviorServer::blackboards_unlock);
+
+	ClassDB::bind_method(D_METHOD("blackboard_is_empty", "blackboard_rid"), &HydrogenBehaviorServer::blackboard_is_empty);
+	ClassDB::bind_method(D_METHOD("blackboard_get_size", "blackboard_rid"), &HydrogenBehaviorServer::blackboard_get_size);
 
 	ClassDB::bind_method(D_METHOD("blackboard_set_parent", "blackboard_rid", "parent"), &HydrogenBehaviorServer::blackboard_set_parent);
 	ClassDB::bind_method(D_METHOD("blackboard_get_parent", "blackboard_rid"), &HydrogenBehaviorServer::blackboard_get_parent);
@@ -296,7 +319,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("blackboard_get_basis", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Basis>, DEFVAL(Basis()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_transform3d", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Transform3D>, DEFVAL(Transform3D()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_projection", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Projection>, DEFVAL(Projection()), DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("blackboard_get_color", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Color>, DEFVAL(Color()));
+	ClassDB::bind_method(D_METHOD("blackboard_get_color", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<Color>, DEFVAL(Color()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_string_name", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<StringName>, DEFVAL(""), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_node_path", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<NodePath>, DEFVAL(NodePath()), DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("blackboard_get_rid", "blackboard_rid", "name", "default", "check_parents"), &HydrogenBehaviorServer::blackboard_get_entry<RID>, DEFVAL(RID()), DEFVAL(true));
@@ -358,14 +381,13 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("blackboard_set_packed_color_array", "blackboard_rid", "name", "value"), &HydrogenBehaviorServer::blackboard_set_entry<PackedColorArray>);
 	ClassDB::bind_method(D_METHOD("blackboard_set_packed_vector4_array", "blackboard_rid", "name", "value"), &HydrogenBehaviorServer::blackboard_set_entry<PackedVector4Array>);
 
-	ClassDB::bind_method(D_METHOD("blackboard_set_from_dictionary", "blackboard_rid", "data"), &HydrogenBehaviorServer::blackboard_set_from_dictionary);
-
 	ClassDB::bind_method(D_METHOD("blackboard_erase_entry", "blackboard_rid", "name"), &HydrogenBehaviorServer::blackboard_erase_entry);
 	ClassDB::bind_method(D_METHOD("blackboard_has_entry", "blackboard_rid", "name"), &HydrogenBehaviorServer::blackboard_has_entry);
 
-	ClassDB::bind_method(D_METHOD("blackboard_export_entries", "blackboard_rid"), &HydrogenBehaviorServer::blackboard_export_entries);
-	ClassDB::bind_method(D_METHOD("blackboard_export_type_infos"), &HydrogenBehaviorServer::blackboard_export_type_infos);
+	ClassDB::bind_method(D_METHOD("blackboard_import_entries", "blackboard_rid", "data"), &HydrogenBehaviorServer::blackboard_import_entries);
+	ClassDB::bind_method(D_METHOD("blackboard_export_entries", "blackboard_rid", "p_include_parents"), &HydrogenBehaviorServer::blackboard_export_entries, DEFVAL(true));
 
+	ClassDB::bind_method(D_METHOD("blackboard_export_type_infos"), &HydrogenBehaviorServer::blackboard_export_type_infos);
 
 	ADD_SIGNAL(MethodInfo("blackboard_created", PropertyInfo(Variant::RID, "blackboard_rid")));
 	ADD_SIGNAL(MethodInfo("blackboard_destroyed", PropertyInfo(Variant::RID, "blackboard_rid")));
@@ -420,6 +442,14 @@ void HydrogenBehaviorServer::blackboards_unlock() const {
 	BehaviorServer::get_singleton()->blackboards_unlock();
 }
 
+bool HydrogenBehaviorServer::blackboard_is_empty(RID p_blackboard_rid) const {
+	return BehaviorServer::get_singleton()->blackboard_is_empty(p_blackboard_rid);
+}
+
+uint32_t HydrogenBehaviorServer::blackboard_get_size(RID p_blackboard_rid) const {
+	return BehaviorServer::get_singleton()->blackboard_get_size(p_blackboard_rid);
+}
+
 bool HydrogenBehaviorServer::blackboard_set_parent(RID p_child_rid, RID p_parent_rid) {
 	return BehaviorServer::get_singleton()->blackboard_set_parent(p_child_rid, p_parent_rid);
 }
@@ -432,20 +462,22 @@ bool HydrogenBehaviorServer::blackboard_is_ancestor(RID p_blackboard_rid, RID p_
 	return BehaviorServer::get_singleton()->blackboard_is_ancestor(p_blackboard_rid, p_candidate);
 }
 
-bool HydrogenBehaviorServer::blackboard_set_from_dictionary(RID p_blackboard_rid, Dictionary p_data) {
-	return BehaviorServer::get_singleton()->blackboard_set_from_dictionary(p_blackboard_rid, p_data);
-}
 
 bool HydrogenBehaviorServer::blackboard_erase_entry(RID p_blackboard_rid, const StringName &p_name) {
 	return BehaviorServer::get_singleton()->blackboard_erase_entry(p_blackboard_rid, p_name);
 }
 
-bool HydrogenBehaviorServer::blackboard_has_entry(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_has_entry(p_blackboard_rid, p_name);
+bool HydrogenBehaviorServer::blackboard_has_entry(RID p_blackboard_rid, const StringName &p_name, const bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_has_entry(p_blackboard_rid, p_name, p_check_parents);
 }
 
-Dictionary HydrogenBehaviorServer::blackboard_export_entries(RID p_blackboard_rid) {
-	return BehaviorServer::get_singleton()->blackboard_export_entries(p_blackboard_rid);
+
+bool HydrogenBehaviorServer::blackboard_import_entries(RID p_blackboard_rid, const TypedDictionary<StringName, Variant> &p_data) {
+	return BehaviorServer::get_singleton()->blackboard_import_entries(p_blackboard_rid, p_data);
+}
+
+Dictionary HydrogenBehaviorServer::blackboard_export_entries(RID p_blackboard_rid, const bool p_include_parents) {
+	return BehaviorServer::get_singleton()->blackboard_export_entries(p_blackboard_rid, p_include_parents);
 }
 
 Dictionary HydrogenBehaviorServer::blackboard_export_type_infos() {

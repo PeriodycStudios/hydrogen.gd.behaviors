@@ -14,9 +14,10 @@
 
 #include <functional>
 
+#include "godot_cpp/variant/typed_dictionary.hpp"
 #include "rid_data.hpp"
-#include "variant_type_traits.hpp"
 #include "type_name.hpp"
+#include "variant_type_traits.hpp"
 
 using namespace godot;
 
@@ -302,6 +303,9 @@ public:
 	explicit Blackboard();
 	~Blackboard();
 
+	_FORCE_INLINE_ bool is_empty() const { return entries.is_empty(); }
+	_FORCE_INLINE_ uint32_t size() const { return entries.size(); }
+
 	bool set_parent(const Blackboard *p_parent);
 	[[nodiscard]] const Blackboard *get_parent() const;
 	[[nodiscard]] bool is_ancestor(const Blackboard *p_candidate) const;
@@ -331,13 +335,13 @@ public:
 	template <typename T>
 	void set_entry(const StringName &p_name, T p_value);
 
-	bool set_from_dictionary(Dictionary p_data);
+	bool import_entries(const TypedDictionary<StringName, Variant> &p_data);
 
 	bool erase_entry(const StringName &p_name);
 
 	[[nodiscard]] bool has_entry(const StringName &p_name, bool p_check_parents = true) const;
 
-	[[nodiscard]] Dictionary export_entries() const;
+	[[nodiscard]] Dictionary export_entries(bool p_include_parents = true) const;
 
 	[[nodiscard]] static Dictionary export_type_infos();
 };

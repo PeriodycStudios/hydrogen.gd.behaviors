@@ -1,6 +1,19 @@
-[gd_scene load_steps=2 format=3 uid="uid://crpir7aw1lsd2"]
+[gd_scene load_steps=5 format=3 uid="uid://crpir7aw1lsd2"]
 
 [ext_resource type="Script" uid="uid://dhx4oj12wnwn0" path="res://test_behaviors.gd" id="1_wtcfe"]
+[ext_resource type="HydrogenBlackboard" uid="uid://0yx5g4y3gyfg" path="res://new_hydrogen_blackboard.tres" id="2_0e48y"]
+
+[sub_resource type="HydrogenBlackboard" id="HydrogenBlackboard_0e48y"]
+parent = ExtResource("2_0e48y")
+initial_values = Dictionary[StringName, Variant]({
+&"password": "password123"
+})
+
+[sub_resource type="HydrogenBlackboard" id="HydrogenBlackboard_wtcfe"]
+parent = SubResource("HydrogenBlackboard_0e48y")
+initial_values = Dictionary[StringName, Variant]({
+&"favorite_color": Color(0.0383969, 0.48465, 0, 1)
+})
 
 [node name="Node2D" type="Node2D"]
 
@@ -27,10 +40,19 @@ offset_right = 332.0
 offset_bottom = 136.0
 text = "Test Blackboard Create and Destruct - HydrogenBlackboard"
 
+[node name="Button5" type="Button" parent="."]
+offset_top = 139.0
+offset_right = 234.0
+offset_bottom = 170.0
+text = "Test Serialized Blackboards"
+
 [node name="Node" type="Node" parent="."]
 script = ExtResource("1_wtcfe")
+blackboard_a = SubResource("HydrogenBlackboard_wtcfe")
+blackboard_b = SubResource("HydrogenBlackboard_0e48y")
 
 [connection signal="pressed" from="Button" to="Node" method="try_running_tests"]
 [connection signal="pressed" from="Button2" to="Node" method="try_exporting_type_infos"]
 [connection signal="pressed" from="Button3" to="Node" method="try_blackboard_create_and_destruct"]
 [connection signal="pressed" from="Button4" to="Node" method="try_blackboard_create_and_destruct_by_ref"]
+[connection signal="pressed" from="Button5" to="Node" method="try_testing_existing_blackboards"]

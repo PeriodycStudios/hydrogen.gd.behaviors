@@ -3,6 +3,7 @@
 
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
+#include "godot_cpp/variant/typed_dictionary.hpp"
 
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
@@ -17,6 +18,10 @@ class HydrogenBlackboard : public Resource {
 	static HydrogenBlackboard *get_by_rid(RID rid);
 
 	RID blackboard;
+	TypedDictionary<StringName, Variant> initial_values = {};
+
+	Ref<HydrogenBlackboard> parent;
+
 
 protected:
 	static void _bind_methods();
@@ -26,13 +31,22 @@ public:
 	HydrogenBlackboard();
 	~HydrogenBlackboard() override;
 
+	bool is_empty() const;
+	uint32_t size() const;
+
 	[[nodiscard]] RID _get_rid() const override { return blackboard; }
 
-	[[nodiscard]] bool set_parent(Ref<HydrogenBlackboard> parent) const;
-	[[nodiscard]] Ref<HydrogenBlackboard> get_parent() const;
+	void set_initial_values(TypedDictionary<StringName, Variant> p_initial_values);
+	[[nodiscard]] _FORCE_INLINE_ TypedDictionary<StringName, Variant> get_initial_values() const { return initial_values; }
+
+	bool set_parent(const Ref<HydrogenBlackboard> &p_parent);
+	[[nodiscard]] _FORCE_INLINE_ Ref<HydrogenBlackboard> get_parent() const { return parent; }
+	[[nodiscard]] bool is_ancestor(const Ref<HydrogenBlackboard> &p_candidate) const;
 
 	template<typename T>
 	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true);
+
+	Variant try_get_entry_variant(const StringName &p_name, bool p_check_parents = true) const;
 
 	template<typename T>
 	[[nodiscard]] const T &get_entry_fast(const StringName &p_name, const T &p_default, bool p_check_parents = true) const;
@@ -46,13 +60,12 @@ public:
 	template <typename T>
 	void set_entry(const StringName &p_name, T p_value);
 
-	bool set_from_dictionary(Dictionary data) const;
-
 	[[nodiscard]] bool erase_entry(const StringName &p_name) const;
 
 	[[nodiscard]] bool has_entry(const StringName &p_name) const;
 
-	[[nodiscard]] Dictionary export_entries() const;
+	bool import_entries(const TypedDictionary<StringName, Variant> &p_values) const;
+	[[nodiscard]] Dictionary export_entries(bool p_include_parents = true) const;
 
 	static Dictionary export_type_infos();
 };

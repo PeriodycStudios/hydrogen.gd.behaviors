@@ -10,6 +10,7 @@
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
+#include "godot_cpp/variant/typed_dictionary.hpp"
 
 #include "blackboard.hpp"
 
@@ -58,6 +59,9 @@ public:
 
 	// ---- Blackboard ----
 
+	bool blackboard_is_empty(RID p_blackboard_rid);
+	uint32_t blackboard_get_size(RID p_blackboard_rid);
+
 	bool blackboard_set_parent(RID p_rid, RID p_parent_rid);
 	RID blackboard_get_parent(RID p_rid);
 	bool blackboard_is_ancestor(RID p_rid, RID p_candidate);
@@ -77,13 +81,12 @@ public:
 	template <typename T>
 	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_value);
 
-	bool blackboard_set_from_dictionary(RID p_rid, Dictionary p_data);
-
 	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
 
 	bool blackboard_has_entry(RID p_rid, const StringName &p_name, bool p_check_parents = true);
 
-	Dictionary blackboard_export_entries(RID p_rid);
+	bool blackboard_import_entries(RID p_rid, const TypedDictionary<StringName, Variant> &p_data);
+	Dictionary blackboard_export_entries(RID p_rid, bool p_include_parents = true);
 
 	static Dictionary blackboard_export_type_infos();
 
@@ -126,6 +129,9 @@ public:
 	void blackboards_lock() const;
 	void blackboards_unlock() const;
 
+	bool blackboard_is_empty(RID p_blackboard_rid) const;
+	uint32_t blackboard_get_size(RID p_blackboard_rid) const;
+
 	bool blackboard_set_parent(RID p_parent_rid, RID p_child_rid);
 	RID blackboard_get_parent(RID p_blackboard_rid);
 	bool blackboard_is_ancestor(RID p_blackboard_rid, RID p_candidate);
@@ -147,13 +153,12 @@ public:
 	template <typename T>
 	void blackboard_set_entry(RID p_blackboard_rid, const StringName &p_name, T p_default = {});
 
-	bool blackboard_set_from_dictionary(RID p_blackboard_rid, Dictionary p_data);
-
 	bool blackboard_erase_entry(RID p_blackboard_rid, const StringName &p_name);
 
 	bool blackboard_has_entry(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents = true);
 
-	Dictionary blackboard_export_entries(RID p_blackboard_rid);
+	bool blackboard_import_entries(RID p_blackboard_rid, const TypedDictionary<StringName, Variant> &p_data);
+	Dictionary blackboard_export_entries(RID p_blackboard_rid, bool p_include_parents = true);
 
 	Dictionary blackboard_export_type_infos();
 

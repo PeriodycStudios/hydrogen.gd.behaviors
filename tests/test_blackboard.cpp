@@ -721,11 +721,9 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
 	RID blackboard = server->blackboard_create();
 	REQUIRE(blackboard != RID());
 
-	Dictionary dict = Dictionary();
-	dict.set_typed(Variant::STRING_NAME, "", {}, Variant::NIL, "", {});
+	CHECK(server->blackboard_is_empty(blackboard));
 
-	REQUIRE(dict.get_typed_key_builtin() == Variant::STRING_NAME);
-	REQUIRE(dict.get_typed_value_builtin() == Variant::NIL);
+	TypedDictionary<StringName, Variant> dict = {};
 
 	Node *node = memnew(Node);
 	REQUIRE(node != nullptr);
@@ -745,12 +743,15 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
 	dict[fourth] = json;
 	dict[fifth] = node;
 
-	server->blackboard_set_from_dictionary(blackboard, dict);
+	server->blackboard_import_entries(blackboard, dict);
 
-	// CHECK(server->blackboard_get_entry<int64_t>(blackboard, first) == 255ul);
-	// CHECK(server->blackboard_get_entry<String>(blackboard, second) == String("42"));
-	// CHECK(server->blackboard_get_entry<int64_t>(blackboard, third) == -512);
-	// CHECK(server->blackboard_get_entry<Ref<JSON>>(blackboard, fourth) == json);
+	CHECK(server->blackboard_get_size(blackboard) == dict.size());
+	CHECK_FALSE(server->blackboard_is_empty(blackboard));
+
+	CHECK(server->blackboard_get_entry<int64_t>(blackboard, first) == 255ul);
+	CHECK(server->blackboard_get_entry<String>(blackboard, second) == String("42"));
+	CHECK(server->blackboard_get_entry<int64_t>(blackboard, third) == -512);
+	CHECK(server->blackboard_get_entry<Ref<JSON>>(blackboard, fourth) == json);
 	CHECK(server->blackboard_get_entry<Node*>(blackboard, fifth) == node);
 
 	server->free_rid(blackboard);

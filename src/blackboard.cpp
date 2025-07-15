@@ -275,17 +275,15 @@ void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 	memdelete(entry);
 }
 
-bool Blackboard::set_from_dictionary(Dictionary p_data) {
+bool Blackboard::import_entries(const TypedDictionary<StringName, Variant> &p_data) {
 
-	ERR_FAIL_COND_V_MSG(p_data.is_empty() || !p_data.is_typed() ||
-		p_data.get_typed_key_builtin() != Variant::STRING_NAME ||
-		p_data.get_typed_value_builtin() != Variant::NIL,
-		false,
-		"Dictionary must be typed [String, Variant]");
+	if (unlikely(p_data.is_empty())) {
+		return false;
+	}
 
 	lock();
 
-	const Array keys = p_data.keys();
+	const TypedArray<StringName> keys(p_data.keys());
 	const Array values = p_data.values();
 
 	for (int i = 0; i < p_data.size(); ++i) {
@@ -341,9 +339,21 @@ bool Blackboard::has_entry(const StringName &p_name, const bool p_check_parents)
 	return result;
 }
 
-Dictionary Blackboard::export_entries() const {
+Dictionary Blackboard::export_entries(const bool p_include_parents) const {
 
 	Dictionary dict = {};
+
+	if (likely(p_include_parents)) {
+		const Blackboard* current = parent;
+		while (current != nullptr) {
+			current->lock();
+			for (const auto &kvp : current->entries) {
+				dict[kvp.key] = kvp.value->as_variant();
+			}
+			current->unlock();
+			current = current->parent;
+		}
+	}
 
 	lock();
 	for (const auto &kvp : entries) {
