@@ -1,0 +1,6 @@
+[gd_resource type="HydrogenBlackboard" format=3 uid="uid://0yx5g4y3gyfg"]
+
+[resource]
+initial_values = Dictionary[StringName, Variant]({
+&"bounds": AABB(0, 0, 0, 1, 2, 3)
+})
