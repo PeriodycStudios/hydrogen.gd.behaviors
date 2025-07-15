@@ -194,7 +194,7 @@ _FORCE_INLINE_ bool HydrogenBlackboard::has_entry(const StringName &p_name) cons
 	return BehaviorServer::get_singleton()->blackboard_has_entry(blackboard, p_name);
 }
 
-// HACK: The binding system doesn't yet seem to like TypedDictionary<StringName, Variant> as a return value
+// HACK: The godot-cpp binding system (as of 4.4.1) doesn't yet seem to like TypedDictionary<StringName, Variant> as a return value
 // check this later and see if it's still broken in a future godot version
 _FORCE_INLINE_ Dictionary HydrogenBlackboard::export_entries(const bool p_include_parents) const {
 	return BehaviorServer::get_singleton()->blackboard_export_entries(blackboard, p_include_parents);

@@ -15,11 +15,11 @@
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
 
+#include <optional>
+#include <thread>
+
 namespace hydrogen::test {
 using namespace godot;
-
-// TODO: Multi-Threaded tests
-// TODO: Switch to using BehaviorServer API
 
 template<typename T>
 void test_simple_get_set(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, T p_value) {
@@ -709,7 +709,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Type Infos") {
 	CHECK(hash_candidate == ulong_name.hash());
 }
 
-TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Import from Dictionary") {
 	Blackboard::register_type<Ref<JSON>>();
 	Blackboard::register_type<Ref<RefCounted>>();
 	Blackboard::register_type<Node*>();
@@ -759,7 +759,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set From Dictionary") {
 	json.unref();
 }
 
-TEST_CASE("[Hydrogen][Behaviors][Blackboard] Multiple Threads" * doctest::skip(true)) {
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Multiple Threads") {
 	BehaviorServer* server = BehaviorServer::get_singleton();
 	REQUIRE(server != nullptr);
 
@@ -774,6 +774,105 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Multiple Threads" * doctest::skip(t
 	h_server->connect("blackboard_destroyed", on_destroyed_callable);
 	h_server->connect("blackboard_parent_set", on_parent_set_callable);
 
+	Vector<RID> created_blackboards = {};
+	Vector<RID> created_blackboards2 = {};
+	auto create_func = [&server](Vector<RID>& blackboards, int32_t num_boards, uint16_t sleep) {
+		for (int32_t i = 0; i < num_boards; i++) {
+			blackboards.push_back(server->blackboard_create());
+			std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
+		}
+	};
+
+	std::thread creation_1(create_func, std::ref(created_blackboards), 10, 42);
+	std::thread creation_2(create_func, std::ref(created_blackboards2), 20, 17);
+
+	creation_1.join();
+	creation_2.join();
+
+	Vector blackboards(created_blackboards);
+	blackboards.append_array(created_blackboards2);
+
+	const uint32_t half_idx = blackboards.size() / 2;
+	const uint32_t second_half_count = blackboards.size() - half_idx;
+
+
+	// set parents
+	auto set_parent_func = [&server](const Vector<RID> &blackboards, int32_t start_idx, uint32_t count, int32_t skip, uint16_t sleep) {
+
+		for (int32_t i = 0; i < count; i++) {
+			int idx = start_idx + i;
+			int ancestor_idx = i - skip;
+			if (likely(ancestor_idx > 0)) {
+				const RID& ancestor_rid = blackboards[ancestor_idx];
+				CHECK(server->blackboard_set_parent(blackboards[idx], ancestor_rid));
+			}
+		}
+	};
+
+	const std::array<String, 5> names = {
+		"Bob",
+		"Alice",
+		"Larry",
+		"Gustopher",
+		"Shannon"
+	};
+
+	auto set_values_func = [&server, &names](const Vector<RID> &blackboards, int32_t start_idx, uint32_t count, uint16_t sleep) {
+
+		real_t accumulator = 0.0;
+
+		for (int32_t i = 0; i < count; i++) {
+			int idx = start_idx + i;
+			const RID& rid = blackboards[idx];
+			server->blackboard_set_entry(rid, "my_idx", idx);
+			server->blackboard_set_entry(rid, "other_value", i);
+			accumulator += static_cast<real_t>(i % sleep);
+			server->blackboard_set_entry_fast(rid, "my_float_value", accumulator);
+			int32_t name_idx = i % names.size();
+			server->blackboard_set_entry(rid, "name", names[name_idx]);
+		}
+	};
+
+	std::thread set_parent_thread(set_parent_func, std::cref(blackboards), 0, half_idx, 1, 10);
+	std::thread set_values_thread(set_values_func, std::cref(blackboards), half_idx, second_half_count, 25);
+	std::thread set_parent_thread2(set_parent_func, std::cref(blackboards), half_idx, second_half_count, 2, 15);
+	std::thread set_values_thread2(set_values_func, std::cref(blackboards), 0, half_idx, 19);
+
+	set_parent_thread.join();
+	set_values_thread.join();
+	set_parent_thread2.join();
+	set_values_thread2.join();
+
+	auto check_values_func = [&server](const Vector<RID> &blackboards, int32_t start_idx, uint32_t count, uint16_t sleep) {
+		for (int32_t i = 0; i < count; i++) {
+			int idx = start_idx + i;
+			const RID& rid = blackboards[idx];
+			CHECK(server->blackboard_has_entry(rid, "my_idx"));
+			CHECK(server->blackboard_has_entry(rid, "other_value"));
+			CHECK(server->blackboard_has_entry(rid, "my_float_value"));
+			CHECK(server->blackboard_has_entry(rid, "name"));
+		}
+	};
+
+	std::thread check_values_thread(check_values_func, std::cref(blackboards), 0, half_idx, 20);
+	std::thread check_values_thread2(check_values_func, std::cref(blackboards), half_idx, second_half_count, 30);
+
+	check_values_thread.join();
+	check_values_thread2.join();
+
+	auto destroy_func = [&server](const Vector<RID>& blackboards, int32_t start_idx, int32_t count, uint16_t sleep) {
+		for (int32_t i = 0; i < count; i++) {
+			const int32_t idx = start_idx + i;
+			server->free_rid(blackboards[idx]);
+			std::this_thread::sleep_for(std::chrono::milliseconds(sleep));
+		}
+	};
+
+	std::thread destroy_thread(destroy_func, std::cref(blackboards), 0, half_idx, 21);
+	std::thread destroy_thread_2(destroy_func, std::cref(blackboards), half_idx, second_half_count, 35);
+
+	destroy_thread.join();
+	destroy_thread_2.join();
 
 	h_server->disconnect("blackboard_created", on_create_callable);
 	h_server->disconnect("blackboard_destroyed", on_destroyed_callable);
@@ -782,7 +881,39 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Multiple Threads" * doctest::skip(t
 
 }
 
-// TODO: Create / Get / Set from multiple threads
-// TODO: Spread Heirarchy across multiple threads
+struct MyCustomTestType {
+	std::optional<String> description;
+	float bar = 20.0;
+	int foo = 12;
+	bool baz = false;
+
+	bool operator==(const MyCustomTestType &other) const {
+		return description == other.description && bar == other.bar && foo == other.foo && baz == other.baz;
+	}
+
+	bool operator!=(const MyCustomTestType &other) const {
+		return description != other.description || bar != other.bar || foo != other.foo || baz != other.baz;
+	}
+};
+
+TEST_CASE("[Hydrogen][Behaviors][Blackboard] Custom Native Types") {
+
+	BehaviorServer *server = BehaviorServer::get_singleton();
+	REQUIRE(server);
+
+	RID blackboard = server->blackboard_create();
+	REQUIRE(blackboard != RID());
+
+	MyCustomTestType test;
+	MyCustomTestType *test_ptr = &test;
+	const MyCustomTestType *test_ptr2 = &test;
+
+	test_simple_get_set<MyCustomTestType>(server, blackboard, "by_value", test);
+	test_simple_get_set<MyCustomTestType*>(server, blackboard, "by_pointer", test_ptr);
+	test_simple_get_set<const MyCustomTestType*>(server, blackboard, "by_const_pointer", test_ptr);
+
+	server->free_rid(blackboard);
+}
+
 
 } //namespace hydrogen::test
