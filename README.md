@@ -16,7 +16,7 @@ Doctest is built against `v2.4.12` tagged commit.
 
 Platforms tested against:
 - [x] Linux/BSD
-- [ ] Windows 64-bit
+- [x] Windows 64-bit
 - [ ] Mac OSX
 - [ ] iOS
 - [ ] Android
