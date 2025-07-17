@@ -606,7 +606,8 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	RID blackboard = server->blackboard_create();
 	CHECK(blackboard != RID());
 
-	server->blackboard_set_entry(blackboard, "First", 255ul);
+	const uint64_t a_number = 255;
+	server->blackboard_set_entry(blackboard, "First", a_number);
 
 	RID blackboard2 = server->blackboard_create();
 	CHECK(blackboard2 != RID());
@@ -615,8 +616,8 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	RID blackboard3 = server->blackboard_create();
 	CHECK(blackboard3 != RID());
 	Array array = Array();
-	array.push_back(255ul);
-	array.push_back(42ul);
+	array.push_back(a_number);
+	array.push_back(42);
 	server->blackboard_set_entry(blackboard3, "Third", array);
 
 	RID blackboard4 = server->blackboard_create();
@@ -674,7 +675,8 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
 	Node *node = memnew(Node);
 	Ref json = memnew(JSON);
 
-	server->blackboard_set_entry(blackboard, "First", 255ul);
+	const uint64_t a_number = 255;
+	server->blackboard_set_entry(blackboard, "First", a_number);
 	server->blackboard_set_entry(blackboard, "Second", String("42"));
 	server->blackboard_set_entry(blackboard, "Third", 512);
 	server->blackboard_set_entry(blackboard, "Fourth", json);
@@ -686,7 +688,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
 	int64_t third = entries["Third"];
 	Object* fifth = entries["Fifth"];
 
-	CHECK(first == 255ul);
+	CHECK(first == a_number);
 	CHECK(entries["Second"] == String("42"));
 	CHECK(third == 512);
 	CHECK(entries["Fourth"] == json);
@@ -701,12 +703,12 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Type Infos") {
 	Dictionary type_infos = Blackboard::export_type_infos();
 	REQUIRE(type_infos.size() > 0);
 
-	const StringName ulong_name = "unsigned long";
-	Variant unsigned_long = type_infos.get(ulong_name, Variant());
-	REQUIRE(unsigned_long.get_type() != Variant::NIL);
-	REQUIRE(unsigned_long.get("type_name") == ulong_name);
-	int64_t hash_candidate = unsigned_long.get("type_key");
-	CHECK(hash_candidate == ulong_name.hash());
+	const StringName string_name = "godot::String";
+	Variant string_info = type_infos.get(string_name, Variant());
+	REQUIRE(string_info.get_type() != Variant::NIL);
+	REQUIRE(string_info.get("type_name") == string_name);
+	int64_t hash_candidate = string_info.get("type_key");
+	CHECK(hash_candidate == string_name.hash());
 }
 
 TEST_CASE("[Hydrogen][Behaviors][Blackboard] Import from Dictionary") {
@@ -737,7 +739,8 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Import from Dictionary") {
 	StringName fourth = "Fourth";
 	StringName fifth = "Fifth";
 
-	dict[first] = 255ul;
+	const uint64_t a_number = 255;
+	dict[first] = a_number;
 	dict[second] = String("42");
 	dict[third] = -512;
 	dict[fourth] = json;
@@ -748,7 +751,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Import from Dictionary") {
 	CHECK(server->blackboard_get_size(blackboard) == dict.size());
 	CHECK_FALSE(server->blackboard_is_empty(blackboard));
 
-	CHECK(server->blackboard_get_entry<int64_t>(blackboard, first) == 255ul);
+	CHECK(server->blackboard_get_entry<int64_t>(blackboard, first) == a_number);
 	CHECK(server->blackboard_get_entry<String>(blackboard, second) == String("42"));
 	CHECK(server->blackboard_get_entry<int64_t>(blackboard, third) == -512);
 	CHECK(server->blackboard_get_entry<Ref<JSON>>(blackboard, fourth) == json);
