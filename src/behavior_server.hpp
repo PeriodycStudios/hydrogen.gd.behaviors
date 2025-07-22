@@ -13,6 +13,7 @@
 #include "godot_cpp/variant/typed_dictionary.hpp"
 
 #include "blackboard.hpp"
+#include "behavior_trees.hpp"
 
 using namespace godot;
 
@@ -25,7 +26,27 @@ class BehaviorServer final : public Object {
 
 	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
+	RID_PtrOwner<BehaviorTree> behavior_tree_owner = {};
 	Ref<Mutex> blackboard_mutex = {};
+	Ref<Mutex> behavior_tree_mutex = {};
+
+	template <typename T>
+	void free_ptr_resource(RID_PtrOwner<T> &p_owner, Ref<Mutex> &p_mutex, RID p_rid, std::function<void(T*)> p_cleanup = nullptr) {
+		ERR_FAIL_COND(p_mutex.is_null());
+		ERR_FAIL_COND(p_rid == RID());
+		p_mutex->lock();
+
+		T *resource = p_owner.get_or_null(p_rid);
+		if (likely(p_cleanup != nullptr)) {
+			p_cleanup(resource);
+		}
+		p_owner.free(p_rid);
+		memdelete(resource);
+
+		p_mutex->unlock();
+	}
+
+	// ---- Blackboard ----
 
 	void blackboard_add_child(RID parent, RID child);
 	void blackboard_remove_child(RID parent, RID child);
@@ -34,6 +55,14 @@ class BehaviorServer final : public Object {
 	void blackboard_emit_set_parent(RID p_child_rid, RID p_parent_rid);
 	void blackboard_emit_created(RID blackboard);
 	void blackboard_emit_destroyed(RID p_blackboard_rid);
+
+	// ---- Blackboard END ----
+
+	// ---- Behavior Tree ----
+
+	void behavior_tree_erase(BehaviorTree *behavior_tree);
+
+	// ---- Behavior Tree END ----
 
 protected:
 	static void _bind_methods();
@@ -47,12 +76,16 @@ public:
 	void blackboards_lock() const;
 	void blackboards_unlock() const;
 
+	void behavior_tree_lock() const;
+	void behavior_tree_unlock() const;
+
 	void free_rid(RID p_rid);
 
 	RID blackboard_create();
 	RID behavior_tree_create();
 	RID state_machine_create();
 	RID agent_create();
+	RID pipeline_context_create(RID p_blackboard, RID p_pipeline);
 
 	Error init();
 	void finish();
@@ -91,6 +124,12 @@ public:
 	static Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
+
+	// ---- Behavior Tree ----
+
+
+
+	// ---- Behavior Tree END ----
 };
 
 class HydrogenBehaviorServer final : public Object {
@@ -136,18 +175,18 @@ public:
 	RID blackboard_get_parent(RID p_blackboard_rid);
 	bool blackboard_is_ancestor(RID p_blackboard_rid, RID p_candidate);
 
-	template<typename T>
+	template <typename T>
 	bool blackboard_try_get_entry(RID p_blackboard_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
 
 	Variant blackboard_try_get_as_variant(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents = true);
 
-	template<typename T>
-	const T &blackboard_get_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+	template <typename T>
+	const T &blackboard_get_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_default = {}, bool p_check_parents = true);
 
 	template <typename T>
 	T blackboard_get_entry(RID p_blackboard_rid, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
-	template<typename T>
+	template <typename T>
 	void blackboard_set_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_value);
 
 	template <typename T>
@@ -163,8 +202,10 @@ public:
 	Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
-
+#if TESTS_ENABLED
 	void run_tests();
+#endif
+
 };
 
 template <typename T>

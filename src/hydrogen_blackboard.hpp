@@ -1,13 +1,13 @@
 #ifndef HYDROGEN_BLACKBOARD_HPP
 #define HYDROGEN_BLACKBOARD_HPP
 
-#include "behavior_server.hpp"
-#include "blackboard.hpp"
-#include "godot_cpp/variant/typed_dictionary.hpp"
-
+#include <godot_cpp/variant/rid.hpp>
 #include <godot_cpp/classes/resource.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
-#include <godot_cpp/variant/rid.hpp>
+#include <godot_cpp/variant/typed_dictionary.hpp>
+
+#include "behavior_server.hpp"
+#include "blackboard.hpp"
 
 using namespace godot;
 

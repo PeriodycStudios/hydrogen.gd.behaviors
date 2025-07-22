@@ -37,16 +37,25 @@ void BehaviorServer::blackboards_unlock() const {
 	blackboard_mutex->unlock();
 }
 
+void BehaviorServer::behavior_tree_lock() const {
+	ERR_FAIL_COND(behavior_tree_mutex.is_null());
+	behavior_tree_mutex->lock();
+}
+
+void BehaviorServer::behavior_tree_unlock() const {
+	ERR_FAIL_COND(behavior_tree_mutex.is_null());
+	behavior_tree_mutex->unlock();
+}
+
+
 void BehaviorServer::free_rid(RID p_rid) {
 	if (blackboard_owner.owns(p_rid)) {
-		blackboards_lock();
-
-		Blackboard *blackboard = blackboard_owner.get_or_null(p_rid);
-		blackboard_erase(blackboard);
-		blackboard_owner.free(p_rid);
-		memdelete(blackboard);
-
-		blackboards_unlock();
+		const static auto bb_cleanup = [this](Blackboard* bb){ blackboard_erase(bb);};
+		free_ptr_resource<Blackboard>(blackboard_owner, blackboard_mutex, p_rid, bb_cleanup);
+	}
+	else if (behavior_tree_owner.owns(p_rid)) {
+		const static auto bt_cleanup = [this](BehaviorTree* bt){ behavior_tree_erase(bt);};
+		free_ptr_resource<BehaviorTree>(behavior_tree_owner, behavior_tree_mutex, p_rid, bt_cleanup);
 	}
 	else {
 		ERR_FAIL_MSG("Invalid ID.");
@@ -77,14 +86,19 @@ RID BehaviorServer::agent_create() {
 	return {};
 }
 
+RID BehaviorServer::pipeline_context_create(RID p_blackboard, RID p_pipeline) {
+	return {};
+}
+
 Error BehaviorServer::init() {
  	blackboard_mutex.instantiate();
+	behavior_tree_mutex.instantiate();
  	return OK;
 }
 
 void BehaviorServer::finish() {
-
 	blackboard_mutex.unref();
+	behavior_tree_mutex.unref();
 }
 
 // ---- Blackboard ----
@@ -204,8 +218,8 @@ bool BehaviorServer::blackboard_set_parent(RID p_blackboard_rid, RID p_parent_ri
 		blackboard_remove_child(previous->get_self(), p_blackboard_rid);
 	}
 
-	if (success) {
-		if (parent) {
+	if (likely(success)) {
+		if (likely(parent)) {
 			blackboard_add_child(p_parent_rid, p_blackboard_rid);
 		}
 
@@ -271,6 +285,17 @@ Dictionary BehaviorServer::blackboard_export_type_infos() {
 }
 
 // ---- Blackboard END ----
+
+// ---- Behavior Tree ----
+
+void BehaviorServer::behavior_tree_erase(BehaviorTree *behavior_tree) {
+
+}
+
+
+
+
+// ---- Behavior Tree END ----
 
 
 HydrogenBehaviorServer *HydrogenBehaviorServer::singleton = nullptr;
