@@ -17,7 +17,7 @@ class Pipeline : public RidData {
 protected:
 
 	Pipeline(Blackboard *p_blackboard, BehaviorsNodeBase *p_root) : blackboard{p_blackboard}, root {p_root} {};
-	virtual ~Pipeline();
+	virtual ~Pipeline() = default;
 
 	_FORCE_INLINE_ Blackboard *get_blackboard() { return blackboard; }
 	_FORCE_INLINE_ BehaviorsNodeBase *get_root() { return root; }
@@ -30,7 +30,7 @@ public:
 	virtual void execute() = 0;
 
 	virtual void halt() { halting = true; };
-	[[nodiscard]] bool is_halting() const;
+	[[nodiscard]] _FORCE_INLINE_ bool is_halting() const { return halting; };
 	[[nodiscard]] virtual bool is_fully_halted() const = 0;
 	virtual void clear_halt() { halting = false; }
 
