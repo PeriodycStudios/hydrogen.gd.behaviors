@@ -25,6 +25,8 @@ class BehaviorServer final : public Object {
 	static BehaviorServer *singleton;
 
 	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
+	HashMap<RID, BehaviorTreeTaskNode*> behavior_tree_nodes = {};
+	HashMap<RID, Pipeline *> pipelines = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
 	RID_PtrOwner<BehaviorTree> behavior_tree_owner = {};
 	Ref<Mutex> blackboard_mutex = {};
@@ -63,6 +65,17 @@ class BehaviorServer final : public Object {
 	void behavior_tree_erase(BehaviorTree *behavior_tree);
 
 	// ---- Behavior Tree END ----
+
+	template <typename T>
+	void cleanup_resources(RID_PtrOwner<T> &p_owner) {
+		if (unlikely(p_owner.get_rid_count() == 0)) {
+			return;
+		}
+
+		List<RID> owned_list = {};
+		p_owner.get_owned_list(&owned_list);
+
+	}
 
 protected:
 	static void _bind_methods();
