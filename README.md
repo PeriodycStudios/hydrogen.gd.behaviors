@@ -1,23 +1,31 @@
 # Hydrogen Godot Behaviors
 
 - [x] TODO: Blackboard
-- [ ] TODO: Pipelines
+- [ ] TODO: Pipelines - IN PROGRESS
   - [ ] TODO: Node Binding Code generator 
-  - [ ] TODO: Graph Nodes
-- [ ] TODO: Behavior Trees
+  - [ ] TODO: Graph Nodes - IN PROGRESS
+- [ ] TODO: Behavior Trees - IN PROGRESS
 - [ ] TODO: Hierarchical FSMs
 - [ ] TODO: Agents
 - [ ] TODO: Steering
   - [ ] TODO: Navigation-integration
+- [ ] TODO: Generator Pipelines
 
 ## Library Compatibility
 Currently this is built against the `godot-4.4.1-stable` tagged commit in the `godot-cpp`
 Doctest is built against `v2.4.12` tagged commit.
 
+Compiles:
+- [x] Linux/BSD
+- [x] Windows 64-bit
+- [X] Mac OSX
+- [ ] iOS
+- [X] Android
+
 Platforms tested against:
 - [x] Linux/BSD
 - [x] Windows 64-bit
-- [ ] Mac OSX
+- [X] Mac OSX
 - [ ] iOS
 - [ ] Android
 
@@ -25,6 +33,7 @@ Platforms tested against:
 - Building for Editor Play/General testing: `scons target=template_debug tests=yes`
   - To build without Unit tests, exclude the `tests=yes` arg
 - Building for optimized testing: `scons target=template_release`
+- For windows, I recommend using the MingW-w64 toolchain if you don't already have the MSVC toolchain setup
 
 ## Demo Project
 
@@ -33,6 +42,9 @@ You can open the `demo/` folder from the Godot 4.4.X editor launcher, a project 
 Alternatively, you can launch directly from the command line:
 1. Navigate to the `demo/` sub-folder
 2. run `PATH/TO/GODOT_EDITOR_4_4_X --editor .`
+
+To run the project directly, ensure the `template_debug` configuration is built and use:
+`PATH/TO/GODOT_EDITOR_4_4_X --project .`
 
 # Contributions / Attributions
 
