@@ -2,7 +2,7 @@
 // Created by tkey on 7/18/25.
 //
 
-#include "behaviors_node_base.hpp"
+#include "pipeline_nodes.hpp"
 
 namespace hydrogen {
 } // hydrogen

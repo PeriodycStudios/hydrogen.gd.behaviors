@@ -5,25 +5,20 @@
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/templates/pair.hpp>
 
-#include "behaviors_node_base.hpp"
 #include "pipeline.hpp"
-
-#define MAKE_BEHAVIOR_TREE_ENTRY_NAME(entry_name)		\
-	static const StringName &entry_name##_name() {		\
-		const static StringName name(#entry_name, true);\
-		return name;									\
-	}
-
 
 namespace hydrogen {
 
 using namespace godot;
 
-class BehaviorTreeTaskNode : public BehaviorsNodeBase {
+namespace behavior_trees {
+	MAKE_BLACKBOARD_ENTRY_NAME(last_result)
+	MAKE_BLACKBOARD_ENTRY_NAME(behavior_tree)
+}
 
-protected:
-	friend class BehaviorTree;
-	uint64_t bind_count = 0;
+class BehaviorTree;
+
+class BehaviorTreeNode : public PipelineNode {
 
 public:
 	enum Result {
@@ -32,99 +27,64 @@ public:
 		RUNNING = 2,
 	};
 
-	virtual Result execute(Blackboard *p_blackboard) const = 0;
-
-	[[nodiscard]] virtual bool is_leaf() const = 0;
-	[[nodiscard]] virtual bool is_descendent(BehaviorTreeTaskNode *p_node) const = 0;
-	[[nodiscard]] virtual bool is_child(BehaviorTreeTaskNode *p_node) const = 0;
-
-	virtual void collect_descendents(Vector<BehaviorTreeTaskNode*> &descendents) const = 0;
-
-	virtual BehaviorTreeTaskNode *get_node_by_id(RID p_rid) = 0;
-
-	[[nodiscard]] _FORCE_INLINE_ uint64_t get_bind_count() const { return bind_count; }
-
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(blackboards)
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(nodes)
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(error)
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(halting)
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(last_result)
-	MAKE_BEHAVIOR_TREE_ENTRY_NAME(node_states)
-};
-
-struct IStatefulBehaviorTreeTaskNode;
-
-struct IBehaviorTreeTaskState {
-
 protected:
-	explicit IBehaviorTreeTaskState(const IStatefulBehaviorTreeTaskNode *p_owner) : owner{p_owner} {};
+	friend class BehaviorTree;
+
+	[[nodiscard]] static _FORCE_INLINE_ BehaviorTree * get_behavior_tree(const Blackboard * p_blackboard) {
+		return p_blackboard->get_entry<BehaviorTree *>(behavior_trees::behavior_tree_name());
+	}
+
+	virtual Result _run(Blackboard *) const = 0;
+
+	virtual Blackboard * push_blackboard(Blackboard *p_blackboard) const {
+		return p_blackboard;
+	}
+
+	virtual void pop_blackboard(Blackboard *p_blackboard) const {}
 
 public:
-	const IStatefulBehaviorTreeTaskNode *owner;
-	virtual ~IBehaviorTreeTaskState() = default;
+
+	Result run(Blackboard *p_blackboard, bool p_resume = false) const;
 };
 
-struct IStatefulBehaviorTreeTaskNode {
-	IStatefulBehaviorTreeTaskNode() = default;
-	virtual ~IStatefulBehaviorTreeTaskNode() = default;
-
-	virtual IBehaviorTreeTaskState *create_state_value() const = 0;
-	virtual bool reset_state_value(IBehaviorTreeTaskState *p_state) const {
-		return p_state != nullptr && p_state->owner == this;
-	}
-};
-
-struct BehaviorTreeTaskNodeHasher {
-	static _FORCE_INLINE_ uint32_t hash(BehaviorTreeTaskNode *p_node) {
-		return p_node ? HashMapHasherDefault::hash(p_node->get_self()) :
-		HashMapHasherDefault::hash(RID());
-	}
-};
-
-struct BehaviorTreeTaskNodeComparator {
-	static _FORCE_INLINE_ bool compare(BehaviorTreeTaskNode *p_node_a, BehaviorTreeTaskNode *p_node_b) {
-		const RID rid_a = p_node_a ? p_node_a->get_self() : RID();
-		const RID rid_b = p_node_b ? p_node_b->get_self() : RID();
-		return rid_a == rid_b;
-	}
-};
 
 class BehaviorTree final : public Pipeline {
 
-	friend class BehaviorTreeTaskNode;
+	friend class BehaviorTreeNode;
 
-	typedef HashSet<BehaviorTreeTaskNode *, BehaviorTreeTaskNodeHasher, BehaviorTreeTaskNodeComparator> NodeSet;
-	typedef HashMap<RID, IBehaviorTreeTaskState *> NodeStateMap;
+	Vector<Pair<const BehaviorTreeNode *, Blackboard *>> execution_stack = {};
 
-	Blackboard *state_blackboard;
-	Vector<Pair<RID, Blackboard *>> blackboards_stack = {};
-	Vector<BehaviorTreeTaskNode *> nodes_stack = {};
-	NodeSet bound_nodes = {};
-	NodeStateMap node_states = {};
+	[[nodiscard]] _FORCE_INLINE_ bool is_stack_empty() const { return execution_stack.is_empty(); }
+	[[nodiscard]] _FORCE_INLINE_ const Pair<const BehaviorTreeNode *, Blackboard *> &peek_stack() const { return execution_stack[execution_stack.size() - 1]; }
 
-	[[nodiscard]] _FORCE_INLINE_ BehaviorTreeTaskNode *get_task_root() { return dynamic_cast<BehaviorTreeTaskNode *>(get_root()); }
+	void _enter(const BehaviorTreeNode *p_node, Blackboard *p_blackboard) {
+		const auto& pair = peek_stack();
+		CRASH_COND(p_node == pair.first);
+		CRASH_COND(p_blackboard == pair.second);
 
-	[[nodiscard]] _FORCE_INLINE_ const Pair<RID, Blackboard *> &get_current_blackboard() const { return blackboards_stack[blackboards_stack.size() - 1]; }
-	[[nodiscard]] _FORCE_INLINE_ BehaviorTreeTaskNode *get_current_node() const { return nodes_stack[nodes_stack.size() - 1]; }
+		execution_stack.push_back(Pair(p_node, p_blackboard));
+	}
 
-	void _update_dirty() override;
+	void _exit(const BehaviorTreeNode *p_node, const Blackboard *p_blackboard) {
+		const auto &bb_pair = peek_stack();
+		CRASH_COND(p_node != bb_pair.first);
+		CRASH_COND(p_blackboard != bb_pair.second);
+
+		execution_stack.remove_at(execution_stack.size() - 1);
+	}
+
+	void execute() override;
 
 public:
 
 	static void register_types();
 
-	BehaviorTree(Blackboard *p_blackboard, BehaviorTreeTaskNode *p_root);
+	BehaviorTree(const Blackboard *p_blackboard, const BehaviorTreeNode *p_root_node);
 	~BehaviorTree() override;
 
-	void execute() override;
-	void halt() override;
 	[[nodiscard]] bool is_fully_halted() const override;
-	void clear_halt() override;
-	String get_error() const override;
 
-	[[nodiscard]] _FORCE_INLINE_ bool is_node_bound(BehaviorTreeTaskNode *p_node) const { return bound_nodes.has(p_node); }
-
-	[[nodiscard]] _FORCE_INLINE_ const BehaviorTreeTaskNode *get_task_root() const { return dynamic_cast<const BehaviorTreeTaskNode *>(get_root()); }
+	[[nodiscard]] _FORCE_INLINE_ const BehaviorTreeNode *get_task_root() const { return dynamic_cast<const BehaviorTreeNode *>(get_root()); }
 };
 
 }
