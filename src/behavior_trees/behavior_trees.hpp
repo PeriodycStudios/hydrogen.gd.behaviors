@@ -5,20 +5,18 @@
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/templates/pair.hpp>
 
-#include "pipeline.hpp"
+#include "../pipeline.hpp"
 
-namespace hydrogen {
+namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-namespace behavior_trees {
-	MAKE_BLACKBOARD_ENTRY_NAME(last_result)
-	MAKE_BLACKBOARD_ENTRY_NAME(behavior_tree)
-}
+MAKE_BLACKBOARD_ENTRY_NAME(last_result)
+MAKE_BLACKBOARD_ENTRY_NAME(behavior_tree)
 
 class BehaviorTree;
 
-class BehaviorTreeNode : public PipelineNode {
+class TaskNode : public pipelines::PipelineNode {
 
 public:
 	enum Result {
@@ -31,7 +29,7 @@ protected:
 	friend class BehaviorTree;
 
 	[[nodiscard]] static _FORCE_INLINE_ BehaviorTree * get_behavior_tree(const Blackboard * p_blackboard) {
-		return p_blackboard->get_entry<BehaviorTree *>(behavior_trees::behavior_tree_name());
+		return p_blackboard->get_entry<BehaviorTree *>(behavior_tree_name());
 	}
 
 	virtual Result _run(Blackboard *) const = 0;
@@ -47,17 +45,16 @@ public:
 	Result run(Blackboard *p_blackboard, bool p_resume = false) const;
 };
 
+class BehaviorTree final : public pipelines::Pipeline {
 
-class BehaviorTree final : public Pipeline {
+	friend class TaskNode;
 
-	friend class BehaviorTreeNode;
-
-	Vector<Pair<const BehaviorTreeNode *, Blackboard *>> execution_stack = {};
+	Vector<Pair<const TaskNode *, Blackboard *>> execution_stack = {};
 
 	[[nodiscard]] _FORCE_INLINE_ bool is_stack_empty() const { return execution_stack.is_empty(); }
-	[[nodiscard]] _FORCE_INLINE_ const Pair<const BehaviorTreeNode *, Blackboard *> &peek_stack() const { return execution_stack[execution_stack.size() - 1]; }
+	[[nodiscard]] _FORCE_INLINE_ const Pair<const TaskNode *, Blackboard *> &peek_stack() const { return execution_stack[execution_stack.size() - 1]; }
 
-	void _enter(const BehaviorTreeNode *p_node, Blackboard *p_blackboard) {
+	void _enter(const TaskNode *p_node, Blackboard *p_blackboard) {
 		const auto& pair = peek_stack();
 		CRASH_COND(p_node == pair.first);
 		CRASH_COND(p_blackboard == pair.second);
@@ -65,7 +62,7 @@ class BehaviorTree final : public Pipeline {
 		execution_stack.push_back(Pair(p_node, p_blackboard));
 	}
 
-	void _exit(const BehaviorTreeNode *p_node, const Blackboard *p_blackboard) {
+	void _exit(const TaskNode *p_node, const Blackboard *p_blackboard) {
 		const auto &bb_pair = peek_stack();
 		CRASH_COND(p_node != bb_pair.first);
 		CRASH_COND(p_blackboard != bb_pair.second);
@@ -79,12 +76,12 @@ public:
 
 	static void register_types();
 
-	BehaviorTree(const Blackboard *p_blackboard, const BehaviorTreeNode *p_root_node);
+	BehaviorTree(const Blackboard *p_blackboard, const TaskNode *p_root_node);
 	~BehaviorTree() override;
 
 	[[nodiscard]] bool is_fully_halted() const override;
 
-	[[nodiscard]] _FORCE_INLINE_ const BehaviorTreeNode *get_task_root() const { return dynamic_cast<const BehaviorTreeNode *>(get_root()); }
+	[[nodiscard]] _FORCE_INLINE_ const TaskNode *get_task_root() const { return dynamic_cast<const TaskNode *>(get_root()); }
 };
 
 }

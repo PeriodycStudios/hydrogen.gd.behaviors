@@ -10,7 +10,7 @@
 #include "pipeline_nodes.hpp"
 #include "rid_data.hpp"
 
-namespace hydrogen {
+namespace hydrogen::pipelines {
 
 class Pipeline : public RidData {
 
@@ -40,24 +40,24 @@ public:
 	static void register_types();
 
 	_FORCE_INLINE_ void halt() const {
-		_state_blackboard->set_entry_fast(pipeline_nodes::halting_name(), true);
+		_state_blackboard->set_entry_fast(halting_name(), true);
 	}
 
 	[[nodiscard]] _FORCE_INLINE_ bool is_halting() const {
-		return _state_blackboard->get_entry<bool>(pipeline_nodes::halting_name());
+		return _state_blackboard->get_entry<bool>(halting_name());
 	}
 
 	[[nodiscard]] virtual bool is_fully_halted() const = 0;
 
 	_FORCE_INLINE_ void clear_halt() const {
-		_state_blackboard->set_entry_fast(pipeline_nodes::halting_name(), false);
+		_state_blackboard->set_entry_fast(halting_name(), false);
 	}
 
 	[[nodiscard]] _FORCE_INLINE_ const Blackboard *get_blackboard() const { return _state_blackboard; }
 	[[nodiscard]] _FORCE_INLINE_ const PipelineNode *get_root() const { return _root; }
 
 	[[nodiscard]] _FORCE_INLINE_ String get_error() const {
-		return _state_blackboard->get_entry_fast<String>(pipeline_nodes::error_name(), "", false);
+		return _state_blackboard->get_entry_fast<String>(error_name(), "", false);
 	}
 };
 }

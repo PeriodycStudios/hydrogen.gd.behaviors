@@ -3,16 +3,16 @@
 
 #include <godot_cpp/templates/local_vector.hpp>
 
-namespace hydrogen {
+namespace hydrogen::pipelines {
 
 void IPipelineNodeStateful::cleanup_state(IPipelineNodeState *p_state) const { memdelete(p_state); }
 
-Pipeline::Pipeline(const Blackboard *p_source_blackboard, const PipelineNode *p_root_node) : _state_blackboard(memnew(Blackboard)), _root(p_root_node)  {
+Pipeline::Pipeline(const Blackboard *p_source_blackboard, const PipelineNode *p_root_node) : _root(p_root_node), _state_blackboard(memnew(Blackboard))  {
 	_state_blackboard->set_parent(p_source_blackboard);
-	_state_blackboard->set_entry_fast(pipeline_nodes::error_name(), String(""));
-	_state_blackboard->set_entry_fast(pipeline_nodes::halting_name(), false);
-	_state_blackboard->set_entry_fast(pipeline_nodes::node_states_name(), &_states);
-	_state_blackboard->set_entry_fast(pipeline_nodes::pipeline_name(), this);
+	_state_blackboard->set_entry_fast(error_name(), String(""));
+	_state_blackboard->set_entry_fast(halting_name(), false);
+	_state_blackboard->set_entry_fast(node_states_name(), &_states);
+	_state_blackboard->set_entry_fast(pipeline_name(), this);
 }
 
 Pipeline::~Pipeline() {
@@ -33,16 +33,16 @@ void Pipeline::bind() {
 
 		const IPipelineNodeContainer *container_node = dynamic_cast<const IPipelineNodeContainer *>(p_node);
 		if (unlikely(container_node != nullptr)) {
-			const uint32_t nodes_count = collected_nodes.size();
+			const uint32_t nodes_count = container_node->get_node_count();
 			for (uint32_t i = 0; i < nodes_count; i++) {
-				PipelineNode *node = container_node->get_child(i);
+				PipelineNode *node = container_node->get_node(i);
 				collect(node);
 			}
 		}
 
 		const IPipelineNodeWrapper *wrapper_node = dynamic_cast<const IPipelineNodeWrapper *>(container_node);
 		if (unlikely(wrapper_node != nullptr)) {
-			PipelineNode *wrapped_node = wrapper_node->get_wrapped_node();
+			PipelineNode *wrapped_node = wrapper_node->get_pipeline_node();
 			if (likely(wrapped_node != nullptr)) {
 				collect(wrapped_node);
 			}

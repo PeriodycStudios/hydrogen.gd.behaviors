@@ -12,12 +12,14 @@
 #include <godot_cpp/templates/local_vector.hpp>
 #include "godot_cpp/variant/typed_dictionary.hpp"
 
+#include "behavior_trees/behavior_trees.hpp"
 #include "blackboard.hpp"
-#include "behavior_trees.hpp"
+
+namespace hydrogen {
 
 using namespace godot;
 
-namespace hydrogen {
+namespace BT = behavior_trees;
 
 class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
@@ -25,10 +27,10 @@ class BehaviorServer final : public Object {
 	static BehaviorServer *singleton;
 
 	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
-	HashMap<RID, BehaviorTreeNode*> behavior_tree_nodes = {};
-	HashMap<RID, BehaviorTree *> behavior_trees = {};
+	HashMap<RID, BT::TaskNode*> behavior_tree_nodes = {};
+	HashMap<RID, BT::BehaviorTree *> behavior_trees = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
-	RID_PtrOwner<BehaviorTree> behavior_tree_owner = {};
+	RID_PtrOwner<BT::BehaviorTree> behavior_tree_owner = {};
 	Ref<Mutex> blackboard_mutex = {};
 	Ref<Mutex> behavior_tree_mutex = {};
 
@@ -62,7 +64,7 @@ class BehaviorServer final : public Object {
 
 	// ---- Behavior Tree ----
 
-	void behavior_tree_erase(BehaviorTree *behavior_tree);
+	void behavior_tree_erase(BT::BehaviorTree *behavior_tree);
 
 	// ---- Behavior Tree END ----
 

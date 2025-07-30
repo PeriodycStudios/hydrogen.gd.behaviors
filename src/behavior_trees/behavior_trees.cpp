@@ -2,9 +2,9 @@
 #include "behavior_trees.hpp"
 #include <godot_cpp/templates/local_vector.hpp>
 
-namespace hydrogen {
+namespace hydrogen::behavior_trees {
 
-BehaviorTreeNode::Result BehaviorTreeNode::run(Blackboard *p_blackboard, bool p_resume) const  {
+TaskNode::Result TaskNode::run(Blackboard *p_blackboard, bool p_resume) const  {
 	BehaviorTree *behavior_tree = get_behavior_tree(p_blackboard);
 
 	if (likely(!p_resume)) {
@@ -23,13 +23,13 @@ BehaviorTreeNode::Result BehaviorTreeNode::run(Blackboard *p_blackboard, bool p_
 }
 
 void BehaviorTree::register_types() {
-	Blackboard::register_type<BehaviorTreeNode::Result>();
+	Blackboard::register_type<TaskNode::Result>();
 	Blackboard::register_type<BehaviorTree *>();
 }
 
-BehaviorTree::BehaviorTree(const Blackboard *p_blackboard, const BehaviorTreeNode *p_root_node) : Pipeline(p_blackboard, p_root_node) {
-	_state_blackboard->set_entry_fast(behavior_trees::behavior_tree_name(), this);
-	_state_blackboard->set_entry_fast(behavior_trees::last_result_name(), BehaviorTreeNode::SUCCESS);
+BehaviorTree::BehaviorTree(const Blackboard *p_blackboard, const TaskNode *p_root_node) : Pipeline(p_blackboard, p_root_node) {
+	_state_blackboard->set_entry_fast(behavior_tree_name(), this);
+	_state_blackboard->set_entry_fast(last_result_name(), TaskNode::SUCCESS);
 }
 
 BehaviorTree::~BehaviorTree() {
@@ -38,7 +38,7 @@ BehaviorTree::~BehaviorTree() {
 
 void BehaviorTree::execute() {
 
-	const BehaviorTreeNode *node;
+	const TaskNode *node;
 	Blackboard *blackboard;
 	if (likely(is_stack_empty())) {
 		node = get_task_root();
@@ -49,8 +49,8 @@ void BehaviorTree::execute() {
 		blackboard = bb_pair.second;
 	}
 
-	const BehaviorTreeNode::Result result = node->run(blackboard);
-	_state_blackboard->set_entry_fast(behavior_trees::last_result_name(), result);
+	const TaskNode::Result result = node->run(blackboard);
+	_state_blackboard->set_entry_fast(last_result_name(), result);
 }
 
 bool BehaviorTree::is_fully_halted() const {

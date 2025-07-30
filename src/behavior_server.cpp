@@ -54,8 +54,8 @@ void BehaviorServer::free_rid(RID p_rid) {
 		free_ptr_resource<Blackboard>(blackboard_owner, blackboard_mutex, p_rid, bb_cleanup);
 	}
 	else if (behavior_tree_owner.owns(p_rid)) {
-		const static auto bt_cleanup = [this](BehaviorTree* bt){ behavior_tree_erase(bt);};
-		free_ptr_resource<BehaviorTree>(behavior_tree_owner, behavior_tree_mutex, p_rid, bt_cleanup);
+		const static auto bt_cleanup = [this](BT::BehaviorTree* bt){ behavior_tree_erase(bt);};
+		free_ptr_resource<BT::BehaviorTree>(behavior_tree_owner, behavior_tree_mutex, p_rid, bt_cleanup);
 	}
 	else {
 		ERR_FAIL_MSG("Invalid ID.");
@@ -288,7 +288,7 @@ Dictionary BehaviorServer::blackboard_export_type_infos() {
 
 // ---- Behavior Tree ----
 
-void BehaviorServer::behavior_tree_erase(BehaviorTree *behavior_tree) {
+void BehaviorServer::behavior_tree_erase(BT::BehaviorTree *behavior_tree) {
 
 }
 
