@@ -34,8 +34,8 @@ class PipelineNode : public RidData {
 
 protected:
 	friend class Pipeline;
-	_FORCE_INLINE_ void _bind() { ++_bind_count; }
-	_FORCE_INLINE_ void _unbind() { --_bind_count; }
+	virtual void _bind() { ++_bind_count; }
+	virtual void _unbind() { --_bind_count; }
 
 	PipelineNode() = default;
 public:

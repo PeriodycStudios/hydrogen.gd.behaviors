@@ -4,18 +4,13 @@
 
 #ifndef SELECTOR_NODES_HPP
 #define SELECTOR_NODES_HPP
-
-#include "../../godot-cpp/include/godot_cpp/templates/vector.hpp"
-#include "behavior_trees.hpp"
 #include "composite_node.hpp"
-
-#include <godot_cpp/templates/vector.hpp>
 
 namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-class SelectorNode : public CompositeNode {
+struct SelectorNode : public CompositeNode {
 /*
  *children : Task[]
  *run() -> Result {
@@ -23,15 +18,10 @@ class SelectorNode : public CompositeNode {
  *   if c.run() return true
  * return false
 */
-
-protected:
-	Result _run(Blackboard *) const override {
-		return FAILURE;
-	}
-
-public:
 	SelectorNode() = default;
 	~SelectorNode() override = default;
+
+	Result run(Blackboard *p_blackboard) const override { return FAILURE; }
 };
 
 // TODO: Nondeterministic sequence

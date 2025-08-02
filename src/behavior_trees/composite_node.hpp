@@ -4,13 +4,13 @@
 
 #ifndef CONTAINER_NODE_HPP
 #define CONTAINER_NODE_HPP
-#include "behavior_trees.hpp"
+#include "task_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-class CompositeNode : public TaskNode, public pipelines::ChildNodeContainer<TaskNode> {
+class CompositeNode : public BehaviorTreeNode, public pipelines::ChildNodeContainer<BehaviorTreeNode> {
 protected:
 	CompositeNode() = default;
 public:

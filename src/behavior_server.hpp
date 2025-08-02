@@ -27,7 +27,7 @@ class BehaviorServer final : public Object {
 	static BehaviorServer *singleton;
 
 	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
-	HashMap<RID, BT::TaskNode*> behavior_tree_nodes = {};
+	HashMap<RID, BT::BehaviorTreeNode*> behavior_tree_nodes = {};
 	HashMap<RID, BT::BehaviorTree *> behavior_trees = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
 	RID_PtrOwner<BT::BehaviorTree> behavior_tree_owner = {};

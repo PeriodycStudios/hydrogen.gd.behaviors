@@ -7,7 +7,8 @@ namespace hydrogen::pipelines {
 
 void IPipelineNodeStateful::cleanup_state(IPipelineNodeState *p_state) const { memdelete(p_state); }
 
-Pipeline::Pipeline(const Blackboard *p_source_blackboard, const PipelineNode *p_root_node) : _root(p_root_node), _state_blackboard(memnew(Blackboard))  {
+Pipeline::Pipeline(const Blackboard *p_source_blackboard, const PipelineNode *p_root_node) : _state_blackboard(memnew(Blackboard)), _root(p_root_node)  {
+	_root = p_root_node;
 	_state_blackboard->set_parent(p_source_blackboard);
 	_state_blackboard->set_entry_fast(error_name(), String(""));
 	_state_blackboard->set_entry_fast(halting_name(), false);
@@ -19,9 +20,18 @@ Pipeline::~Pipeline() {
 	memdelete(_state_blackboard);
 }
 
-void Pipeline::bind() {
+bool Pipeline::set_pipeline_root(const PipelineNode *p_node) {
+	if (_is_bound) {
+		WARN_PRINT("Cannot set pipeline root while pipeline is bound.");
+		return false;
+	}
 
-	if (unlikely(_is_bound)) {
+	_root = p_node;
+	return true;
+}
+
+void Pipeline::bind() {
+	if (unlikely(_root == nullptr || _is_bound)) {
 		return;
 	}
 
@@ -72,8 +82,7 @@ void Pipeline::bind() {
 }
 
 void Pipeline::unbind() {
-
-	if (unlikely(!_is_bound)) {
+	if (unlikely(_root == nullptr || !_is_bound)) {
 		return;
 	}
 
