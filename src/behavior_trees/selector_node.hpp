@@ -8,9 +8,12 @@
 
 namespace hydrogen::behavior_trees {
 
-using namespace godot;
-
-struct SelectorNode : public CompositeNode {
+class SelectorNode : public CompositeNode, public pipelines::IPipelineNodeStateful {
+	//
+	// struct SelectorNodeState : public pipelines::IPipelineNodeState{
+	// 	int current_child_index = 0;
+	// };
+	//
 /*
  *children : Task[]
  *run() -> Result {
@@ -18,10 +21,15 @@ struct SelectorNode : public CompositeNode {
  *   if c.run() return true
  * return false
 */
+public:
 	SelectorNode() = default;
 	~SelectorNode() override = default;
 
-	Result run(Blackboard *p_blackboard) const override { return FAILURE; }
+	pipelines::IPipelineNodeState *create_state() const override { return nullptr; }
+
+	Result execute(BehaviorTreeContext &p_context) const override { return FAILURE; }
+
+	void halt(BehaviorTreeContext &p_context) const override {}
 };
 
 // TODO: Nondeterministic sequence

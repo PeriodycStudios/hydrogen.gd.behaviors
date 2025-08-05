@@ -16,7 +16,6 @@ class BehaviorTreeGraph : public PipelineGraph<BehaviorTreeNode> {
 public:
 	BehaviorTreeGraph() = default;
 	~BehaviorTreeGraph() override = default;
-
 };
 
 } // hydrogen

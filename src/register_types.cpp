@@ -39,6 +39,8 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 	hydrogen_behavior_server = memnew(HydrogenBehaviorServer);
 
 	Engine::get_singleton()->register_singleton(k_server_name, HydrogenBehaviorServer::get_singleton());
+
+	behavior_trees::BehaviorTree::register_types();
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {

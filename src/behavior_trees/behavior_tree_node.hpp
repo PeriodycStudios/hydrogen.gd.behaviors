@@ -7,28 +7,12 @@
 namespace hydrogen::behavior_trees {
 
 class BehaviorTree;
+class BehaviorTreeContext;
 
 MAKE_BLACKBOARD_ENTRY_NAME(last_result)
 MAKE_BLACKBOARD_ENTRY_NAME(behavior_tree)
 
-
-class Context {
-
-	friend class BehaviorTree;
-
-	Blackboard *_blackboard;
-	BehaviorTree *_behavior_tree;
-	std::atomic_bool _halt;
-
-
-public:
-
-	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_blackboard() const { return _blackboard; }
-	[[nodiscard]] _FORCE_INLINE_ BehaviorTree *get_behavior_tree() const { return _behavior_tree; }
-	[[nodiscard]] _FORCE_INLINE_ bool is_halting() const { return _halt; }
-};
-
-class BehaviorTreeNode : public pipelines::PipelineNode {
+class BehaviorTreeNode : public pipelines::IPipelineNode {
 protected:
 	friend class BehaviorTree;
 
@@ -43,9 +27,8 @@ public:
 		RUNNING = 2,
 	};
 
-	virtual Result execute(Blackboard *p_blackboard) const = 0;
-	virtual Result resume(Blackboard *p_blackboard) const = 0;
-	virtual void halt(Blackboard *p_blackboard) const = 0;
+	virtual Result execute(BehaviorTreeContext &p_context) const = 0;
+	virtual void halt(BehaviorTreeContext &p_context) const = 0;
 };
 }
 

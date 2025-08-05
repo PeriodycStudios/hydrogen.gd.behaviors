@@ -6,6 +6,7 @@
 #define PIPELINE_HPP
 
 #include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
 
 #include "pipeline_nodes.hpp"
 #include "rid_data.hpp"
@@ -14,60 +15,53 @@
 namespace hydrogen::pipelines {
 
 class Pipeline : public RidData {
-
-	Blackboard *_state_blackboard = nullptr;
-	IPipelineGraph *_graph = nullptr;
-
-	const PipelineNode *_root = nullptr;
-	bool _is_bound = false;
+	Blackboard *_instance_blackboard;
+	Blackboard *_state_blackboard;
+	IPipelineGraph *_graph;
+	NodeStateMap _node_states {};
+	HashMap<StringName, StringName> _aliases {};
+	std::mutex *_mutex;
 
 protected:
+	[[nodiscard]] _FORCE_INLINE_ std::mutex *mutex() const { return _mutex; }
+	_FORCE_INLINE_ NodeStateMap &node_states() { return _node_states; }
+	[[nodiscard]] _FORCE_INLINE_ HashMap<StringName, StringName> &aliases() { return _aliases; }
 
-	typedef HashMap<RID, const PipelineNode*> NodeMap;
-	typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
-
-	NodeMap _nodes = {};
-	NodeStateMap _states = {};
-
-	explicit Pipeline(const Blackboard *p_source_blackboard, const PipelineNode * p_root_node = nullptr);
+	explicit Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph * p_graph);
 	virtual ~Pipeline();
 
-	// _FORCE_INLINE_ bool set_pipeline_graph(IPipelineGraph *p_graph) {
-	// 	if (_graph != nullptr) {
-	// 		_graph->
-	// 	}
-	// }
-
-	bool set_pipeline_root(const PipelineNode *p_node);
-
-	Blackboard *get_blackboard() { return _state_blackboard; }
+	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_state_blackboard() const { return _state_blackboard; }
+	[[nodiscard]] _FORCE_INLINE_ const Blackboard *get_readonly_state_blackboard() const { return _state_blackboard; }
+	[[nodiscard]] _FORCE_INLINE_ const IPipelineNode *get_pipeline_root() const { return _graph->get_pipeline_root(); }
 
 public:
 
+	_FORCE_INLINE_ void set_alias(const StringName &p_name, const StringName &p_alias) {
+		std::scoped_lock lock(*mutex());
+		_aliases[p_name] = p_alias;
+	}
+
+	_FORCE_INLINE_ bool erase_alias(const StringName &p_name) {
+		std::scoped_lock lock(*mutex());
+		return _aliases.erase(p_name);
+	}
+
+	[[nodiscard]] const StringName &get_alias(const StringName &p_name) const {
+		std::scoped_lock lock(*mutex());
+		const auto iter = _aliases.find(p_name);
+		if (likely(iter != _aliases.end())) {
+			static StringName empty = StringName();
+			return empty;
+		}
+		return iter->value;
+	}
+
+	[[nodiscard]] TypedDictionary<StringName, StringName> get_aliases() const;
+
 	virtual void execute() = 0;
+	virtual void halt() = 0;
 
-	virtual void bind();
-	virtual void unbind();
-	_FORCE_INLINE_ bool is_bound() const { return _is_bound; }
-
-	static void register_types();
-
-	const Blackboard *get_blackboard() const { return _state_blackboard; }
-	[[nodiscard]] _FORCE_INLINE_ const PipelineNode *get_pipeline_root() const { return _root; }
-
-	_FORCE_INLINE_ void halt() const {
-		_state_blackboard->set_entry_fast(halting_name(), true);
-	}
-
-	[[nodiscard]] _FORCE_INLINE_ bool is_halting() const {
-		return _state_blackboard->get_entry<bool>(halting_name());
-	}
-
-	[[nodiscard]] virtual bool is_fully_halted() const = 0;
-
-	_FORCE_INLINE_ void clear_halt() const {
-		_state_blackboard->set_entry_fast(halting_name(), false);
-	}
+	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_blackboard() const { return _instance_blackboard; }
 
 	[[nodiscard]] _FORCE_INLINE_ String get_error() const {
 		return _state_blackboard->get_entry_fast<String>(error_name(), "", false);

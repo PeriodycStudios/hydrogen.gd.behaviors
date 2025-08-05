@@ -4,11 +4,9 @@
 
 #ifndef DECORATOR_NODE_HPP
 #define DECORATOR_NODE_HPP
-#include "task_node.hpp"
+#include "behavior_tree_node.hpp"
 
 namespace hydrogen::behavior_trees {
-
-using namespace godot;
 
 class DecoratorNode : public BehaviorTreeNode, public pipelines::ChildNodeWrapper<BehaviorTreeNode> {
 protected:

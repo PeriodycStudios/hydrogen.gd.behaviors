@@ -9,7 +9,9 @@
 #include "pipeline_nodes.hpp"
 #include "rid_data.hpp"
 
+#include <cstdint>
 #include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 
 #define MAKE_BLACKBOARD_ENTRY_NAME(entry_name)			\
 	static const StringName &entry_name##_name() {		\
@@ -21,28 +23,38 @@ namespace hydrogen::pipelines {
 
 using namespace godot;
 
-MAKE_BLACKBOARD_ENTRY_NAME(halting)
 MAKE_BLACKBOARD_ENTRY_NAME(error)
-MAKE_BLACKBOARD_ENTRY_NAME(blackboards)
-MAKE_BLACKBOARD_ENTRY_NAME(node_states)
-MAKE_BLACKBOARD_ENTRY_NAME(pipeline)
 
-class PipelineNode;
+class IPipelineNode;
 
-class PipelineNode : public RidData {
-	std::atomic<uint32_t> _bind_count = {0};
+struct NodePortInfo {
+	const StringName name;
+	const StringName type_name;
 
+private:
+	friend class IPipelineNode;
+
+	NodePortInfo(const StringName &p_name, const StringName &p_type_name) : name(p_name), type_name(p_type_name) {}
+};
+
+class IPipelineNode : public RidData {
 protected:
-	friend class Pipeline;
-	virtual void _bind() { ++_bind_count; }
-	virtual void _unbind() { --_bind_count; }
+	IPipelineNode() = default;
 
-	PipelineNode() = default;
 public:
-	virtual ~PipelineNode() = default;
+	virtual ~IPipelineNode() = default;
 
-	_FORCE_INLINE_ uint32_t get_bind_count() const { return _bind_count; }
-	_FORCE_INLINE_ bool is_bound() const { return get_bind_count() > 0; }
+	virtual int32_t get_input_port_count() const = 0;
+	virtual int32_t get_output_port_count() const = 0;
+
+	virtual StringName get_input_port_type_name(int32_t p_port) const = 0;
+	virtual StringName get_output_port_type_name(int32_t p_port) const = 0;
+
+	virtual StringName get_input_port_name(int32_t p_port) const = 0;
+	virtual StringName get_output_port_name(int32_t p_port) const = 0;
+
+	virtual void get_input_port_info(Vector<NodePortInfo> &p_infos) const = 0;
+	virtual void get_output_port_info(Vector<NodePortInfo> &p_infos) const = 0;
 };
 
 struct IPipelineNodeState;
@@ -53,7 +65,6 @@ struct IPipelineNodeStateful {
 	[[nodiscard]] virtual RID state_key() const = 0;
 
 	[[nodiscard]] virtual IPipelineNodeState *create_state() const = 0;
-	virtual void cleanup_state(IPipelineNodeState *p_state) const;
 
 protected:
 	IPipelineNodeStateful() = default;
@@ -66,29 +77,30 @@ protected:
 	IPipelineNodeState() = default;
 };
 
-class IPipelineNodeContainer {
+typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
+
+class IPipelineNodeContainer : public IPipelineNode {
 protected:
 	IPipelineNodeContainer() = default;
 public:
-	virtual ~IPipelineNodeContainer() = default;
+	~IPipelineNodeContainer() override = default;
 	virtual int64_t get_node_count() const = 0;
-	virtual PipelineNode *get_node(int64_t p_index) const = 0;
+	virtual IPipelineNode *get_node(int64_t p_index) const = 0;
 };
 
-class IPipelineNodeWrapper {
+class IPipelineNodeWrapper : public IPipelineNode {
 protected:
 	IPipelineNodeWrapper() = default;
 public:
-	virtual ~IPipelineNodeWrapper() = default;
-	virtual PipelineNode *get_pipeline_node() const = 0;
+	~IPipelineNodeWrapper() override = default;
+	virtual IPipelineNode *get_pipeline_node() const = 0;
 };
-
 
 template <typename T, typename = void>
 class ChildNodeWrapper {};
 
 template <typename T>
-class ChildNodeWrapper<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>> : public IPipelineNodeWrapper {
+class ChildNodeWrapper<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeWrapper {
 	T* _wrapped_node = nullptr;
 
 protected:
@@ -97,7 +109,7 @@ protected:
 
 public:
 
-	[[nodiscard]] PipelineNode *get_pipeline_node() const override { return _wrapped_node; }
+	[[nodiscard]] IPipelineNode *get_pipeline_node() const override { return _wrapped_node; }
 	[[nodiscard]] _FORCE_INLINE_ T *get_child() const { return _wrapped_node; }
 	_FORCE_INLINE_ void set_child(T *p_node) { _wrapped_node = p_node; }
 
@@ -108,7 +120,7 @@ template <typename T, typename = void>
 class ChildNodeContainer {};
 
 template <typename T>
-class ChildNodeContainer<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>> : public IPipelineNodeContainer {
+class ChildNodeContainer<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeContainer {
 	Vector<T*> _children = {};
 
 protected:
@@ -132,7 +144,7 @@ public:
 	_FORCE_INLINE_ void clear() { _children.clear(); }
 	_FORCE_INLINE_ bool is_empty() const { return _children.is_empty(); }
 
-	PipelineNode *get_node(int64_t p_index) const override { return _children[p_index]; }
+	IPipelineNode *get_node(int64_t p_index) const override { return _children[p_index]; }
 	_FORCE_INLINE_ T *get_child(int64_t p_index) const { return _children.get(p_index); }
 	_FORCE_INLINE_ void set_child(int64_t p_index, const T *&p_elem) { _children.set(p_index, p_elem); }
 
@@ -176,7 +188,7 @@ public:
 		ERR_FAIL_COND_V(p_rid == RID(), nullptr);
 
 		for (auto it = _children.begin(); it != _children.end(); ++it) {
-			const PipelineNode *candidate = dynamic_cast<const PipelineNode*>(*it);
+			const IPipelineNode *candidate = dynamic_cast<const IPipelineNode*>(*it);
 			if (unlikely(candidate->get_self() == p_rid)) {
 				return candidate;
 			}

@@ -1,29 +1,35 @@
 
 #include "behavior_trees.hpp"
-#include <godot_cpp/templates/local_vector.hpp>
+#include <mutex>
+#include "behavior_tree_context.hpp"
 
 namespace hydrogen::behavior_trees {
 
 void BehaviorTree::register_types() {
 	Blackboard::register_type<BehaviorTreeNode::Result>();
-	Blackboard::register_type<BehaviorTree *>();
 }
 
-BehaviorTree::BehaviorTree(const Blackboard *p_blackboard, const BehaviorTreeNode *p_root_node) : Pipeline(p_blackboard, p_root_node) {
-	get_blackboard()->set_entry_fast(behavior_tree_name(), this);
-	get_blackboard()->set_entry_fast(last_result_name(), BehaviorTreeNode::SUCCESS);
+BehaviorTree::BehaviorTree(const Blackboard *p_blackboard, BehaviorTreeGraph *p_graph) : Pipeline(p_blackboard, p_graph) {
+	get_state_blackboard()->set_entry_fast(behavior_tree_name(), this);
+	get_state_blackboard()->set_entry_fast(last_result_name(), BehaviorTreeNode::SUCCESS);
 }
 
 BehaviorTree::~BehaviorTree() {
+	halt();
 }
 
 void BehaviorTree::execute() {
-	const BehaviorTreeNode::Result result = get_task_root()->execute(get_blackboard());
-	get_blackboard()->set_entry_fast(last_result_name(), result);
+	std::scoped_lock<std::mutex> lock(mutex());
+	BehaviorTreeContext context = create_context();
+	const BehaviorTreeNode::Result result = get_root()->execute(context);
+	get_state_blackboard()->set_entry_fast(last_result_name(), result);
 }
 
-bool BehaviorTree::is_fully_halted() const {
-	return is_halting();
+void BehaviorTree::halt() {
+	std::scoped_lock<std::mutex> lock(mutex());
+	BehaviorTreeContext context = create_context();
+	get_root()->halt(context);
+	get_state_blackboard()->set_entry_fast(last_result_name(), BehaviorTreeNode::SUCCESS);
 }
 
 } //namespace hydrogen
