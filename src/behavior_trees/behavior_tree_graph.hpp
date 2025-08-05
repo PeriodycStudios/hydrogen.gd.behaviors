@@ -5,7 +5,7 @@
 #ifndef BEHAVIOR_TREE_GRAPH_HPP
 #define BEHAVIOR_TREE_GRAPH_HPP
 
-#include "../pipeline_graph.hpp"
+#include "../pipelines/pipeline_graph.hpp"
 #include "behavior_tree_node.hpp"
 
 namespace hydrogen::behavior_trees {

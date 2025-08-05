@@ -6,7 +6,7 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/rid.hpp>
 
-#include "../pipeline_nodes.hpp"
+#include "../pipelines/pipeline_nodes.hpp"
 
 namespace godot {
 class StringName;

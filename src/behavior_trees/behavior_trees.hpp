@@ -2,10 +2,10 @@
 #define BEHAVIOR_TREES_HPP
 #include <godot_cpp/core/defs.hpp>
 
-#include "../pipeline.hpp"
+#include "../pipelines/pipeline.hpp"
 #include "behavior_tree_context.hpp"
-#include "behavior_tree_node.hpp"
 #include "behavior_tree_graph.hpp"
+#include "behavior_tree_node.hpp"
 
 namespace hydrogen::behavior_trees {
 

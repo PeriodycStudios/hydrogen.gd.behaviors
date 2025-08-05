@@ -1,0 +1,29 @@
+#ifndef NODE_WRAPPER_HPP
+#define NODE_WRAPPER_HPP
+
+#include "pipline_nodes.hpp"
+
+namespace hydrogen::pipelines {
+
+template <typename T, typename = void>
+class PipelineNodeWrapper {};
+
+template <typename T>
+class PipelineNodeWrapper<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeWrapper {
+	T* _wrapped_node = nullptr;
+
+protected:
+	T* get_child() { return _wrapped_node; }
+	PipelineNodeWrapper() = default;
+
+public:
+
+	[[nodiscard]] IPipelineNode *get_pipeline_node() const override { return _wrapped_node; }
+	[[nodiscard]] _FORCE_INLINE_ T *get_child() const { return _wrapped_node; }
+	_FORCE_INLINE_ void set_child(T *p_node) { _wrapped_node = p_node; }
+
+	~PipelineNodeWrapper() override = default;
+};
+}
+
+#endif

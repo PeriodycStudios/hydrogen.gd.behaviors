@@ -55,6 +55,4 @@ TypedDictionary<StringName, StringName> Pipeline::get_aliases() const {
 	}
 	return aliases;
 }
-
-
 }

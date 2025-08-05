@@ -8,9 +8,9 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 
-#include "pipeline_nodes.hpp"
-#include "rid_data.hpp"
+#include "../rid_data.hpp"
 #include "pipeline_graph.hpp"
+#include "pipeline_nodes.hpp"
 
 namespace hydrogen::pipelines {
 
