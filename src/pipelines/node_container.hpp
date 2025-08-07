@@ -10,6 +10,8 @@
 
 namespace hydrogen::pipelines {
 
+using namespace godot;
+
 template <typename T, typename = void>
 class PipelineNodeContainer {};
 

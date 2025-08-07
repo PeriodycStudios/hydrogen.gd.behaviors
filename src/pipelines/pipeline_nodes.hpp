@@ -5,7 +5,6 @@
 #ifndef BEHAVIORS_NODE_BASE_HPP
 #define BEHAVIORS_NODE_BASE_HPP
 
-#include "../blackboard.hpp"
 #include "../rid_data.hpp"
 
 #include <cstdint>

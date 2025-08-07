@@ -7,7 +7,6 @@
 #include <godot_cpp/variant/typed_dictionary.hpp>
 
 #include "behavior_server.hpp"
-#include "blackboard.hpp"
 
 using namespace godot;
 

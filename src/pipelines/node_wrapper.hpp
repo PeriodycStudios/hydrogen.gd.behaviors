@@ -2,6 +2,7 @@
 #define NODE_WRAPPER_HPP
 
 #include "pipline_nodes.hpp"
+#include <type_traits>
 
 namespace hydrogen::pipelines {
 
