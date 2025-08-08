@@ -7,7 +7,6 @@
 #include "behavior_server.hpp"
 #include "blackboard.hpp"
 #include "hydrogen_blackboard.hpp"
-#include "register_types.hpp"
 
 #ifdef TESTS_ENABLED
 #include "test_runner.hpp"

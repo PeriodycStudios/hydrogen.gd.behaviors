@@ -2,7 +2,9 @@
 #ifndef TASK_NODE_HPP
 #define TASK_NODE_HPP
 
+#include "../blackboard.hpp"
 #include "../pipelines/pipeline_nodes.hpp"
+
 
 namespace hydrogen::behavior_trees {
 

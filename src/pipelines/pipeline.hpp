@@ -41,7 +41,7 @@ protected:
 	[[nodiscard]] _FORCE_INLINE_ const IPipelineNode *get_pipeline_root() const { return _graph->get_pipeline_root(); }
 
 public:
-	virtual ~Pipeline() = default;
+	virtual ~Pipeline();
 
 	_FORCE_INLINE_ void set_alias(const StringName &p_name, const StringName &p_alias) {
 		std::scoped_lock lock(*mutex());

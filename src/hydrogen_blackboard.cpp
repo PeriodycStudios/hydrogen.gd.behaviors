@@ -4,8 +4,6 @@
 #include "behavior_server.hpp"
 #include "godot_cpp/classes/engine.hpp"
 
-#include <filesystem>
-
 using namespace hydrogen;
 
 HashMap<RID, HydrogenBlackboard*> HydrogenBlackboard::lookups = {};

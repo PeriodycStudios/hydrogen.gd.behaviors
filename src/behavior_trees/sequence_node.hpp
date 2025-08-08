@@ -10,7 +10,7 @@ namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-struct SequenceNode final : public CompositeNode, pipelines::IPipelineNodeStateful {
+struct SequenceNode : public CompositeNode, pipelines::IPipelineNodeStateful {
 
 	// struct SequenceNodeState : public pipelines::IPipelineNodeState {
 	// 	int current_child_index = 0;

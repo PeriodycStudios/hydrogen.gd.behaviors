@@ -2,11 +2,14 @@
 #ifndef VARIANT_TYPE_TRAITS_HPP
 #define VARIANT_TYPE_TRAITS_HPP
 
+
+#include <godot_cpp/classes/object.hpp>
+#include <godot_cpp/classes/ref_counted.hpp>
+
 #include <type_traits>
 
-using namespace godot;
-
 namespace hydrogen::traits {
+using namespace godot;
 using namespace std;
 
 template <typename T, typename = void>

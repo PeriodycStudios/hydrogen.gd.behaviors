@@ -1,0 +1,21 @@
+{
+    "search.exclude": {
+        "**/node_modules": true,
+        "**/bower_components": true,
+        "**/*.code-search": true,
+    },
+    "files.exclude": {
+        "bin": true,
+        "**/__pycache__":true,
+        "**/.cache": true,
+        "**/.git": true,
+        "**/.svn": true,
+        "**/.hg": true,
+        "**/.DS_Store": true,
+        "**/Thumbs.db": true,
+        "**/*.os": true,
+        "**/*.so": true,
+        "**/*.out": true,
+        "**/*.dll": true
+    },
+}

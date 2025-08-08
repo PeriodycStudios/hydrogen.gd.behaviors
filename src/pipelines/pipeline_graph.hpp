@@ -5,10 +5,13 @@
 #ifndef PIPELINE_GRAPH_HPP
 #define PIPELINE_GRAPH_HPP
 #include "pipeline_nodes.hpp"
+
 #include <godot_cpp/core/error_macros.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
 
 #include <type_traits>
 #include <atomic>
+#include <mutex>
 
 namespace hydrogen {
 namespace pipelines {

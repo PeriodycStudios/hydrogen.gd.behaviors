@@ -6,11 +6,9 @@
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/variant/rid.hpp>
 
+#include "../blackboard.hpp"
 #include "../pipelines/pipeline_nodes.hpp"
 
-namespace godot {
-class StringName;
-}
 namespace hydrogen::behavior_trees {
 
 using namespace godot;

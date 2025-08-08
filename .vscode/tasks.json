@@ -1,0 +1,44 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": [
+                "dev_build=yes",
+                "use_llvm=yes",
+                "tests=yes"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build-editor",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": [
+                "dev_build=yes",
+                "target=editor",
+                "use_llvm=yes",
+                "tests=yes"
+            ],
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build-release",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": [
+                "target=template_release",
+                "use_llvm=yes",
+                "tests=yes"
+            ],
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}

@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <godot_cpp/templates/vector.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
 
 #define MAKE_BLACKBOARD_ENTRY_NAME(entry_name)			\
 	static const StringName &entry_name##_name() {		\
