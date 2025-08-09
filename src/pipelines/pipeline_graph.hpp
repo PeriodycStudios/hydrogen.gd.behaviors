@@ -13,8 +13,7 @@
 #include <atomic>
 #include <mutex>
 
-namespace hydrogen {
-namespace pipelines {
+namespace hydrogen::pipelines {
 
 class Pipeline;
 
@@ -24,8 +23,8 @@ class IPipelineGraph {
 
 	[[nodiscard]] virtual const IPipelineNode *get_node(RID p_node_id) const = 0;
 	[[nodiscard]] virtual const IPipelineNode *get_pipeline_root() const = 0;
-	[[nodiscard]] virtual const Vector<const IPipelineGraph *> get_pipeline_sub_graphs() const = 0;
-	[[nodiscard]] virtual const Vector<const IPipelineNode *> get_pipeline_nodes() const = 0;
+	[[nodiscard]] virtual Vector<const IPipelineGraph *> get_pipeline_sub_graphs() const = 0;
+	[[nodiscard]] virtual Vector<const IPipelineNode *> get_pipeline_nodes() const = 0;
 
 protected:
 	IPipelineGraph() = default;
@@ -38,22 +37,22 @@ public:
 	[[nodiscard]] virtual RID create_node(const StringName &p_node_type_name) = 0;
 	virtual bool destroy_node(RID p_node_id) = 0;
 	virtual bool set_root_id(RID p_node_id) = 0;
-	virtual RID get_root_id() = 0;
+	[[nodiscard]] virtual RID get_root_id() = 0;
 
-	virtual int32_t get_input_port_count(RID p_node_id) const = 0;
-	virtual int32_t get_output_port_count(RID p_node_id) const = 0;
+	[[nodiscard]] virtual int32_t get_input_port_count(RID p_node_id) const = 0;
+	[[nodiscard]] virtual int32_t get_output_port_count(RID p_node_id) const = 0;
 
-	virtual StringName get_input_port_type_name(RID p_node_id, int32_t p_port) const = 0;
-	virtual StringName get_output_port_type_name(RID p_node_id, int32_t p_port) const = 0;
+	[[nodiscard]] virtual StringName get_input_port_type_name(RID p_node_id, int32_t p_port) const = 0;
+	[[nodiscard]] virtual StringName get_output_port_type_name(RID p_node_id, int32_t p_port) const = 0;
 
-	virtual StringName get_input_port_name(RID p_node_id, int32_t p_port) const = 0;
-	virtual StringName get_output_port_name(RID p_node_id, int32_t p_port) const = 0;
+	[[nodiscard]] virtual StringName get_input_port_name(RID p_node_id, int32_t p_port) const = 0;
+	[[nodiscard]] virtual StringName get_output_port_name(RID p_node_id, int32_t p_port) const = 0;
 
 	virtual void get_input_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const = 0;
 	virtual void get_output_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const = 0;
 
-	virtual Vector<RID> get_nodes_unconnected_to_root() = 0;
-	virtual Vector<RID> get_nodes_connected_to_root() = 0;
+	[[nodiscard]] virtual Vector<RID> get_nodes_unconnected_to_root() const = 0;
+	[[nodiscard]] virtual Vector<RID> get_nodes_connected_to_root() const = 0;
 };
 
 template<typename T, typename = void>
@@ -146,14 +145,14 @@ public:
 		return node->get_output_port_type_name(p_port);
 	}
 
-	StringName get_input_port_name(RID p_node_id, int32_t p_port) const override {
+	[[nodiscard]] StringName get_input_port_name(RID p_node_id, int32_t p_port) const override {
 		std::scoped_lock lock(_mutex);
 		T *node = _nodes.get_or_null(p_node_id);
 		ERR_FAIL_COND_V_MSG(node == nullptr, StringName(), "Unknown node id.");
 		return node->get_input_port_name(p_port);
 	}
 
-	StringName get_output_port_name(RID p_node_id, int32_t p_port) const override {
+	[[nodiscard]] StringName get_output_port_name(RID p_node_id, int32_t p_port) const override {
 		std::scoped_lock lock(_mutex);
 		T *node = _nodes.get_or_null(p_node_id);
 		ERR_FAIL_COND_V_MSG(node == nullptr, StringName(), "Unknown node id.");
@@ -175,7 +174,6 @@ public:
 	}
 };
 
-} // pipelines
 } // hydrogen
 
 #endif //PIPELINE_GRAPH_HPP
