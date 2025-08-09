@@ -38,6 +38,19 @@
                 "use_llvm=yes",
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "update compiledb",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": [
+                "target=editor",
+                "use_llvm=yes",
+                "compiledb=yes",
+                "tests=yes"
+            ],
+            "problemMatcher": "$msCompile"
         }
     ]
 }
