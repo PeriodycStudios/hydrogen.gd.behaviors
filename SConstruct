@@ -38,6 +38,8 @@ env = SConscript("godot-cpp/SConstruct", {"env": env, "customs": customs})
 
 env.Append(CPPPATH=["src/"])
 sources = Glob("src/*.cpp")
+sources.append(Glob("src/pipelines/*.cpp"))
+sources.append(Glob("src/behavior_trees/*.cpp"))
 
 env.tests = env["tests"]
 

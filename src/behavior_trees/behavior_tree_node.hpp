@@ -1,10 +1,7 @@
+#ifndef BEHAVIOR_TREE_NODE_HPP
+#define BEHAVIOR_TREE_NODE_HPP
 
-#ifndef TASK_NODE_HPP
-#define TASK_NODE_HPP
-
-#include "../blackboard.hpp"
 #include "../pipelines/pipeline_nodes.hpp"
-
 
 namespace hydrogen::behavior_trees {
 
@@ -12,16 +9,8 @@ class BehaviorTree;
 class BehaviorTreeContext;
 
 MAKE_BLACKBOARD_ENTRY_NAME(last_result)
-MAKE_BLACKBOARD_ENTRY_NAME(behavior_tree)
 
 class BehaviorTreeNode : public pipelines::IPipelineNode {
-protected:
-	friend class BehaviorTree;
-
-	[[nodiscard]] static _FORCE_INLINE_ BehaviorTree * get_behavior_tree(const Blackboard * p_blackboard) {
-		return p_blackboard->get_entry<BehaviorTree *>(behavior_tree_name());
-	}
-
 public:
 	enum Result {
 		SUCCESS = 0,
@@ -29,8 +18,17 @@ public:
 		RUNNING = 2,
 	};
 
-	virtual Result execute(BehaviorTreeContext &p_context) const = 0;
-	virtual void halt(BehaviorTreeContext &p_context) const = 0;
+protected:
+	friend class BehaviorTree;
+
+	virtual Result _execute(BehaviorTreeContext &p_context) const = 0;
+	virtual void _halt(BehaviorTreeContext &p_context) const = 0;
+
+public:
+	
+	Result execute(BehaviorTreeContext &p_context) const;
+
+	void halt(BehaviorTreeContext &p_context) const;
 };
 }
 

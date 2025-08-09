@@ -5,7 +5,6 @@
 #ifndef PIPELINE_HPP
 #define PIPELINE_HPP
 
-
 #include "../blackboard.hpp"
 #include "../rid_data.hpp"
 #include "pipeline_graph.hpp"
@@ -43,25 +42,11 @@ protected:
 public:
 	virtual ~Pipeline();
 
-	_FORCE_INLINE_ void set_alias(const StringName &p_name, const StringName &p_alias) {
-		std::scoped_lock lock(*mutex());
-		_aliases[p_name] = p_alias;
-	}
+	void set_alias(const StringName &p_name, const StringName &p_alias);
 
-	_FORCE_INLINE_ bool erase_alias(const StringName &p_name) {
-		std::scoped_lock lock(*mutex());
-		return _aliases.erase(p_name);
-	}
+	bool erase_alias(const StringName &p_name);
 
-	[[nodiscard]] const StringName &get_alias(const StringName &p_name) const {
-		std::scoped_lock lock(*mutex());
-		const auto iter = _aliases.find(p_name);
-		if (likely(iter != _aliases.end())) {
-			static StringName empty = StringName();
-			return empty;
-		}
-		return iter->value;
-	}
+	[[nodiscard]] const StringName &get_alias(const StringName &p_name) const;
 
 	[[nodiscard]] TypedDictionary<StringName, StringName> get_aliases() const;
 

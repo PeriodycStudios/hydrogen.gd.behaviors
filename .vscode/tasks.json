@@ -36,7 +36,6 @@
             "args": [
                 "target=template_release",
                 "use_llvm=yes",
-                "tests=yes"
             ],
             "problemMatcher": "$msCompile"
         }
