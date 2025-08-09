@@ -10,9 +10,9 @@
 #include "pipeline_graph.hpp"
 #include "pipeline_nodes.hpp"
 
-#include <godot_cpp/templates/hash_map.hpp>
-#include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/variant/typed_dictionary.hpp>
 #include <mutex>
 
 namespace hydrogen::pipelines {
@@ -33,7 +33,6 @@ protected:
 	[[nodiscard]] _FORCE_INLINE_ HashMap<StringName, StringName> &aliases() { return _aliases; }
 
 	explicit Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph * p_graph);
-
 
 	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_state_blackboard() const { return _state_blackboard; }
 	[[nodiscard]] _FORCE_INLINE_ const Blackboard *get_readonly_state_blackboard() const { return _state_blackboard; }

@@ -9,7 +9,7 @@
 namespace hydrogen::pipelines {
 
 Pipeline::Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph *p_graph) :
-_instance_blackboard(memnew(Blackboard)), _state_blackboard(memnew(Blackboard)), _graph(p_graph)  {
+_instance_blackboard(memnew(Blackboard)), _state_blackboard(memnew(Blackboard)), _graph(p_graph), _mutex(memnew(std::mutex)) {
 	_instance_blackboard->set_parent(p_source_blackboard);
 	_state_blackboard->set_parent(_instance_blackboard);
 	_state_blackboard->set_entry_fast(error_name(), String(""));
@@ -43,10 +43,12 @@ Pipeline::~Pipeline() {
 
 	memdelete(_state_blackboard);
 	memdelete(_instance_blackboard);
+	memdelete(_mutex);
 
 	_instance_blackboard = nullptr;
 	_state_blackboard = nullptr;
 	_graph = nullptr;
+	_mutex = nullptr;
 }
 
 _FORCE_INLINE_ void Pipeline::set_alias(const StringName &p_name, const StringName &p_alias) {
