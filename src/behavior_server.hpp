@@ -10,16 +10,17 @@
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
+#include "behavior_trees/behavior_tree_graph.hpp"
 #include "godot_cpp/variant/typed_dictionary.hpp"
 
 #include "behavior_trees/behavior_trees.hpp"
+#include "behavior_trees/behavior_tree_graph.hpp"
 #include "blackboard.hpp"
 
 namespace hydrogen {
 
 using namespace godot;
-
-namespace BT = behavior_trees;
+using namespace behavior_trees;
 
 class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
@@ -27,10 +28,9 @@ class BehaviorServer final : public Object {
 	static BehaviorServer *singleton;
 
 	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
-	HashMap<RID, BT::BehaviorTreeNode*> behavior_tree_nodes = {};
-	HashMap<RID, BT::BehaviorTree *> behavior_trees = {};
 	RID_PtrOwner<Blackboard> blackboard_owner = {};
-	RID_PtrOwner<BT::BehaviorTree> behavior_tree_owner = {};
+	RID_PtrOwner<BehaviorTree> behavior_tree_owner = {};
+	RID_PtrOwner<BehaviorTreeGraph> behavior_tree_graph_owner = {};
 	Ref<Mutex> blackboard_mutex = {};
 	Ref<Mutex> behavior_tree_mutex = {};
 
@@ -64,7 +64,8 @@ class BehaviorServer final : public Object {
 
 	// ---- Behavior Tree ----
 
-	void behavior_tree_erase(BT::BehaviorTree *behavior_tree);
+	void behavior_tree_graph_erase(BehaviorTreeGraph *p_graph);
+	void behavior_tree_erase(BehaviorTree *p_behavior_tree);
 
 	// ---- Behavior Tree END ----
 
@@ -97,10 +98,11 @@ public:
 	void free_rid(RID p_rid);
 
 	RID blackboard_create();
-	RID behavior_tree_create();
+	RID behavior_tree_graph_create();
+	RID behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph);
 	RID state_machine_create();
 	RID agent_create();
-	RID pipeline_context_create(RID p_blackboard, RID p_pipeline);
+	// RID pipeline_context_create(RID p_blackboard, RID p_pipeline);
 
 	Error init();
 	void finish();
@@ -174,7 +176,8 @@ public:
 	void free_rid(RID p_rid);
 
 	RID blackboard_create();
-	RID behavior_tree_create();
+	RID behavior_tree_graph_create();
+	RID behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph);
 	RID state_machine_create();
 	RID agent_create();
 

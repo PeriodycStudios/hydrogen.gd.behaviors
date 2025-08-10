@@ -14,6 +14,7 @@
 
 #include <functional>
 
+#include "name_helpers.hpp"
 #include "godot_cpp/variant/typed_dictionary.hpp"
 #include "rid_data.hpp"
 #include "type_name.hpp"
@@ -372,7 +373,7 @@ void Blackboard::register_type() {
 	}
 
 	TypeInfo type_info = {};
-	const StringName name = StringName(std::string(type_name<type>()).c_str());
+	const StringName name = get_type_name_static<type>();
 	type_info.type_key = name.hash();
 	TypeInfo::type_names[type_info.type_key] = name;
 

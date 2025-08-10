@@ -1,7 +1,7 @@
 
 #include "behavior_tree_context.hpp"
 #include "behavior_tree_node.hpp"
-#include "../pipelines/pipeline_nodes.hpp"
+#include "../pipelines/node_interfaces.hpp"
 
 namespace hydrogen::behavior_trees {
 

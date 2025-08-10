@@ -1,5 +1,11 @@
 
 #include "behavior_server.hpp"
+#include "behavior_trees/behavior_tree_graph.hpp"
+#include "behavior_trees/behavior_trees.hpp"
+#include "blackboard.hpp"
+#include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/core/error_macros.hpp"
+#include "godot_cpp/core/memory.hpp"
 
 #ifdef TESTS_ENABLED
 #include "test_runner.hpp"
@@ -47,15 +53,19 @@ void BehaviorServer::behavior_tree_unlock() const {
 	behavior_tree_mutex->unlock();
 }
 
-
 void BehaviorServer::free_rid(RID p_rid) {
 	if (blackboard_owner.owns(p_rid)) {
 		const static auto bb_cleanup = [this](Blackboard* bb){ blackboard_erase(bb);};
 		free_ptr_resource<Blackboard>(blackboard_owner, blackboard_mutex, p_rid, bb_cleanup);
 	}
 	else if (behavior_tree_owner.owns(p_rid)) {
-		const static auto bt_cleanup = [this](BT::BehaviorTree* bt){ behavior_tree_erase(bt);};
-		free_ptr_resource<BT::BehaviorTree>(behavior_tree_owner, behavior_tree_mutex, p_rid, bt_cleanup);
+		const static auto bt_cleanup = [this](BehaviorTree* bt){ behavior_tree_erase(bt);};
+		free_ptr_resource<BehaviorTree>(behavior_tree_owner, behavior_tree_mutex, p_rid, bt_cleanup);
+	}
+	else if (behavior_tree_graph_owner.owns(p_rid))
+	{
+		const static auto btg_cleanup = [this](BehaviorTreeGraph * btg) { behavior_tree_graph_erase(btg); };
+		free_ptr_resource<BehaviorTreeGraph>(behavior_tree_graph_owner, behavior_tree_mutex, p_rid, btg_cleanup);
 	}
 	else {
 		ERR_FAIL_MSG("Invalid ID.");
@@ -74,8 +84,35 @@ RID BehaviorServer::blackboard_create() {
 	return rid;
 }
 
-RID BehaviorServer::behavior_tree_create() {
-	return {};
+RID BehaviorServer::behavior_tree_graph_create() {
+	behavior_tree_lock();
+
+	BehaviorTreeGraph* graph = memnew(BehaviorTreeGraph);
+	RID rid = behavior_tree_graph_owner.make_rid(graph);
+	graph->set_self(rid);
+
+	behavior_tree_unlock();
+
+	return rid;
+}
+
+RID BehaviorServer::behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph) {
+	behavior_tree_lock();
+	blackboards_lock();
+
+	Blackboard* blackboard = blackboard_owner.get_or_null(p_blackboard);
+	ERR_FAIL_NULL_V(blackboard, RID());
+
+	BehaviorTreeGraph* graph = behavior_tree_graph_owner.get_or_null(p_behavior_tree_graph);
+	ERR_FAIL_NULL_V(graph, RID());
+
+	BehaviorTree* behavior_tree = memnew(BehaviorTree(blackboard, graph));
+	RID rid = behavior_tree_owner.make_rid(behavior_tree);
+	behavior_tree->set_self(rid);
+
+	blackboards_unlock();
+	behavior_tree_unlock();
+	return rid;
 }
 
 RID BehaviorServer::state_machine_create() {
@@ -83,10 +120,6 @@ RID BehaviorServer::state_machine_create() {
 }
 
 RID BehaviorServer::agent_create() {
-	return {};
-}
-
-RID BehaviorServer::pipeline_context_create(RID p_blackboard, RID p_pipeline) {
 	return {};
 }
 
@@ -288,7 +321,11 @@ Dictionary BehaviorServer::blackboard_export_type_infos() {
 
 // ---- Behavior Tree ----
 
-void BehaviorServer::behavior_tree_erase(BT::BehaviorTree *behavior_tree) {
+void BehaviorServer::behavior_tree_graph_erase(BehaviorTreeGraph *p_graph) {
+
+}
+
+void BehaviorServer::behavior_tree_erase(BehaviorTree *behavior_tree) {
 
 }
 
@@ -433,8 +470,8 @@ RID HydrogenBehaviorServer::blackboard_create() {
 	return BehaviorServer::get_singleton()->blackboard_create();
 }
 
-RID HydrogenBehaviorServer::behavior_tree_create() {
-	return BehaviorServer::get_singleton()->behavior_tree_create();
+RID HydrogenBehaviorServer::behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph) {
+	return BehaviorServer::get_singleton()->behavior_tree_create(p_blackboard, p_behavior_tree_graph);
 }
 
 RID HydrogenBehaviorServer::state_machine_create() {

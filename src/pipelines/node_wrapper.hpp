@@ -1,7 +1,7 @@
 #ifndef NODE_WRAPPER_HPP
 #define NODE_WRAPPER_HPP
 
-#include "pipeline_nodes.hpp"
+#include "node_interfaces.hpp"
 #include <godot_cpp/core/defs.hpp>
 #include <type_traits>
 

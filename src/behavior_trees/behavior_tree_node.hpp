@@ -1,16 +1,17 @@
 #ifndef BEHAVIOR_TREE_NODE_HPP
 #define BEHAVIOR_TREE_NODE_HPP
 
-#include "../pipelines/pipeline_nodes.hpp"
+#include "../name_helpers.hpp"
+#include "../pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
 class BehaviorTree;
 class BehaviorTreeContext;
 
-MAKE_BLACKBOARD_ENTRY_NAME(last_result)
+DEFINE_NAME_STATIC(last_result)
 
-class BehaviorTreeNode : public pipelines::IPipelineNode {
+class BehaviorTreeNode : public pipelines::PipelineNode {
 public:
 	enum Result {
 		SUCCESS = 0,

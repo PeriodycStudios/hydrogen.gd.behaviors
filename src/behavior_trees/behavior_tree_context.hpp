@@ -7,7 +7,7 @@
 #include <godot_cpp/variant/rid.hpp>
 
 #include "../blackboard.hpp"
-#include "../pipelines/pipeline_nodes.hpp"
+#include "../pipelines/node_interfaces.hpp"
 #include "behavior_tree_node.hpp"
 
 namespace hydrogen::behavior_trees {

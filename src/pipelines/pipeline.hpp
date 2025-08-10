@@ -8,7 +8,7 @@
 #include "../blackboard.hpp"
 #include "../rid_data.hpp"
 #include "pipeline_graph.hpp"
-#include "pipeline_nodes.hpp"
+#include "node_interfaces.hpp"
 
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/templates/hash_map.hpp>

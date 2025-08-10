@@ -1,7 +1,7 @@
 #ifndef NODE_CONTAINER_HPP
 #define NODE_CONTAINER_HPP
 
-#include "pipeline_nodes.hpp"
+#include "node_interfaces.hpp"
 #include "node_wrapper.hpp"
 
 #include <godot_cpp/templates/vector.hpp>
@@ -38,7 +38,7 @@ public:
 	}
 	_FORCE_INLINE_ bool remove_child_at(int64_t p_index) { return _children.remove_at(p_index); }
 	_FORCE_INLINE_ void clear() { _children.clear(); }
-	_FORCE_INLINE_ bool is_empty() const { return _children.is_empty(); }
+	bool is_empty() const override { return _children.is_empty(); }
 
 	IPipelineNode *get_node(int64_t p_index) const override { return _children[p_index]; }
 	_FORCE_INLINE_ T *get_child(int64_t p_index) const { return _children.get(p_index); }
