@@ -46,7 +46,7 @@ public:
 	[[nodiscard]] virtual RID create_node(const StringName &p_node_type_name) = 0;
 	virtual bool destroy_node(RID p_node_id) = 0;
 	virtual bool set_root_id(RID p_node_id) = 0;
-	[[nodiscard]] virtual RID get_root_id() = 0;
+	[[nodiscard]] virtual RID get_root_id() const = 0;
 
 	[[nodiscard]] virtual int32_t get_input_port_count(RID p_node_id) const = 0;
 	[[nodiscard]] virtual int32_t get_output_port_count(RID p_node_id) const = 0;
@@ -186,7 +186,7 @@ public:
 		return true;
 	}
 
-	[[nodiscard]] RID get_root_id() override {
+	[[nodiscard]] RID get_root_id() const override {
 		std::scoped_lock lock(*_mutex);
 		return _root != nullptr ? _root->get_self() : RID();
 	}

@@ -5,12 +5,18 @@
 #ifndef BEHAVIOR_SERVER_HPP
 #define BEHAVIOR_SERVER_HPP
 
+#include <cstdint>
 #include <godot_cpp/classes/mutex.hpp>
 #include <godot_cpp/core/object.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
 #include "behavior_trees/behavior_tree_graph.hpp"
+#include "godot_cpp/classes/packed_data_container.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/rid.hpp"
+#include "godot_cpp/variant/string_name.hpp"
+#include "godot_cpp/variant/typed_array.hpp"
 #include "godot_cpp/variant/typed_dictionary.hpp"
 
 #include "behavior_trees/behavior_trees.hpp"
@@ -33,6 +39,7 @@ class BehaviorServer final : public Object {
 	RID_PtrOwner<BehaviorTreeGraph> behavior_tree_graph_owner = {};
 	Ref<Mutex> blackboard_mutex = {};
 	Ref<Mutex> behavior_tree_mutex = {};
+	Ref<Mutex> behavior_tree_graph_mutex = {};
 
 	template <typename T>
 	void free_ptr_resource(RID_PtrOwner<T> &p_owner, Ref<Mutex> &p_mutex, RID p_rid, std::function<void(T*)> p_cleanup = nullptr) {
@@ -67,6 +74,12 @@ class BehaviorServer final : public Object {
 	void behavior_tree_graph_erase(BehaviorTreeGraph *p_graph);
 	void behavior_tree_erase(BehaviorTree *p_behavior_tree);
 
+	void behavior_tree_graph_emit_created(RID p_behavior_tree_graph);
+	void behavior_tree_graph_emit_destroyed(RID p_behavior_tree_graph);
+
+	void behavior_tree_emit_created(RID p_behavior_tree);
+	void behavior_tree_emit_destroyed(RID p_behavior_tree);
+
 	// ---- Behavior Tree END ----
 
 	template <typename T>
@@ -94,6 +107,9 @@ public:
 
 	void behavior_tree_lock() const;
 	void behavior_tree_unlock() const;
+
+	void behavior_tree_graph_lock() const;
+	void behavior_tree_graph_unlock() const;
 
 	void free_rid(RID p_rid);
 
@@ -144,7 +160,21 @@ public:
 
 	// ---- Behavior Tree ----
 
-
+	RID behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_node_type_name);
+	bool behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id);
+	bool behavior_tree_graph_is_bound(RID p_graph_id);
+	bool behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id);
+	RID behavior_tree_graph_get_root(RID p_graph_id);
+	int32_t behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id);
+	int32_t behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id);
+	StringName behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	TypedArray<Dictionary> behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id);
+	TypedArray<Dictionary> behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id);
+	TypedArray<RID> behavior_tree_graph_get_unrooted_nodes(RID p_graph_id);
+	TypedArray<RID> behavior_tree_graph_get_rooted_nodes(RID p_graph_id);
 
 	// ---- Behavior Tree END ----
 };
@@ -158,6 +188,12 @@ class HydrogenBehaviorServer final : public Object {
 	void _blackboard_emit_set_parent(RID parent, RID child);
 	void _blackboard_emit_created(RID p_blackboard_rid);
 	void _blackboard_emit_destroyed(RID p_blackboard_rid);
+
+	void _behavior_tree_graph_emit_created(RID p_behavior_tree_graph);
+	void _behavior_tree_graph_emit_destroyed(RID p_behavior_tree_graph);
+
+	void _behavior_tree_emit_created(RID p_behavior_tree);
+	void _behavior_tree_emit_destroyed(RID p_behavior_tree);
 
 protected:
 	static void _bind_methods();
@@ -220,6 +256,36 @@ public:
 	Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
+
+	// ---- Behavior Tree ----
+
+	RID behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_name);
+	bool behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id);
+
+	bool behavior_tree_graph_is_bound(RID p_graph_id);
+
+	bool behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id);
+	RID behavior_tree_graph_get_root(RID p_graph_id);
+
+	int32_t behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id);
+	int32_t behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id);
+
+	StringName behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+
+	StringName behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+
+	TypedArray<Dictionary> behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id);
+	TypedArray<Dictionary> behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id);
+
+	TypedArray<RID> behavior_tree_graph_get_unrooted_nodes(RID p_graph_id);
+	TypedArray<RID> behavior_tree_graph_get_rooted_nodes(RID p_graph_id);
+
+
+
+	// ---- Behavior Tree END ----
+
 #if TESTS_ENABLED
 	void run_tests();
 #endif

@@ -17,7 +17,6 @@
 #include "name_helpers.hpp"
 #include "godot_cpp/variant/typed_dictionary.hpp"
 #include "rid_data.hpp"
-#include "type_name.hpp"
 #include "variant_type_traits.hpp"
 
 using namespace godot;
