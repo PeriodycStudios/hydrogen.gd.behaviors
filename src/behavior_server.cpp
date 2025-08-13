@@ -1,6 +1,7 @@
 
 #include "behavior_server.hpp"
 #include "behavior_trees/behavior_tree_graph.hpp"
+#include "behavior_trees/behavior_tree_node.hpp"
 #include "behavior_trees/behavior_trees.hpp"
 #include "blackboard.hpp"
 #include "godot_cpp/core/defs.hpp"
@@ -357,20 +358,27 @@ void BehaviorServer::behavior_tree_emit_destroyed(RID p_behavior_tree) {
 	return HydrogenBehaviorServer::get_singleton()->_behavior_tree_emit_destroyed(p_behavior_tree);
 }
 
-#define TRY_GET_CONST_GRAPH(fail_result)												\
-	behavior_tree_graph_lock();															\
-	const BehaviorTreeGraph *graph = behavior_tree_graph_owner.get_or_null(p_graph_id);	\
-	behavior_tree_graph_lock();															\
-	ERR_FAIL_NULL_V(graph, fail_result);												\
+#define TRY_GET_CONST_GRAPH(graph_type, fail_result, own_id)				\
+	own_id##_graph_lock();													\
+	const graph_type *graph = own_id##_graph_owner.get_or_null(p_graph_id);	\
+	own_id##_graph_lock();													\
+	ERR_FAIL_NULL_V(graph, fail_result);									\
 
-#define TRY_GET_GRAPH(fail_result)													\
-	behavior_tree_graph_lock();														\
-	BehaviorTreeGraph *graph = behavior_tree_graph_owner.get_or_null(p_graph_id);	\
-	behavior_tree_graph_lock();														\
-	ERR_FAIL_NULL_V(graph, fail_result);											\
+#define TRY_GET_GRAPH(fail_result)										\
+	own_id##_graph_lock();												\
+	graph_type *graph = own_id##_graph_owner.get_or_null(p_graph_id);	\
+	own_id##_graph_lock();												\
+	ERR_FAIL_NULL_V(graph, fail_result);								\
 
+#define TRY_GET_CONST_NODE(fail_result)							\
+	const BehaviorTreeNode *node = graph->get_node(p_node_id);	\
+	ERR_FAIL_NULL_V(node, fail_result);							\
 
-RID BehaviorServer::behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_node_type_name) {
+#define TRY_GET_NODE(fail_result)						\
+	BehaviorTreeNode *node = graph->get_node(p_node_id);\
+	ERR_FAIL_NULL_V(node, fail_result);					\
+
+RID BehaviorServer::pipeline_graph_create_node(RID p_graph_id, const StringName &p_node_type_name) {
 	TRY_GET_GRAPH(RID());
 	if (unlikely(graph->is_bound())) {
 		WARN_PRINT("Cannot edit behavior tree graph while it's bound!");
@@ -379,7 +387,7 @@ RID BehaviorServer::behavior_tree_graph_create_node(RID p_graph_id, const String
 	return graph->create_node(p_node_type_name);
 }
 
-bool BehaviorServer::behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id) {
+bool BehaviorServer::pipeline_graph_destroy_node(RID p_graph_id, RID p_node_id) {
 	TRY_GET_GRAPH(false);
 	if (unlikely(graph->is_bound())) {
 		WARN_PRINT("Cannot edit behavior tree graph while it's bound!");
@@ -388,12 +396,12 @@ bool BehaviorServer::behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node
 	return graph->destroy_node(p_node_id);
 }
 
-bool BehaviorServer::behavior_tree_graph_is_bound(RID p_graph_id) {
+bool BehaviorServer::pipeline_graph_is_bound(RID p_graph_id) {
 	TRY_GET_CONST_GRAPH(false);
 	return graph->is_bound();
 }
 
-bool BehaviorServer::behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id) {
+bool BehaviorServer::pipeline_graph_set_root(RID p_graph_id, RID p_node_id) {
 	TRY_GET_GRAPH(false);
 	if (unlikely(graph->is_bound())) {
 		WARN_PRINT("Cannot edit behavior tree graph while it's bound!");
@@ -402,37 +410,39 @@ bool BehaviorServer::behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id)
 	return graph->set_root_id(p_node_id);
 }
 
-RID BehaviorServer::behavior_tree_graph_get_root(RID p_graph_id) {
+RID BehaviorServer::pipeline_graph_get_root(RID p_graph_id) {
 	TRY_GET_CONST_GRAPH(RID());
 	return graph->get_root_id();
 }
 
-int32_t BehaviorServer::behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id) {
+int32_t BehaviorServer::node_get_input_port_count(RID p_graph_id, RID p_node_id) {
 	TRY_GET_CONST_GRAPH(0);
-	return graph->get_input_port_count(p_node_id);
+	TRY_GET_CONST_NODE(0)
+
+	return node->get_input_port_count(p_node_id);
 }
 
-int32_t BehaviorServer::behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id) {
+int32_t BehaviorServer::node_get_output_port_count(RID p_graph_id, RID p_node_id) {
 	TRY_GET_CONST_GRAPH(0);
 	return graph->get_output_port_count(p_node_id);
 }
 
-StringName BehaviorServer::behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
+StringName BehaviorServer::node_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
 	TRY_GET_CONST_GRAPH(StringName());
 	return graph->get_input_port_type_name(p_node_id, p_port_index);
 }
 
-StringName BehaviorServer::behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
+StringName BehaviorServer::node_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
 	TRY_GET_CONST_GRAPH(StringName());
 	return graph->get_output_port_type_name(p_node_id, p_port_index);
 }
 
-StringName BehaviorServer::behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
+StringName BehaviorServer::node_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
 	TRY_GET_CONST_GRAPH(StringName());
 	return graph->get_input_port_name(p_node_id, p_port_index);
 }
 
-StringName BehaviorServer::behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
+StringName BehaviorServer::node_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
 	TRY_GET_CONST_GRAPH(StringName());
 	return graph->get_output_port_name(p_node_id, p_port_index);
 }
@@ -454,14 +464,14 @@ TypedArray<Dictionary> prepare_port_infos(const Vector<NodePortInfo> &port_infos
 	return result;
 }
 
-TypedArray<Dictionary> BehaviorServer::behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id) {
+TypedArray<Dictionary> BehaviorServer::node_get_input_port_infos(RID p_graph_id, RID p_node_id) {
 	TRY_GET_CONST_GRAPH({});
 	Vector<NodePortInfo> port_infos = {};
 	graph->get_input_port_infos(p_node_id, port_infos);
 	return prepare_port_infos(port_infos);
 }
 
-TypedArray<Dictionary> BehaviorServer::behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id) {
+TypedArray<Dictionary> BehaviorServer::node_get_output_port_infos(RID p_graph_id, RID p_node_id) {
 	TRY_GET_CONST_GRAPH({});
 	Vector<NodePortInfo> port_infos;
 	graph->get_output_port_infos(p_node_id, port_infos);
@@ -483,12 +493,12 @@ TypedArray<RID> prepare_node_ids(const Vector<RID> &p_node_ids) {
 	return result;
 }
 
-TypedArray<RID> BehaviorServer::behavior_tree_graph_get_unrooted_nodes(RID p_graph_id) {
+TypedArray<RID> BehaviorServer::pipeline_graph_get_unrooted_nodes(RID p_graph_id) {
 	TRY_GET_CONST_GRAPH({});
 	return prepare_node_ids(graph->get_unrooted_nodes());
 }
 
-TypedArray<RID> BehaviorServer::behavior_tree_graph_get_rooted_nodes(RID p_graph_id) {
+TypedArray<RID> BehaviorServer::pipeline_graph_get_rooted_nodes(RID p_graph_id) {
 	TRY_GET_CONST_GRAPH({});
 	return prepare_node_ids(graph->get_rooted_nodes());
 }
@@ -758,63 +768,63 @@ void HydrogenBehaviorServer::_behavior_tree_emit_destroyed(RID p_behavior_tree) 
 }
 
 RID HydrogenBehaviorServer::behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_node_type_name) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_create_node(p_graph_id, p_node_type_name);
+	return BehaviorServer::get_singleton()->pipeline_graph_create_node(p_graph_id, p_node_type_name);
 }
 
 bool HydrogenBehaviorServer::behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_destroy_node(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_destroy_node(p_graph_id, p_node_id);
 }
 
 bool HydrogenBehaviorServer::behavior_tree_graph_is_bound(RID p_graph_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_is_bound(p_graph_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_is_bound(p_graph_id);
 }
 
 bool HydrogenBehaviorServer::behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_set_root(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_set_root(p_graph_id, p_node_id);
 }
 
 RID HydrogenBehaviorServer::behavior_tree_graph_get_root(RID p_graph_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_root(p_graph_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_get_root(p_graph_id);
 }
 
 int32_t HydrogenBehaviorServer::behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_input_port_count(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->node_get_input_port_count(p_graph_id, p_node_id);
 }
 
 int32_t HydrogenBehaviorServer::behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_output_port_count(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->node_get_output_port_count(p_graph_id, p_node_id);
 }
 
 StringName HydrogenBehaviorServer::behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_input_port_type_name(p_graph_id, p_node_id, p_port_index);
+	return BehaviorServer::get_singleton()->node_get_input_port_type_name(p_graph_id, p_node_id, p_port_index);
 }
 
 StringName HydrogenBehaviorServer::behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_output_port_type_name(p_graph_id, p_node_id, p_port_index);
+	return BehaviorServer::get_singleton()->node_get_output_port_type_name(p_graph_id, p_node_id, p_port_index);
 }
 
 StringName HydrogenBehaviorServer::behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_input_port_name(p_graph_id, p_node_id, p_port_index);
+	return BehaviorServer::get_singleton()->node_get_input_port_name(p_graph_id, p_node_id, p_port_index);
 }
 
 StringName HydrogenBehaviorServer::behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_output_port_name(p_graph_id, p_node_id, p_port_index);
+	return BehaviorServer::get_singleton()->node_get_output_port_name(p_graph_id, p_node_id, p_port_index);
 }
 
 TypedArray<Dictionary> HydrogenBehaviorServer::behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_input_port_infos(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->node_get_input_port_infos(p_graph_id, p_node_id);
 }
 
 TypedArray<Dictionary> HydrogenBehaviorServer::behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_output_port_infos(p_graph_id, p_node_id);
+	return BehaviorServer::get_singleton()->node_get_output_port_infos(p_graph_id, p_node_id);
 }
 
 TypedArray<RID> HydrogenBehaviorServer::behavior_tree_graph_get_unrooted_nodes(RID p_graph_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_unrooted_nodes(p_graph_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_get_unrooted_nodes(p_graph_id);
 }
 
 TypedArray<RID> HydrogenBehaviorServer::behavior_tree_graph_get_rooted_nodes(RID p_graph_id) {
-	return BehaviorServer::get_singleton()->behavior_tree_graph_get_rooted_nodes(p_graph_id);
+	return BehaviorServer::get_singleton()->pipeline_graph_get_rooted_nodes(p_graph_id);
 }
 
 // ---- Behavior Tree END ----

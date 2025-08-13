@@ -7,7 +7,10 @@
 
 #include "../rid_data.hpp"
 #include "../name_helpers.hpp"
+#include "godot_cpp/classes/global_constants.hpp"
+#include "godot_cpp/templates/vector.hpp"
 
+#include <functional>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <cstdint>
@@ -35,12 +38,16 @@ private:
 	NodePortInfo(const StringName &p_name, const StringName &p_type_name) : name(p_name), type_name(p_type_name) {}
 };
 
+class IPipelineGraph;
+
 class IPipelineNode : public RidData {
 protected:
 	IPipelineNode() = default;
 
 public:
 	virtual ~IPipelineNode() = default;
+
+	[[nodiscard]] virtual bool is_compatible(IPipelineNode *p_other_node);
 
 	[[nodiscard]] virtual int32_t get_input_port_count() const = 0;
 	[[nodiscard]] virtual int32_t get_output_port_count() const = 0;
@@ -64,6 +71,8 @@ struct IPipelineNodeStateful {
 
 	[[nodiscard]] virtual IPipelineNodeState *create_state() const = 0;
 
+	[[nodiscard]] virtual bool is_compatible(IPipelineNode *p_other) = 0;
+
 protected:
 	IPipelineNodeStateful() = default;
 };
@@ -77,32 +86,96 @@ protected:
 
 typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
 
-class IPipelineNodeContainer {
+class IPipelineNodeComposite {
 protected:
-	IPipelineNodeContainer() = default;
+	IPipelineNodeComposite() = default;
 public:
-	virtual ~IPipelineNodeContainer() = default;
+	virtual ~IPipelineNodeComposite() = default;
+
+	virtual void add_child_node(const IPipelineNode *p_node) = 0;
+	virtual	bool remove_child_node(const IPipelineNode *p_node) = 0;
+	virtual bool remove_child_node_at(int64_t p_index) = 0;
+	virtual void clear() = 0;
 	[[nodiscard]] virtual bool is_empty() const = 0;
+	[[nodiscard]] virtual const IPipelineNode *get_child_node(int64_t p_index) const = 0;
+	virtual void set_child_node(int64_t p_index, const IPipelineNode *p_node) = 0;
 	[[nodiscard]] virtual int64_t get_node_count() const = 0;
-	[[nodiscard]] virtual IPipelineNode *get_node(int64_t p_index) const = 0;
+
+	virtual void resize(uint64_t p_size) = 0;
+	virtual void resize_zeroed(uint64_t p_size) = 0;
+	virtual void swap_child_nodes(uint64_t p_first_index, uint64_t p_second_index) = 0;
+
+	virtual Error insert_child_node(int64_t p_pos, const IPipelineNode *p_node) = 0;
+	virtual void append_child_nodes(const Vector<const IPipelineNode *> &p_nodes) = 0;
+	virtual bool is_descendent_node(const IPipelineNode *p_node) = 0;
+	virtual bool is_child_node(const IPipelineNode *p_node) = 0;
 };
 
-class IPipelineNodeWrapper {
+class IPipelineNodeDecorator {
 protected:
-	IPipelineNodeWrapper() = default;
+	IPipelineNodeDecorator() = default;
 public:
-	virtual ~IPipelineNodeWrapper() = default;
-	[[nodiscard]] virtual IPipelineNode *get_pipeline_node() const = 0;
+	virtual ~IPipelineNodeDecorator() = default;
+
+	[[nodiscard]] virtual const IPipelineNode *get_pipeline_node() const = 0;
+	virtual void set_pipline_node(const IPipelineNode *p_node) = 0;
 };
 
-class IPipelineGraph;
+class IPipelineGraph {
+protected:
+
+	virtual RID _create_node(const StringName &p_node_type_name) = 0;
+	virtual bool _destroy_node(RID p_node_id) = 0;
+
+	friend class Pipeline;
+	IPipelineGraph() = default;
+
+public:
+	virtual ~IPipelineGraph() = default;
+
+	[[nodiscard]] virtual const IPipelineNode *get_pipeline_node(RID p_node_id) const = 0;
+	[[nodiscard]] virtual IPipelineNode *get_pipeline_node(RID p_node_id) = 0;
+	[[nodiscard]] virtual const IPipelineNode *get_pipeline_root() const = 0;
+	[[nodiscard]] virtual IPipelineNode *get_pipeline_root() = 0;
+
+	[[nodiscard]] virtual bool is_bound() const = 0;
+
+	RID create_node(const StringName &p_node_type_name) {
+		ERR_FAIL_COND_V_MSG(is_bound(), RID(), "Cannot create nodes while bound!");
+		return _create_node(p_node_type_name);
+	}
+
+	bool destroy_node(RID p_node_id) {
+		ERR_FAIL_COND_V_MSG(is_bound(), false, "Cannot destroy nodes while bound!");
+		return _destroy_node(p_node_id);
+	}
+	
+	virtual bool set_root_id(RID p_node_id) = 0;
+	[[nodiscard]] virtual RID get_root_id() const = 0;
+
+	virtual Vector<const IPipelineNode*> get_pipeline_nodes() const;
+	virtual Vector<IPipelineNode *> get_pipeline_nodes() = 0;
+
+	typedef std::function<bool(const IPipelineNode *)> PipelineNodePredicate;
+
+	virtual void query_pipeline_node(RID p_node_id, Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const = 0;
+	virtual void query_pipeline_node(RID p_node_id, Vector<IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) = 0;
+
+	virtual void query_pipeline_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const = 0;
+	virtual void query_pipeline_nodes(Vector<IPipelineNode*> &p_nodes, PipelineNodePredicate p_predicate) = 0;
+
+	[[nodiscard]] virtual Vector<RID> get_unrooted_nodes() const = 0;
+	[[nodiscard]] virtual Vector<RID> get_rooted_nodes() const = 0;
+};
 
 class IPipelineNodeSubGraph {
 protected:
 	IPipelineNodeSubGraph() = default;
 public:
 	virtual ~IPipelineNodeSubGraph() = default;
-	[[nodiscard]] virtual const IPipelineGraph *get_sub_graph() const;
+
+	[[nodiscard]] virtual const IPipelineGraph *get_pipeline_sub_graph() const = 0;
+	virtual void set_pipeline_sub_graph(IPipelineGraph *p_graph) = 0;
 };
 } // hydrogen
 

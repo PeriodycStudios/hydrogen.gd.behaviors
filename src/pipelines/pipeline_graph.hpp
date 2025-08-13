@@ -7,7 +7,6 @@
 
 #include "godot_cpp/core/memory.hpp"
 #include "godot_cpp/templates/hash_set.hpp"
-#include "godot_cpp/variant/string_name.hpp"
 #include "node_interfaces.hpp"
 
 #include <functional>
@@ -27,69 +26,37 @@ namespace hydrogen::pipelines {
 
 class Pipeline;
 
-class IPipelineGraph {
-protected:
-	friend class Pipeline;
-
-	[[nodiscard]] virtual const IPipelineNode *get_node(RID p_node_id) = 0;
-	[[nodiscard]] virtual const IPipelineNode *get_pipeline_root() const = 0;
-	[[nodiscard]] virtual Vector<const IPipelineGraph *> get_pipeline_sub_graphs() = 0;
-	[[nodiscard]] virtual Vector<const IPipelineNode *> get_pipeline_nodes() = 0;
-
-	IPipelineGraph() = default;
-
-public:
-	virtual ~IPipelineGraph() = default;
-
-	[[nodiscard]] virtual bool is_bound() const = 0;
-
-	[[nodiscard]] virtual RID create_node(const StringName &p_node_type_name) = 0;
-	virtual bool destroy_node(RID p_node_id) = 0;
-	virtual bool set_root_id(RID p_node_id) = 0;
-	[[nodiscard]] virtual RID get_root_id() const = 0;
-
-	[[nodiscard]] virtual int32_t get_input_port_count(RID p_node_id) const = 0;
-	[[nodiscard]] virtual int32_t get_output_port_count(RID p_node_id) const = 0;
-
-	[[nodiscard]] virtual StringName get_input_port_type_name(RID p_node_id, int32_t p_port) const = 0;
-	[[nodiscard]] virtual StringName get_output_port_type_name(RID p_node_id, int32_t p_port) const = 0;
-
-	[[nodiscard]] virtual StringName get_input_port_name(RID p_node_id, int32_t p_port) const = 0;
-	[[nodiscard]] virtual StringName get_output_port_name(RID p_node_id, int32_t p_port) const = 0;
-
-	virtual void get_input_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const = 0;
-	virtual void get_output_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const = 0;
-
-	[[nodiscard]] virtual Vector<RID> get_unrooted_nodes() const = 0;
-	[[nodiscard]] virtual Vector<RID> get_rooted_nodes() const = 0;
-};
-
 template<typename T, typename = void>
 class PipelineGraph {};
 
 template <typename T>
 class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public RidData, public IPipelineGraph {
+
+public:
+	typedef std::function<bool(const T *)> NodePredicate;
+
+private:
 	std::mutex *_mutex;
 	std::atomic_uint32_t _bind_count = { 0 };
 
-	HashSet<RID> get_rooted_nodes_set() const {
-		HashSet<RID> nodes = {};
+	Vector<RID> get_rooted_nodes_set() const {
+		Vector<RID> nodes = {};
 		if (unlikely(_root == nullptr)) {
 			return nodes;
 		}
 
 		std::function<void(const IPipelineNode* node)> collect_nodes = [&nodes, &collect_nodes](const IPipelineNode* node) {
-			nodes.insert(node->get_self());
+			nodes.push_back(node->get_self());
 
-			const IPipelineNodeContainer* container = dynamic_cast<const IPipelineNodeContainer *>(node);
+			const IPipelineNodeComposite* container = dynamic_cast<const IPipelineNodeComposite *>(node);
 			if (unlikely(container != nullptr && !container->is_empty())) {
 				const int child_count = container->get_node_count();
 				for (int32_t i = 0; i < child_count; ++i) {
-					const IPipelineNode *child_node = container->get_node(i);
+					const IPipelineNode *child_node = container->get_child_node(i);
 					collect_nodes(child_node);
 				}
 			}
-			const IPipelineNodeWrapper *wrapper = dynamic_cast<const IPipelineNodeWrapper*>(node);
+			const IPipelineNodeDecorator *wrapper = dynamic_cast<const IPipelineNodeDecorator*>(node);
 			if (unlikely(wrapper && wrapper->get_pipeline_node() != nullptr)) {
 				collect_nodes(wrapper->get_pipeline_node());
 			}
@@ -114,43 +81,111 @@ protected:
 		--_bind_count;
 	}
 
-	const IPipelineNode* get_node(RID p_node_id) override {
-		return _nodes_owner.get_or_null(p_node_id);
+	template<typename U>
+	U* _get_node(RID p_node_id) const {
+		auto iter = _nodes.find(p_node_id);
+		if (likely(iter != _nodes.end())) {
+			return iter->value;
+		}
+		else {
+			return nullptr;
+		}
 	}
 
-	const IPipelineNode *get_pipeline_root() const override {
-		return _root;
+	template<typename U>
+	void _visit(U p_node, std::function<void(U)> p_visitor) const {
+		p_visitor(p_node);
+
+		const IPipelineNodeComposite* container = dynamic_cast<const IPipelineNodeComposite *>(p_node);
+		if (unlikely(container != nullptr && !container->is_empty())) {
+			const int child_count = container->get_node_count();
+			for (int32_t i = 0; i < child_count; ++i) {
+				U child_node = dynamic_cast<U>(container->get_child_node(i));
+				ERR_CONTINUE(child_node == nullptr);
+				_query_node(child_node, p_visitor);
+			}
+		}
+		const IPipelineNodeDecorator *decorator = dynamic_cast<const IPipelineNodeDecorator*>(p_node);
+		if (unlikely(decorator != nullptr)) {
+			U decorated_node = dynamic_cast<U>(decorator->get_pipeline_node());
+			_query_node(decorated_node, p_visitor);
+		}
 	}
 
-	Vector<const IPipelineGraph *> get_pipeline_sub_graphs() override {
+	template<typename U>
+	std::function<U> _create_query_visitor(Vector<U> &p_nodes, std::function<bool(U)> p_predicate) {
+		return [&p_nodes, &p_predicate](U p_node) {
+			if (likely(p_predicate(p_node))) {
+				p_nodes.push_back(p_node);
+			}
+		};
+	}
+
+	template<typename U>
+	void _query_node(U p_node, Vector<U> &p_nodes, std::function<bool(U)> p_predicate) const {
+		auto visitor = _create_query_visitor(p_nodes, p_predicate);
+		return _visit(p_node, visitor);
+	}
+
+	template<typename U>
+	void _query_nodes(Vector<U> &p_nodes, std::function<bool(U)> p_predicate) const {
+		auto visitor = _create_query_visitor(p_nodes, p_predicate);
+
+		for (const auto &kvp : _nodes) {
+			visitor(kvp.value);
+		}
+	}
+
+	template<typename U>
+	Vector<U> _get_nodes() const {
+		Vector<U> nodes = {};
+		if (unlikely(_nodes.is_empty())) {
+			return nodes;
+		}
+
+		nodes.resize(_nodes.size());
+
+		int32_t idx = 0;
+		for (const auto &kvp : _nodes) {
+			nodes[idx] = kvp.value;
+			++idx;
+		}
+
+		return nodes;
+	}
+	
+
+	// template<typename U>
+	// void _query_node(const T *p_node, Vector<U> &p_nodes, NodePredicate p_predicate = [](auto *x) { return true; }) const {
+
+	// 	if (likely(p_predicate(p_node))) {
+	// 		p_nodes.push_back(p_node);
+	// 	}
+
+	// 	const IPipelineNodeComposite* container = dynamic_cast<const IPipelineNodeComposite *>(p_node);
+	// 	if (unlikely(container != nullptr && !container->is_empty())) {
+	// 		const int child_count = container->get_node_count();
+	// 		for (int32_t i = 0; i < child_count; ++i) {
+	// 			const IPipelineNode *child_node = container->get_child_node(i);
+	// 			_query_node(child_node, p_nodes, p_predicate);
+	// 		}
+	// 	}
+	// 	const IPipelineNodeDecorator *wrapper = dynamic_cast<const IPipelineNodeDecorator*>(p_node);
+	// 	if (unlikely(wrapper && wrapper->get_pipeline_node() != nullptr)) {
+	// 		_query_node(wrapper->get_pipeline_node(), p_nodes, p_predicate);
+	// 	}
+	// }
+
+	template<typename U> 
+	Vector<U> _collect_nodes() const {
 		std::scoped_lock lock(*_mutex);
 
 		const uint32_t nodes_count = _nodes.size();
 		if (unlikely(nodes_count == 0)) {
-			return {};
+			return;
 		}
 
-		Vector<const IPipelineGraph *> sub_graphs = {};
-		for (const auto &kvp : _nodes) {
-			const IPipelineNode *node = kvp.value;
-			const IPipelineNodeSubGraph *sub_graph_node = dynamic_cast<const IPipelineNodeSubGraph *>(node);
-			if (unlikely(sub_graph_node != nullptr && sub_graph_node->get_sub_graph() != nullptr)) {
-				sub_graphs.push_back(sub_graph_node->get_sub_graph());
-			}
-		}
-		
-		return sub_graphs;
-	}
-
-	Vector<const IPipelineNode *> get_pipeline_nodes() override {
-		std::scoped_lock lock(*_mutex);
-
-		const uint32_t nodes_count = _nodes_owner.get_rid_count();
-		if (unlikely(nodes_count == 0)) {
-			return {};
-		}
-
-		Vector<const IPipelineNode *> collected_nodes = {};
+		Vector<U> collected_nodes = {};
 		for(const auto &kvp : _nodes) {
 			collected_nodes.push_back(kvp.value);
 		}
@@ -159,6 +194,7 @@ protected:
 	}
 
 public:
+
 	~PipelineGraph() override {
 		_root = nullptr;
 		for (const auto &kvp : _nodes) {
@@ -172,6 +208,41 @@ public:
 		memdelete(_mutex);
 	}
 
+	const IPipelineNode* get_pipeline_node(RID p_node_id) const override {
+		return get_node(p_node_id);
+	}
+
+	IPipelineNode* get_pipeline_node(RID p_node_id) override {
+		return get_node(p_node_id);
+	}
+
+	_FORCE_INLINE_ const T *get_node(RID p_node_id) const {
+		return _get_node<const T *>(p_node_id);
+	}
+
+	_FORCE_INLINE_ T *get_node(RID p_node_id) {
+		ERR_FAIL_COND_V_MSG(is_bound(), nullptr, "Cannot get editable node while bound!");
+		return _get_node<T *>(p_node_id);
+	}
+
+	const IPipelineNode *get_pipeline_root() const override {
+		return _root;
+	}
+
+	IPipelineNode *get_pipeline_root() override {
+		ERR_FAIL_COND_V_MSG(is_bound(), nullptr, "Cannot get editable root node while bound!");
+		return _root;
+	}
+
+	const T *get_root() const {
+		return _root;
+	}
+
+	T *get_root() {
+		ERR_FAIL_COND_V_MSG(is_bound(), nullptr, "Cannot get editable root node while bound!");
+		return _root;
+	}
+	
 	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
 
 	bool set_root_id(RID p_node_id) override {
@@ -191,68 +262,82 @@ public:
 		return _root != nullptr ? _root->get_self() : RID();
 	}
 
-	[[nodiscard]] int32_t get_input_port_count(RID p_node_id) const override {
-		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), 0, "Unknown node id.");
-		T* node = iter->value;
-		return node->get_input_port_count();
+	Vector<const IPipelineNode *> get_pipeline_nodes() const override {
+		return _get_nodes<const IPipelineNode *>();
 	}
 
-	[[nodiscard]] int32_t get_output_port_count(RID p_node_id) const override {
-		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), 0, "Unknown node id.");
-		T* node = iter->value;
-		return node->get_output_port_count();
+	Vector<IPipelineNode *> get_pipeline_nodes() override {
+		ERR_FAIL_COND_V_MSG(is_bound(), {}, "Cannot get editable nodes while bound !");
+
+		return _get_nodes<IPipelineNode *>();
 	}
 
-	[[nodiscard]] StringName get_input_port_type_name(RID p_node_id, int32_t p_port) const override {
-		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), StringName(), "Unknown node id.");
-		T* node = iter->value;
-		return node->get_input_port_type_name(p_port);
+	Vector<const T *> get_nodes() const {
+		return _get_nodes<const T *>();
 	}
 
-	[[nodiscard]] StringName get_output_port_type_name(RID p_node_id, int32_t p_port) const override {
-		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), StringName(), "Unknown node id.");
-		T* node = iter->value;
-		return node->get_output_port_type_name(p_port);
+	Vector<T *> get_nodes() {
+		ERR_FAIL_COND_V_MSG(is_bound(), {}, "Cannot get editable nodes while bound !");
+		return _get_nodes<T *>();
 	}
 
-	[[nodiscard]] StringName get_input_port_name(RID p_node_id, int32_t p_port) const override {
+	void query_pipeline_node(RID p_node_id, Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const override {
 		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), StringName(), "Unknown node id.");
-		T *node = iter->value;
-		return node->get_input_port_name(p_port);
+		const IPipelineNode* node = get_node(p_node_id);
+		ERR_FAIL_NULL(node);
+
+		_query_node<const IPipelineNode *>(node, p_nodes, p_predicate);
 	}
 
-	[[nodiscard]] StringName get_output_port_name(RID p_node_id, int32_t p_port) const override {
+	void query_pipeline_node(RID p_node_id, Vector<IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) override {
+		ERR_FAIL_COND_MSG(is_bound(), "Cannot query editable nodes when bound!");
+
 		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_V_MSG(iter == _nodes.end(), StringName(), "Unknown node id.");
-		T *node = iter->value;
-		return node->get_output_port_name(p_port);
+		IPipelineNode *node = get_node(p_node_id);
+		ERR_FAIL_NULL(node);
+
+		_query_node<IPipelineNode *>(node, p_nodes, p_predicate);
 	}
 
-	void get_input_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const override {
+	void query_node(RID p_node_id, Vector<const T *> &p_nodes, NodePredicate p_predicate) const {
 		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_MSG(iter == _nodes.end(), "Unknown node id.");
-		T *node = iter->value;
-		node->get_input_port_infos(p_infos);
+		const T *node = get_node(p_node_id);
+		ERR_FAIL_NULL(node);
+
+		_query_node(node, p_nodes, p_predicate);
 	}
 
-	void get_output_port_infos(RID p_node_id, Vector<NodePortInfo> &p_infos) const override {
+	void query_node(RID p_node_id, Vector<T *> &p_nodes, NodePredicate p_predicate) {
+		ERR_FAIL_COND_MSG(is_bound(), "Cannot query editable nodes when bound!");
+
 		std::scoped_lock lock(*_mutex);
-		auto iter = _nodes.find(p_node_id);
-		ERR_FAIL_COND_MSG(iter == _nodes.end(), "Unknown node id.");
-		T *node = iter->value;
-		node->get_output_port_infos(p_infos);
+		T *node = get_node(p_node_id);
+		ERR_FAIL_NULL(node);
+
+		_query_node(node, p_nodes, p_predicate);
+	}
+
+	void query_pipeline_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const override {
+		std::scoped_lock lock(*_mutex);
+
+		_query_nodes<const IPipelineNode *>(p_nodes, p_predicate);
+	}
+
+	void query_pipeline_nodes(Vector<IPipelineNode*> &p_nodes, PipelineNodePredicate p_predicate) override {
+		ERR_FAIL_COND_MSG(is_bound(), "Cannot query editable nodes when bound!");
+		std::scoped_lock lock(*_mutex);
+		_query_nodes<IPipelineNode *>(p_nodes, p_predicate);
+	}
+
+	void query_nodes(Vector<const T *> &p_nodes, NodePredicate p_predicate) const {
+		std::scoped_lock lock(*_mutex);
+		_query_nodes<const T *>(p_nodes, p_predicate);
+	}
+
+	void query_nodes(Vector<T *> &p_nodes, NodePredicate p_predicate) {
+		ERR_FAIL_COND_MSG(is_bound(), "Cannot query editable nodes when bound!");
+		std::scoped_lock lock(*_mutex);
+		_query_nodes<T *>(p_nodes, p_predicate);
 	}
 
 	[[nodiscard]] Vector<RID> get_unrooted_nodes() const override {

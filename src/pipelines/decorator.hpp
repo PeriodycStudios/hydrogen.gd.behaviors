@@ -8,15 +8,15 @@
 namespace hydrogen::pipelines {
 
 template <typename T, typename = void>
-class PipelineNodeWrapper {};
+class PipelineNodeDecorator {};
 
 template <typename T>
-class PipelineNodeWrapper<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeWrapper {
+class PipelineNodeDecorator<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeDecorator {
 	T* _wrapped_node = nullptr;
 
 protected:
 	T* get_child() { return _wrapped_node; }
-	PipelineNodeWrapper() = default;
+	PipelineNodeDecorator() = default;
 
 public:
 
@@ -24,7 +24,7 @@ public:
 	[[nodiscard]] _FORCE_INLINE_ T *get_child() const { return _wrapped_node; }
 	_FORCE_INLINE_ void set_child(T *p_node) { _wrapped_node = p_node; }
 
-	~PipelineNodeWrapper() override = default;
+	~PipelineNodeDecorator() override = default;
 };
 }
 

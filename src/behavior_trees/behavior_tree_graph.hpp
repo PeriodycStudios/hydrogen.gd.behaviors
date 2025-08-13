@@ -16,12 +16,14 @@ using namespace hydrogen::pipelines;
 
 class BehaviorTreeGraph : public PipelineGraph<BehaviorTreeNode> {
 
+protected:
+
+	RID _create_node(const StringName &p_node_type_name) override { return {}; }
+	bool _destroy_node(RID p_node_id) override { return false; }
+
 public:
 	BehaviorTreeGraph() = default;
 	~BehaviorTreeGraph() override = default;
-
-	RID create_node(const StringName &p_node_type_name) override { return {}; }
-	bool destroy_node(RID p_node_id) override { return false; }
 };
 
 } // hydrogen

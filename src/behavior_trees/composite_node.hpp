@@ -5,11 +5,11 @@
 #ifndef CONTAINER_NODE_HPP
 #define CONTAINER_NODE_HPP
 #include "behavior_tree_node.hpp"
-#include "../pipelines/node_container.hpp"
+#include "../pipelines/composite.hpp"
 
 namespace hydrogen::behavior_trees {
 
-class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeContainer<BehaviorTreeNode> {
+class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeComposite<BehaviorTreeNode> {
 protected:
 	CompositeNode() = default;
 public:

@@ -12,7 +12,9 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
 #include "behavior_trees/behavior_tree_graph.hpp"
+#include "godot_cpp/classes/global_constants.hpp"
 #include "godot_cpp/classes/packed_data_container.hpp"
+#include "godot_cpp/templates/vector.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/rid.hpp"
 #include "godot_cpp/variant/string_name.hpp"
@@ -158,23 +160,69 @@ public:
 
 	// ---- Blackboard END ----
 
+	// ---- Pipeline Graphs ----
+
+	Vector<RID> pipeline_graph_get_sub_graphs(RID p_graph_id);
+	Vector<RID> pipeline_graph_get_nodes(RID p_graph_id);
+
+
+	RID pipeline_graph_create_node(RID p_graph_id, const StringName &p_node_type_name);
+	bool pipeline_graph_destroy_node(RID p_graph_id, RID p_node_id);
+
+	bool pipeline_graph_is_bound(RID p_graph_id);
+	bool pipeline_graph_set_root(RID p_graph_id, RID p_node_id);
+	RID pipeline_graph_get_root(RID p_graph_id);
+	TypedArray<RID> pipeline_graph_get_unrooted_nodes(RID p_graph_id);
+	TypedArray<RID> pipeline_graph_get_rooted_nodes(RID p_graph_id);
+
+	// ---- Pipeline Graphs END ----
+
+	// ---- Nodes ----
+
+	StringName node_get_type_name(RID p_graph_id, RID p_node_id);
+	bool node_is_compatible(RID p_graph_id, RID p_node_id, RID p_other_node_id);
+
+	int32_t node_get_input_port_count(RID p_graph_id, RID p_node_id);
+	int32_t node_get_output_port_count(RID p_graph_id, RID p_node_id);
+	StringName node_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName node_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName node_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName node_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph_id, RID p_node_id);
+	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph_id, RID p_node_id);
+
+	void node_is_composite(RID p_graph_id, RID p_node_id);
+	bool node_is_decorator(RID p_graph_id, RID p_node_id);
+
+	bool node_composite_add_child(RID p_graph_id, RID p_node_id, RID p_child_id);
+	bool node_composite_remove_child(RID p_graph_id, RID p_node_id, RID p_child_id);
+	bool node_composite_remove_child_at(RID p_graph_id, RID p_node_id, int32_t p_child_index);
+	void node_composite_clear(RID p_graph_id, RID p_node_id);
+
+	RID node_composite_get_child(RID p_graph_id, RID p_node_id, int64_t p_child_index);
+	bool node_composite_set_child(RID p_graph_id, RID p_node_id, int64_t p_child_index, RID p_child_id);
+	int64_t node_composite_child_count(RID p_graph_id, RID p_node_id);
+	void node_composite_resize(RID p_graph_id, RID p_node_id, uint64_t p_size);
+	void node_composite_resize_zeroed(RID p_graph_id, RID p_node_id, uint64_t p_size);
+	void node_composite_swap_children(RID p_graph_id, RID p_node_id, uint64_t p_first_index, uint64_t p_second_index);
+	Error node_composite_insert_child(RID p_graph_id, RID p_node_id, int64_t p_pos, RID p_child_id);
+	void node_composite_append_children(RID p_graph_id, RID p_node_id, const Vector<RID> &p_child_ids);
+	bool node_composite_is_descendent(RID p_graph_id, RID p_node_id, RID p_candidate_id);
+	bool node_composite_is_child(RID p_graph_id, RID p_node_id, RID p_candidate_id);
+	
+	RID node_decorator_get_child(RID p_graph_id, RID p_node_id);
+	void node_decorator_set_child(RID p_graph_id, RID p_node_id, RID p_child_id);
+
+	// ---- Nodes END ----
+
 	// ---- Behavior Tree ----
 
-	RID behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_node_type_name);
-	bool behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id);
-	bool behavior_tree_graph_is_bound(RID p_graph_id);
-	bool behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id);
-	RID behavior_tree_graph_get_root(RID p_graph_id);
-	int32_t behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id);
-	int32_t behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id);
-	StringName behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	TypedArray<Dictionary> behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id);
-	TypedArray<Dictionary> behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id);
-	TypedArray<RID> behavior_tree_graph_get_unrooted_nodes(RID p_graph_id);
-	TypedArray<RID> behavior_tree_graph_get_rooted_nodes(RID p_graph_id);
+	
+	
+	
+	
+
+	
 
 	// ---- Behavior Tree END ----
 };
