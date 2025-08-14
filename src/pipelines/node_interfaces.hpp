@@ -7,13 +7,14 @@
 
 #include "../rid_data.hpp"
 #include "../name_helpers.hpp"
-#include "godot_cpp/classes/global_constants.hpp"
-#include "godot_cpp/templates/vector.hpp"
 
-#include <functional>
+#include <godot_cpp/classes/global_constants.hpp>
+#include <godot_cpp/templates/vector.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/variant/string_name.hpp>
+
 #include <cstdint>
+#include <functional>
 
 namespace hydrogen::pipelines {
 
@@ -121,7 +122,7 @@ public:
 	virtual void set_pipline_node(const IPipelineNode *p_node) = 0;
 };
 
-class IPipelineGraph {
+class IPipelineGraph : public RidData {
 protected:
 
 	virtual RID _create_node(const StringName &p_node_type_name) = 0;
@@ -132,6 +133,10 @@ protected:
 
 public:
 	virtual ~IPipelineGraph() = default;
+
+	[[nodiscard]] virtual Vector<const IPipelineGraph *> get_pipeline_sub_graphs() const = 0;
+
+	virtual Vector<const IPipelineNode*> get_pipeline_nodes() const;
 
 	[[nodiscard]] virtual const IPipelineNode *get_pipeline_node(RID p_node_id) const = 0;
 	[[nodiscard]] virtual IPipelineNode *get_pipeline_node(RID p_node_id) = 0;
@@ -153,8 +158,7 @@ public:
 	virtual bool set_root_id(RID p_node_id) = 0;
 	[[nodiscard]] virtual RID get_root_id() const = 0;
 
-	virtual Vector<const IPipelineNode*> get_pipeline_nodes() const;
-	virtual Vector<IPipelineNode *> get_pipeline_nodes() = 0;
+	
 
 	typedef std::function<bool(const IPipelineNode *)> PipelineNodePredicate;
 

@@ -5,11 +5,10 @@
 #ifndef PIPELINE_GRAPH_HPP
 #define PIPELINE_GRAPH_HPP
 
-#include "godot_cpp/core/memory.hpp"
-#include "godot_cpp/templates/hash_set.hpp"
 #include "node_interfaces.hpp"
 
-#include <functional>
+#include <godot_cpp/core/memory.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/core/defs.hpp>
@@ -21,6 +20,7 @@
 #include <type_traits>
 #include <atomic>
 #include <mutex>
+#include <functional>
 
 namespace hydrogen::pipelines {
 
@@ -30,7 +30,7 @@ template<typename T, typename = void>
 class PipelineGraph {};
 
 template <typename T>
-class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public RidData, public IPipelineGraph {
+class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineGraph {
 
 public:
 	typedef std::function<bool(const T *)> NodePredicate;
@@ -153,28 +153,7 @@ protected:
 
 		return nodes;
 	}
-	
 
-	// template<typename U>
-	// void _query_node(const T *p_node, Vector<U> &p_nodes, NodePredicate p_predicate = [](auto *x) { return true; }) const {
-
-	// 	if (likely(p_predicate(p_node))) {
-	// 		p_nodes.push_back(p_node);
-	// 	}
-
-	// 	const IPipelineNodeComposite* container = dynamic_cast<const IPipelineNodeComposite *>(p_node);
-	// 	if (unlikely(container != nullptr && !container->is_empty())) {
-	// 		const int child_count = container->get_node_count();
-	// 		for (int32_t i = 0; i < child_count; ++i) {
-	// 			const IPipelineNode *child_node = container->get_child_node(i);
-	// 			_query_node(child_node, p_nodes, p_predicate);
-	// 		}
-	// 	}
-	// 	const IPipelineNodeDecorator *wrapper = dynamic_cast<const IPipelineNodeDecorator*>(p_node);
-	// 	if (unlikely(wrapper && wrapper->get_pipeline_node() != nullptr)) {
-	// 		_query_node(wrapper->get_pipeline_node(), p_nodes, p_predicate);
-	// 	}
-	// }
 
 	template<typename U> 
 	Vector<U> _collect_nodes() const {
@@ -264,12 +243,6 @@ public:
 
 	Vector<const IPipelineNode *> get_pipeline_nodes() const override {
 		return _get_nodes<const IPipelineNode *>();
-	}
-
-	Vector<IPipelineNode *> get_pipeline_nodes() override {
-		ERR_FAIL_COND_V_MSG(is_bound(), {}, "Cannot get editable nodes while bound !");
-
-		return _get_nodes<IPipelineNode *>();
 	}
 
 	Vector<const T *> get_nodes() const {

@@ -5,95 +5,148 @@
 #ifndef BEHAVIOR_SERVER_HPP
 #define BEHAVIOR_SERVER_HPP
 
-#include <cstdint>
-#include <godot_cpp/classes/mutex.hpp>
-#include <godot_cpp/core/object.hpp>
+#include "blackboard.hpp"
+#include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline.hpp"
+
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
-#include "behavior_trees/behavior_tree_graph.hpp"
-#include "godot_cpp/classes/global_constants.hpp"
-#include "godot_cpp/classes/packed_data_container.hpp"
-#include "godot_cpp/templates/vector.hpp"
-#include "godot_cpp/variant/dictionary.hpp"
-#include "godot_cpp/variant/rid.hpp"
-#include "godot_cpp/variant/string_name.hpp"
-#include "godot_cpp/variant/typed_array.hpp"
-#include "godot_cpp/variant/typed_dictionary.hpp"
+#include <godot_cpp/classes/global_constants.hpp>
+#include <godot_cpp/core/binder_common.hpp>
+#include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/core/error_macros.hpp>
+#include <godot_cpp/core/memory.hpp>
+#include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/variant/dictionary.hpp>
+#include <godot_cpp/variant/string_name.hpp>
+#include <godot_cpp/variant/typed_array.hpp>
+#include <godot_cpp/variant/typed_dictionary.hpp>
 
-#include "behavior_trees/behavior_trees.hpp"
-#include "behavior_trees/behavior_tree_graph.hpp"
-#include "blackboard.hpp"
+#include <cstdint>
+#include <mutex>
+#include "mutex_helpers.hpp"
 
 namespace hydrogen {
 
 using namespace godot;
-using namespace behavior_trees;
+using namespace pipelines;
+
+#define BLACKBOARDS_LOCK LOCK_ONE(_blackboard_mutex)
+#define BLACKBOARDS_LOCK_V(fail_result)	LOCK_ONE_V(_blackboard_mutex, fail_result)
+
+#define TRY_GET_BLACKBOARD_V(fail_result)									\
+	BLACKBOARDS_LOCK_V(fail_result);										\
+	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
+	ERR_FAIL_NULL_V(blackboard, fail_result)								\
+
+#define TRY_GET_BLACKBOARD													\
+	BLACKBOARDS_LOCK;														\
+	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
+	ERR_FAIL_NULL(blackboard)												\
 
 class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
 
-	static BehaviorServer *singleton;
+public:
+	enum GraphType {
+		BEHAVIOR_TREE,
+		// FSM,
+		GRAPH_TYPE_MAX
+	};
 
-	HashMap<RID, LocalVector<RID>> blackboard_parents_to_children = {};
-	RID_PtrOwner<Blackboard> blackboard_owner = {};
-	RID_PtrOwner<BehaviorTree> behavior_tree_owner = {};
-	RID_PtrOwner<BehaviorTreeGraph> behavior_tree_graph_owner = {};
-	Ref<Mutex> blackboard_mutex = {};
-	Ref<Mutex> behavior_tree_mutex = {};
-	Ref<Mutex> behavior_tree_graph_mutex = {};
+private:
+
+	static BehaviorServer *_singleton;
+
+	HashMap<RID, LocalVector<RID>> _blackboard_parents_to_children = {};
+	RID_PtrOwner<Blackboard> _blackboard_owner = {};
+	RID_PtrOwner<IPipelineGraph> _graph_owner = {};
+	RID_PtrOwner<Pipeline> _pipeline_owner = {};
+	std::mutex *_blackboard_mutex = nullptr;
+	std::mutex *_graph_mutex = nullptr;
+	std::mutex *_pipeline_mutex = nullptr;
 
 	template <typename T>
-	void free_ptr_resource(RID_PtrOwner<T> &p_owner, Ref<Mutex> &p_mutex, RID p_rid, std::function<void(T*)> p_cleanup = nullptr) {
-		ERR_FAIL_COND(p_mutex.is_null());
-		ERR_FAIL_COND(p_rid == RID());
-		p_mutex->lock();
+	void _free_ptr_resource(RID_PtrOwner<T> &p_owner, std::mutex *p_mutex, RID p, std::function<void(T*)> p_cleanup = nullptr) {
+		ERR_FAIL_NULL(p_mutex);
+		ERR_FAIL_COND(p == RID());
+		std::scoped_lock lock(*p_mutex);
 
-		T *resource = p_owner.get_or_null(p_rid);
+		T *resource = p_owner.get_or_null(p);
 		if (likely(p_cleanup != nullptr)) {
 			p_cleanup(resource);
 		}
-		p_owner.free(p_rid);
+		p_owner.free(p);
 		memdelete(resource);
+	}
 
-		p_mutex->unlock();
+	RID _blackboard_create_helper() {
+		BLACKBOARDS_LOCK_V(RID());
+
+		Blackboard *blackboard = memnew(Blackboard);
+		RID rid = _blackboard_owner.make_rid(blackboard);
+		blackboard->set_self(rid);
+
+		return rid;
+	}
+
+	template<typename TGRAPH>
+	RID _graph_create_helper() {
+		LOCK_ONE_V(_graph_mutex, RID());
+
+		TGRAPH *graph = memnew(TGRAPH);
+		RID rid = _graph_owner.make_rid(graph);
+		graph->set_self(rid);
+
+		_graph_emit_created(rid);
+
+		return rid;
+	}
+
+	template<typename TPIPELINE> 
+	RID _pipeline_create_helper(RID p_blackboard, RID p_graph) {
+		LOCK_THREE_V(_pipeline_mutex, _blackboard_mutex, _graph_mutex, RID());
+		
+		Blackboard* blackboard = _blackboard_owner.get_or_null(p_blackboard);
+		ERR_FAIL_NULL_V(blackboard, RID());
+
+		IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+		ERR_FAIL_NULL_V(graph, RID());
+
+		TPIPELINE *pipeline = memnew(TPIPELINE(blackboard, graph));
+		RID rid = _pipeline_owner.make_rid(pipeline);
+		pipeline->set_self(rid);
+
+		_pipeline_emit_created(rid);
+
+		return rid;
 	}
 
 	// ---- Blackboard ----
 
-	void blackboard_add_child(RID parent, RID child);
-	void blackboard_remove_child(RID parent, RID child);
-	void blackboard_erase(Blackboard *blackboard);
+	void _blackboard_add_child(RID parent, RID child);
+	void _blackboard_remove_child(RID parent, RID child);
+	void _blackboard_erase(Blackboard *blackboard);
 
-	void blackboard_emit_set_parent(RID p_child_rid, RID p_parent_rid);
-	void blackboard_emit_created(RID blackboard);
-	void blackboard_emit_destroyed(RID p_blackboard_rid);
+	void _blackboard_emit_set_parent(RID p_child, RID p_parent);
+	void _blackboard_emit_created(RID blackboard);
+	void _blackboard_emit_destroyed(RID p_blackboard);
 
 	// ---- Blackboard END ----
 
 	// ---- Behavior Tree ----
 
-	void behavior_tree_graph_erase(BehaviorTreeGraph *p_graph);
-	void behavior_tree_erase(BehaviorTree *p_behavior_tree);
+	void _graph_erase(IPipelineGraph *p_graph);
+	void _pipeline_erase(Pipeline *p_pipeline);
 
-	void behavior_tree_graph_emit_created(RID p_behavior_tree_graph);
-	void behavior_tree_graph_emit_destroyed(RID p_behavior_tree_graph);
+	void _graph_emit_created(RID p_behavior_tree_graph);
+	void _graph_emit_destroyed(RID p_behavior_tree_graph);
 
-	void behavior_tree_emit_created(RID p_behavior_tree);
-	void behavior_tree_emit_destroyed(RID p_behavior_tree);
+	void _pipeline_emit_created(RID p_behavior_tree);
+	void _pipeline_emit_destroyed(RID p_behavior_tree);
 
 	// ---- Behavior Tree END ----
-
-	template <typename T>
-	void cleanup_resources(RID_PtrOwner<T> &p_owner) {
-		if (unlikely(p_owner.get_rid_count() == 0)) {
-			return;
-		}
-
-		List<RID> owned_list = {};
-		p_owner.get_owned_list(&owned_list);
-
-	}
 
 protected:
 	static void _bind_methods();
@@ -104,128 +157,145 @@ public:
 	BehaviorServer();
 	~BehaviorServer() override;
 
-	void blackboards_lock() const;
-	void blackboards_unlock() const;
-
-	void behavior_tree_lock() const;
-	void behavior_tree_unlock() const;
-
-	void behavior_tree_graph_lock() const;
-	void behavior_tree_graph_unlock() const;
-
-	void free_rid(RID p_rid);
+	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID behavior_tree_graph_create();
-	RID behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph);
-	RID state_machine_create();
+	RID graph_create(GraphType p_graph_type);
+	RID pipeline_create(GraphType p_graph_type, RID p_blackboard, RID p_graph);
 	RID agent_create();
-	// RID pipeline_context_create(RID p_blackboard, RID p_pipeline);
 
 	Error init();
 	void finish();
 
 	// ---- Blackboard ----
 
-	bool blackboard_is_empty(RID p_blackboard_rid);
-	uint32_t blackboard_get_size(RID p_blackboard_rid);
+	bool blackboard_is_empty(RID p_blackboard);
+	uint32_t blackboard_get_size(RID p_blackboard);
 
-	bool blackboard_set_parent(RID p_rid, RID p_parent_rid);
-	RID blackboard_get_parent(RID p_rid);
-	bool blackboard_is_ancestor(RID p_rid, RID p_candidate);
-
-	template<typename T>
-	bool blackboard_try_get_entry(RID p_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
+	bool blackboard_set_parent(RID p, RID p_parent);
+	RID blackboard_get_parent(RID p);
+	bool blackboard_is_ancestor(RID p, RID p_candidate);
 
 	template<typename T>
-	const T &blackboard_get_entry_fast(RID p_rid, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+	bool blackboard_try_get_entry(RID p, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
+
+	template<typename T>
+	const T &blackboard_get_entry_fast(RID p, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
 
 	template <typename T>
-	T blackboard_get_entry(RID p_rid, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
+	T blackboard_get_entry(RID p, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
 	template<typename T>
-	void blackboard_set_entry_fast(RID p_rid, const StringName &p_name, const T &p_value);
+	void blackboard_set_entry_fast(RID p, const StringName &p_name, const T &p_value);
 
 	template <typename T>
-	void blackboard_set_entry(RID p_rid, const StringName &p_name, T p_value);
+	void blackboard_set_entry(RID p, const StringName &p_name, T p_value);
 
-	bool blackboard_erase_entry(RID p_rid, const StringName &p_name);
+	bool blackboard_erase_entry(RID p, const StringName &p_name);
 
-	bool blackboard_has_entry(RID p_rid, const StringName &p_name, bool p_check_parents = true);
+	bool blackboard_has_entry(RID p, const StringName &p_name, bool p_check_parents = true);
 
-	bool blackboard_import_entries(RID p_rid, const TypedDictionary<StringName, Variant> &p_data);
-	Dictionary blackboard_export_entries(RID p_rid, bool p_include_parents = true);
+	bool blackboard_import_entries(RID p, const TypedDictionary<StringName, Variant> &p_data);
+	Dictionary blackboard_export_entries(RID p, bool p_include_parents = true);
 
 	static Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
 
-	// ---- Pipeline Graphs ----
+	// ---- Graphs ----
 
-	Vector<RID> pipeline_graph_get_sub_graphs(RID p_graph_id);
-	Vector<RID> pipeline_graph_get_nodes(RID p_graph_id);
+	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
+	TypedArray<RID> graph_get_nodes(RID p_graph);
 
+	RID graph_create_node(RID p_graph, const StringName &p_node_type_name);
+	bool graph_destroy_node(RID p_graph, RID p_node);
 
-	RID pipeline_graph_create_node(RID p_graph_id, const StringName &p_node_type_name);
-	bool pipeline_graph_destroy_node(RID p_graph_id, RID p_node_id);
+	bool graph_is_bound(RID p_graph);
+	bool graph_set_root(RID p_graph, RID p_node);
+	RID graph_get_root(RID p_graph);
+	TypedArray<RID> graph_get_unrooted_nodes(RID p_graph);
+	TypedArray<RID> graph_get_rooted_nodes(RID p_graph);
 
-	bool pipeline_graph_is_bound(RID p_graph_id);
-	bool pipeline_graph_set_root(RID p_graph_id, RID p_node_id);
-	RID pipeline_graph_get_root(RID p_graph_id);
-	TypedArray<RID> pipeline_graph_get_unrooted_nodes(RID p_graph_id);
-	TypedArray<RID> pipeline_graph_get_rooted_nodes(RID p_graph_id);
-
-	// ---- Pipeline Graphs END ----
+	// ---- Graphs END ----
 
 	// ---- Nodes ----
 
-	StringName node_get_type_name(RID p_graph_id, RID p_node_id);
-	bool node_is_compatible(RID p_graph_id, RID p_node_id, RID p_other_node_id);
+	StringName node_get_type_name(RID p_graph, RID p_node);
+	bool node_is_compatible(RID p_graph, RID p_node, RID p_other_node);
 
-	int32_t node_get_input_port_count(RID p_graph_id, RID p_node_id);
-	int32_t node_get_output_port_count(RID p_graph_id, RID p_node_id);
-	StringName node_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName node_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName node_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName node_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph_id, RID p_node_id);
-	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph_id, RID p_node_id);
+	int32_t node_get_input_port_count(RID p_graph, RID p_node);
+	int32_t node_get_output_port_count(RID p_graph, RID p_node);
+	StringName node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph, RID p_node);
+	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph, RID p_node);
 
-	void node_is_composite(RID p_graph_id, RID p_node_id);
-	bool node_is_decorator(RID p_graph_id, RID p_node_id);
+	void node_is_composite(RID p_graph, RID p_node);
+	bool node_is_decorator(RID p_graph, RID p_node);
 
-	bool node_composite_add_child(RID p_graph_id, RID p_node_id, RID p_child_id);
-	bool node_composite_remove_child(RID p_graph_id, RID p_node_id, RID p_child_id);
-	bool node_composite_remove_child_at(RID p_graph_id, RID p_node_id, int32_t p_child_index);
-	void node_composite_clear(RID p_graph_id, RID p_node_id);
+	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
+	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
+	bool node_composite_remove_child_at(RID p_graph, RID p_node, int32_t p_child_index);
+	void node_composite_clear(RID p_graph, RID p_node);
 
-	RID node_composite_get_child(RID p_graph_id, RID p_node_id, int64_t p_child_index);
-	bool node_composite_set_child(RID p_graph_id, RID p_node_id, int64_t p_child_index, RID p_child_id);
-	int64_t node_composite_child_count(RID p_graph_id, RID p_node_id);
-	void node_composite_resize(RID p_graph_id, RID p_node_id, uint64_t p_size);
-	void node_composite_resize_zeroed(RID p_graph_id, RID p_node_id, uint64_t p_size);
-	void node_composite_swap_children(RID p_graph_id, RID p_node_id, uint64_t p_first_index, uint64_t p_second_index);
-	Error node_composite_insert_child(RID p_graph_id, RID p_node_id, int64_t p_pos, RID p_child_id);
-	void node_composite_append_children(RID p_graph_id, RID p_node_id, const Vector<RID> &p_child_ids);
-	bool node_composite_is_descendent(RID p_graph_id, RID p_node_id, RID p_candidate_id);
-	bool node_composite_is_child(RID p_graph_id, RID p_node_id, RID p_candidate_id);
+	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
+	bool node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
+	int64_t node_composite_child_count(RID p_graph, RID p_node);
+	void node_composite_resize(RID p_graph, RID p_node, uint64_t p_size);
+	void node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size);
+	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
+	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
+	void node_composite_append_children(RID p_graph, RID p_node, const Vector<RID> &p_childs);
+	bool node_composite_is_descendent(RID p_graph, RID p_node, RID p_candidate);
+	bool node_composite_is_child(RID p_graph, RID p_node, RID p_candidate);
 	
-	RID node_decorator_get_child(RID p_graph_id, RID p_node_id);
-	void node_decorator_set_child(RID p_graph_id, RID p_node_id, RID p_child_id);
+	RID node_decorator_get_child(RID p_graph, RID p_node);
+	void node_decorator_set_child(RID p_graph, RID p_node, RID p_child);
 
 	// ---- Nodes END ----
 
-	// ---- Behavior Tree ----
+	// ---- Pipelines ----
 
-	
-	
-	
-	
-
-	
-
-	// ---- Behavior Tree END ----
+	// ---- Pipelines END ----
 };
+
+
+template <typename T>
+bool BehaviorServer::blackboard_try_get_entry(RID p_blackboard, const StringName &p_name, T &p_out_result, bool p_check_parents) {
+	TRY_GET_BLACKBOARD_V(false);
+	return blackboard->try_get_entry(p_name, p_out_result, p_check_parents);
+}
+
+template <typename T>
+const T &BehaviorServer::blackboard_get_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_default, bool p_check_parents) {
+	TRY_GET_BLACKBOARD_V(p_default);
+	return blackboard->get_entry_fast(p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+T BehaviorServer::blackboard_get_entry(RID p_blackboard, const StringName &p_name, T p_default, bool p_check_parents) {
+	TRY_GET_BLACKBOARD_V(p_default);
+	return blackboard->get_entry(p_name, p_default, p_check_parents);
+}
+
+template <typename T>
+void BehaviorServer::blackboard_set_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_value) {
+	TRY_GET_BLACKBOARD;
+	blackboard->set_entry_fast(p_name, p_value);
+}
+
+template <typename T>
+void BehaviorServer::blackboard_set_entry(RID p_blackboard, const StringName &p_name, T p_value) {
+	TRY_GET_BLACKBOARD;
+	blackboard->set_entry(p_name, p_value);
+}
+
+#undef BLACKBOARDS_LOCK
+#undef BLACKBOARDS_LOCK_V
+#undef TRY_GET_BLACKBOARD
+#undef TRY_GET_BLACKBOARD_V
 
 class HydrogenBehaviorServer final : public Object {
 	GDCLASS(HydrogenBehaviorServer, Object);
@@ -234,14 +304,14 @@ class HydrogenBehaviorServer final : public Object {
 	static HydrogenBehaviorServer *singleton;
 
 	void _blackboard_emit_set_parent(RID parent, RID child);
-	void _blackboard_emit_created(RID p_blackboard_rid);
-	void _blackboard_emit_destroyed(RID p_blackboard_rid);
+	void _blackboard_emit_created(RID p_blackboard);
+	void _blackboard_emit_destroyed(RID p_blackboard);
 
-	void _behavior_tree_graph_emit_created(RID p_behavior_tree_graph);
-	void _behavior_tree_graph_emit_destroyed(RID p_behavior_tree_graph);
+	void _graph_emit_created(RID p_behavior_tree_graph);
+	void _graph_emit_destroyed(RID p_behavior_tree_graph);
 
-	void _behavior_tree_emit_created(RID p_behavior_tree);
-	void _behavior_tree_emit_destroyed(RID p_behavior_tree);
+	void _pipeline_emit_created(RID p_behavior_tree);
+	void _pipeline_emit_destroyed(RID p_behavior_tree);
 
 protected:
 	static void _bind_methods();
@@ -257,82 +327,106 @@ public:
 		singleton = nullptr;
 	};
 
-	void free_rid(RID p_rid);
+	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID behavior_tree_graph_create();
-	RID behavior_tree_create(RID p_blackboard, RID p_behavior_tree_graph);
-	RID state_machine_create();
+	RID graph_create(BehaviorServer::GraphType p_graph_type);
+	RID pipeline_create(BehaviorServer::GraphType p_graph_type, RID p_blackboard, RID p_behavior_tree_graph);
 	RID agent_create();
 
 	// ---- Blackboard ----
 
-	void blackboards_lock() const;
-	void blackboards_unlock() const;
+	bool blackboard_is_empty(RID p_blackboard) const;
+	uint32_t blackboard_get_size(RID p_blackboard) const;
 
-	bool blackboard_is_empty(RID p_blackboard_rid) const;
-	uint32_t blackboard_get_size(RID p_blackboard_rid) const;
-
-	bool blackboard_set_parent(RID p_parent_rid, RID p_child_rid);
-	RID blackboard_get_parent(RID p_blackboard_rid);
-	bool blackboard_is_ancestor(RID p_blackboard_rid, RID p_candidate);
+	bool blackboard_set_parent(RID p_parent, RID p_child);
+	RID blackboard_get_parent(RID p_blackboard);
+	bool blackboard_is_ancestor(RID p_blackboard, RID p_candidate);
 
 	template <typename T>
-	bool blackboard_try_get_entry(RID p_blackboard_rid, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
+	bool blackboard_try_get_entry(RID p_blackboard, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
 
-	Variant blackboard_try_get_as_variant(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents = true);
-
-	template <typename T>
-	const T &blackboard_get_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_default = {}, bool p_check_parents = true);
+	Variant blackboard_try_get_as_variant(RID p_blackboard, const StringName &p_name, bool p_check_parents = true);
 
 	template <typename T>
-	T blackboard_get_entry(RID p_blackboard_rid, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
+	const T &blackboard_get_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_default = {}, bool p_check_parents = true);
 
 	template <typename T>
-	void blackboard_set_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_value);
+	T blackboard_get_entry(RID p_blackboard, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
 	template <typename T>
-	void blackboard_set_entry(RID p_blackboard_rid, const StringName &p_name, T p_default = {});
+	void blackboard_set_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_value);
 
-	bool blackboard_erase_entry(RID p_blackboard_rid, const StringName &p_name);
+	template <typename T>
+	void blackboard_set_entry(RID p_blackboard, const StringName &p_name, T p_default = {});
 
-	bool blackboard_has_entry(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents = true);
+	bool blackboard_erase_entry(RID p_blackboard, const StringName &p_name);
+	bool blackboard_has_entry(RID p_blackboard, const StringName &p_name, bool p_check_parents = true);
 
-	bool blackboard_import_entries(RID p_blackboard_rid, const TypedDictionary<StringName, Variant> &p_data);
-	Dictionary blackboard_export_entries(RID p_blackboard_rid, bool p_include_parents = true);
+	bool blackboard_import_entries(RID p_blackboard, const TypedDictionary<StringName, Variant> &p_data);
+	Dictionary blackboard_export_entries(RID p_blackboard, bool p_include_parents = true);
 
 	Dictionary blackboard_export_type_infos();
 
 	// ---- Blackboard END ----
 
-	// ---- Behavior Tree ----
+	// ---- Graphs ----
 
-	RID behavior_tree_graph_create_node(RID p_graph_id, const StringName &p_name);
-	bool behavior_tree_graph_destroy_node(RID p_graph_id, RID p_node_id);
+	Vector<RID> graph_get_sub_graphs(RID p_graph);
+	Vector<RID> graph_get_nodes(RID p_graph);
 
-	bool behavior_tree_graph_is_bound(RID p_graph_id);
+	RID graph_create_node(RID p_graph, const StringName &p_node_type_name);
+	bool graph_destroy_node(RID p_graph, RID p_node);
 
-	bool behavior_tree_graph_set_root(RID p_graph_id, RID p_node_id);
-	RID behavior_tree_graph_get_root(RID p_graph_id);
+	bool graph_is_bound(RID p_graph);
+	bool graph_set_root(RID p_graph, RID p_node);
+	RID graph_get_root(RID p_graph);
+	TypedArray<RID> graph_get_unrooted_nodes(RID p_graph);
+	TypedArray<RID> graph_get_rooted_nodes(RID p_graph);
 
-	int32_t behavior_tree_graph_get_input_port_count(RID p_graph_id, RID p_node_id);
-	int32_t behavior_tree_graph_get_output_port_count(RID p_graph_id, RID p_node_id);
+	// ---- Graphs END ----
 
-	StringName behavior_tree_graph_get_input_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName behavior_tree_graph_get_output_port_type_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	// ---- Nodes ----
 
-	StringName behavior_tree_graph_get_input_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
-	StringName behavior_tree_graph_get_output_port_name(RID p_graph_id, RID p_node_id, int32_t p_port_index);
+	StringName node_get_type_name(RID p_graph, RID p_node);
+	bool node_is_compatible(RID p_graph, RID p_node, RID p_other_node);
 
-	TypedArray<Dictionary> behavior_tree_graph_get_input_port_infos(RID p_graph_id, RID p_node_id);
-	TypedArray<Dictionary> behavior_tree_graph_get_output_port_infos(RID p_graph_id, RID p_node_id);
+	int32_t node_get_input_port_count(RID p_graph, RID p_node);
+	int32_t node_get_output_port_count(RID p_graph, RID p_node);
+	StringName node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	StringName node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph, RID p_node);
+	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph, RID p_node);
 
-	TypedArray<RID> behavior_tree_graph_get_unrooted_nodes(RID p_graph_id);
-	TypedArray<RID> behavior_tree_graph_get_rooted_nodes(RID p_graph_id);
+	void node_is_composite(RID p_graph, RID p_node);
+	bool node_is_decorator(RID p_graph, RID p_node);
 
+	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
+	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
+	bool node_composite_remove_child_at(RID p_graph, RID p_node, int32_t p_child_index);
+	void node_composite_clear(RID p_graph, RID p_node);
 
+	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
+	bool node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
+	int64_t node_composite_child_count(RID p_graph, RID p_node);
+	void node_composite_resize(RID p_graph, RID p_node, uint64_t p_size);
+	void node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size);
+	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
+	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
+	void node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_childs);
+	bool node_composite_is_descendent(RID p_graph, RID p_node, RID p_candidate);
+	bool node_composite_is_child(RID p_graph, RID p_node, RID p_candidate);
+	
+	RID node_decorator_get_child(RID p_graph, RID p_node);
+	void node_decorator_set_child(RID p_graph, RID p_node, RID p_child);
 
-	// ---- Behavior Tree END ----
+	// ---- Nodes END ----
+
+	// ---- Pipelines ----
+
+	// ---- Pipelines END ----
 
 #if TESTS_ENABLED
 	void run_tests();
@@ -341,72 +435,39 @@ public:
 };
 
 template <typename T>
-bool BehaviorServer::blackboard_try_get_entry(RID p_blackboard_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	ERR_FAIL_NULL_V(blackboard, false);
-	return blackboard->try_get_entry(p_name, p_out_result, p_check_parents);
+bool HydrogenBehaviorServer::blackboard_try_get_entry(RID p_blackboard, const StringName &p_name, T &p_out_result, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_try_get_entry<T>(p_blackboard, p_name, p_out_result, p_check_parents);
 }
 
-template <typename T>
-const T &BehaviorServer::blackboard_get_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	ERR_FAIL_NULL_V(blackboard, p_default);
-	return blackboard->get_entry_fast(p_name, p_default, p_check_parents);
-}
-
-template <typename T>
-T BehaviorServer::blackboard_get_entry(RID p_blackboard_rid, const StringName &p_name, T p_default, bool p_check_parents) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	ERR_FAIL_NULL_V(blackboard, p_default);
-	return blackboard->get_entry(p_name, p_default, p_check_parents);
-}
-
-template <typename T>
-void BehaviorServer::blackboard_set_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_value) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	ERR_FAIL_NULL(blackboard);
-	blackboard->set_entry_fast(p_name, p_value);
-}
-
-template <typename T>
-void BehaviorServer::blackboard_set_entry(RID p_blackboard_rid, const StringName &p_name, T p_value) {
-	Blackboard *blackboard = blackboard_owner.get_or_null(p_blackboard_rid);
-	ERR_FAIL_NULL(blackboard);
-	blackboard->set_entry(p_name, p_value);
-}
-
-template <typename T>
-bool HydrogenBehaviorServer::blackboard_try_get_entry(RID p_blackboard_rid, const StringName &p_name, T &p_out_result, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_try_get_entry<T>(p_blackboard_rid, p_name, p_out_result, p_check_parents);
-}
-
-inline Variant HydrogenBehaviorServer::blackboard_try_get_as_variant(RID p_blackboard_rid, const StringName &p_name, bool p_check_parents) {
+inline Variant HydrogenBehaviorServer::blackboard_try_get_as_variant(RID p_blackboard, const StringName &p_name, bool p_check_parents) {
 	Variant out_variant = Variant();
-	blackboard_try_get_entry(p_blackboard_rid, p_name, out_variant, p_check_parents);
+	blackboard_try_get_entry(p_blackboard, p_name, out_variant, p_check_parents);
 	return out_variant;
 }
 
 template <typename T>
-const T &HydrogenBehaviorServer::blackboard_get_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_default, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_get_entry_fast<T>(p_blackboard_rid, p_name, p_default, p_check_parents);
+const T &HydrogenBehaviorServer::blackboard_get_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_default, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_get_entry_fast<T>(p_blackboard, p_name, p_default, p_check_parents);
 }
 
 template <typename T>
-T HydrogenBehaviorServer::blackboard_get_entry(RID p_blackboard_rid, const StringName &p_name, T p_default, bool p_check_parents) {
-	return BehaviorServer::get_singleton()->blackboard_get_entry<T>(p_blackboard_rid, p_name, p_default, p_check_parents);
+T HydrogenBehaviorServer::blackboard_get_entry(RID p_blackboard, const StringName &p_name, T p_default, bool p_check_parents) {
+	return BehaviorServer::get_singleton()->blackboard_get_entry<T>(p_blackboard, p_name, p_default, p_check_parents);
 }
 
 template <typename T>
-void HydrogenBehaviorServer::blackboard_set_entry_fast(RID p_blackboard_rid, const StringName &p_name, const T &p_value) {
-	BehaviorServer::get_singleton()->blackboard_set_entry_fast<T>(p_blackboard_rid, p_name, p_value);
+void HydrogenBehaviorServer::blackboard_set_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_value) {
+	BehaviorServer::get_singleton()->blackboard_set_entry_fast<T>(p_blackboard, p_name, p_value);
 }
 
 template <typename T>
-void HydrogenBehaviorServer::blackboard_set_entry(RID p_blackboard_rid, const StringName &p_name, T p_default) {
-	BehaviorServer::get_singleton()->blackboard_set_entry<T>(p_blackboard_rid, p_name, p_default);
+void HydrogenBehaviorServer::blackboard_set_entry(RID p_blackboard, const StringName &p_name, T p_default) {
+	BehaviorServer::get_singleton()->blackboard_set_entry<T>(p_blackboard, p_name, p_default);
 }
 
 }
+
+VARIANT_ENUM_CAST(hydrogen::BehaviorServer::GraphType)
 
 
 #endif //BEHAVIOR_SERVER_HPP
