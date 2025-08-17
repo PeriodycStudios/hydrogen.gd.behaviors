@@ -1,14 +1,15 @@
 #ifndef NODE_CONTAINER_HPP
 #define NODE_CONTAINER_HPP
 
-#include "godot_cpp/classes/global_constants.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "node_interfaces.hpp"
 #include "decorator.hpp"
 
-#include <cstdint>
+#include <godot_cpp/classes/global_constants.hpp>
+#include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/templates/vector.hpp>
 #include <godot_cpp/core/defs.hpp>
+
+#include <cstdint>
 #include <type_traits>
 
 namespace hydrogen::pipelines {
@@ -20,13 +21,12 @@ class PipelineNodeComposite {};
 
 #define TRY_CONVERT_CHILD()								\
 	const T* node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_COND(node == nullptr);						\
+	ERR_FAIL_COND(node == nullptr)						\
 
-#define TRY_CONVERT_CHILD_RESULT(result)				\
+#define TRY_CONVERT_CHILD_V(fail_result)				\
 	const T *node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_COND_V(node == nullptr, result);			\
+	ERR_FAIL_COND_V(node == nullptr, fail_result)		\
 	
-
 template <typename T>
 class PipelineNodeComposite<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeComposite {
 	Vector<const T*> _children = {};
@@ -38,14 +38,19 @@ public:
 	~PipelineNodeComposite() override { _children.clear(); }
 
 	void add_child_node(const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD()
+		TRY_CONVERT_CHILD();
 		add_child(node);
 	}
 
-	_FORCE_INLINE_ void add_child(const T *p_node) { _children.push_back(p_node); }
+	_FORCE_INLINE_ void add_child(const T *p_node) { 
+		if (unlikely(_children.has(p_node))) {
+			return;	
+		}
+		_children.push_back(p_node); 
+	}
 
 	bool remove_child_node(const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD_RESULT(false)
+		TRY_CONVERT_CHILD_V(false);
 		return remove_child(node);
 	}
 
@@ -57,9 +62,7 @@ public:
 		return false;
 	}
 
-	bool remove_child_node_at(int64_t p_index) override {
-		return remove_child_at(p_index);
-	}
+	bool remove_child_node_at(int64_t p_index) override { return remove_child_at(p_index); }
 
 	_FORCE_INLINE_ bool remove_child_at(int64_t p_index) { return _children.remove_at(p_index); }
 
@@ -69,7 +72,7 @@ public:
 
 	const IPipelineNode *get_child_node(int64_t p_index) const override { return get_child(p_index); }
 	void set_child_node(int64_t p_index, const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD()
+		TRY_CONVERT_CHILD();
 		set_child(p_index, node);
 	}
 
@@ -81,12 +84,16 @@ public:
 	void resize_zeroed(uint64_t p_size) override { _children.resize_zeroed(p_size); }
 
 	void swap_child_nodes(uint64_t p_first_index, uint64_t p_second_index) override {
+		const uint64_t child_count = _children.size();
+		ERR_FAIL_INDEX(p_first_index, child_count);
+		ERR_FAIL_INDEX(p_second_index, child_count);
+
 		T *p = _children.ptrw();
 		SWAP(p[p_first_index], p[p_second_index]);
 	}
 
 	Error insert_child_node(int64_t p_pos, const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD_RESULT(Error::ERR_INVALID_PARAMETER)
+		TRY_CONVERT_CHILD_V(Error::ERR_INVALID_PARAMETER);
 		return insert_child(p_pos, p_node);
 	}
 
@@ -107,7 +114,7 @@ public:
 	_FORCE_INLINE_ void append_children(const Vector<const T*> &p_to_append) { _children.append(p_to_append); }
 
 	[[nodiscard]] bool is_descendent_node(const IPipelineNode * p_node) override {
-		TRY_CONVERT_CHILD_RESULT(false)
+		TRY_CONVERT_CHILD_V(false);
 		return is_descendent(node);
 	}
 
@@ -132,7 +139,7 @@ public:
 	}
 
 	[[nodiscard]] bool is_child_node(const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD_RESULT(false)
+		TRY_CONVERT_CHILD_V(false);
 		return is_child(node);
 	}
 
@@ -165,7 +172,7 @@ public:
 };
 
 #undef TRY_CONVERT_CHILD
-#undef TRY_CONVERT_CHILD_RESULT
+#undef TRY_CONVERT_CHILD_V
 
 }
 

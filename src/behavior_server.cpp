@@ -449,6 +449,19 @@ TypedArray<RID> BehaviorServer::graph_get_rooted_nodes(RID p_graph) {
 
 // ---- Nodes ----
 
+StringName BehaviorServer::node_get_type_name(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE(StringName());
+	return node->get_type_name();
+}
+
+bool BehaviorServer::node_is_compatible(RID p_graph, RID p_node, RID p_other_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE(false);
+	const IPipelineNode *other_node = graph->get_pipeline_node(p_other_node);
+	ERR_FAIL_NULL_V(other_node, false);
+
+	return node->is_compatible(other_node);
+}
+
 int32_t BehaviorServer::node_get_input_port_count(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE(0);
 	return node->get_input_port_count();

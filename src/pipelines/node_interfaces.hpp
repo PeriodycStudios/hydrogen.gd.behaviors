@@ -7,6 +7,7 @@
 
 #include "../rid_data.hpp"
 #include "../name_helpers.hpp"
+#include "blackboard.hpp"
 
 #include <godot_cpp/classes/global_constants.hpp>
 #include <godot_cpp/templates/vector.hpp>
@@ -25,18 +26,28 @@ DEFINE_NAME_STATIC(error)
 class IPipelineNode;
 
 struct NodePortInfo {
+
+	typedef std::function<void(Blackboard *)> DefaultSetter;
+
 	const StringName name;
 	const StringName type_name;
+	const DefaultSetter set_default;
 
 	template<typename T>
-	static NodePortInfo create_port(const StringName &p_name) {
-		return NodePortInfo(p_name, get_type_name_static<T>());
+	static NodePortInfo create_port(const StringName &p_name, DefaultSetter p_setter) {
+		return NodePortInfo(p_name, get_type_name_static<T>(), p_setter);
 	}
 
 private:
 	friend class IPipelineNode;
 
-	NodePortInfo(const StringName &p_name, const StringName &p_type_name) : name(p_name), type_name(p_type_name) {}
+	NodePortInfo(
+		const StringName &p_name, 
+		const StringName &p_type_name, 
+		const DefaultSetter p_setter) : 
+		name(p_name), 
+		type_name(p_type_name), 
+		set_default(p_setter) {}
 };
 
 class IPipelineGraph;
@@ -48,7 +59,8 @@ protected:
 public:
 	virtual ~IPipelineNode() = default;
 
-	[[nodiscard]] virtual bool is_compatible(IPipelineNode *p_other_node);
+	[[nodiscard]] virtual StringName get_type_name() const = 0;
+	[[nodiscard]] virtual bool is_compatible(const IPipelineNode *p_other_node) const = 0;
 
 	[[nodiscard]] virtual int32_t get_input_port_count() const = 0;
 	[[nodiscard]] virtual int32_t get_output_port_count() const = 0;
@@ -61,6 +73,19 @@ public:
 
 	virtual void get_input_port_infos(Vector<NodePortInfo> &p_infos) const = 0;
 	virtual void get_output_port_infos(Vector<NodePortInfo> &p_infos) const = 0;
+
+	[[nodiscard]] virtual bool is_node_compatible(const IPipelineNode *p_other) const = 0;
+
+	[[nodiscard]] virtual bool is_leaf() const = 0;
+	[[nodiscard]] virtual bool is_branch() const = 0;
+	[[nodiscard]] virtual bool is_vertex() const = 0;
+
+	[[nodiscard]] virtual bool has_children() const = 0;
+	virtual void get_children(Vector<IPipelineNode *> &p_children_buffer) = 0;
+	virtual void get_children(Vector<const IPipelineNode *> &p_children_buffer) const = 0;
+
+	virtual void get_descendants(Vector<IPipelineNode *> &p_descendents_buffer) = 0;
+	virtual void get_descendants(Vector<const IPipelineNode *> &p_descendents_buffer) const = 0;
 };
 
 struct IPipelineNodeState;
@@ -71,8 +96,6 @@ struct IPipelineNodeStateful {
 	[[nodiscard]] virtual RID state_key() const = 0;
 
 	[[nodiscard]] virtual IPipelineNodeState *create_state() const = 0;
-
-	[[nodiscard]] virtual bool is_compatible(IPipelineNode *p_other) = 0;
 
 protected:
 	IPipelineNodeStateful() = default;
@@ -86,6 +109,7 @@ protected:
 };
 
 typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
+
 
 class IPipelineNodeComposite {
 protected:
@@ -134,6 +158,9 @@ protected:
 public:
 	virtual ~IPipelineGraph() = default;
 
+	virtual void update(RID p_node) = 0;
+	virtual void update(IPipelineNode *p_node) = 0;
+
 	[[nodiscard]] virtual Vector<const IPipelineGraph *> get_pipeline_sub_graphs() const = 0;
 
 	virtual Vector<const IPipelineNode*> get_pipeline_nodes() const;
@@ -154,11 +181,9 @@ public:
 		ERR_FAIL_COND_V_MSG(is_bound(), false, "Cannot destroy nodes while bound!");
 		return _destroy_node(p_node_id);
 	}
-	
+
 	virtual bool set_root_id(RID p_node_id) = 0;
 	[[nodiscard]] virtual RID get_root_id() const = 0;
-
-	
 
 	typedef std::function<bool(const IPipelineNode *)> PipelineNodePredicate;
 

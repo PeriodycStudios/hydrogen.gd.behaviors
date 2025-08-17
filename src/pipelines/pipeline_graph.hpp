@@ -7,6 +7,7 @@
 
 #include "node_interfaces.hpp"
 
+#include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/core/error_macros.hpp>
@@ -15,6 +16,7 @@
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/vector.hpp>
 #include <godot_cpp/variant/rid.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
 
 #include <cstdint>
 #include <type_traits>
@@ -31,6 +33,8 @@ class PipelineGraph {};
 
 template <typename T>
 class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineGraph {
+
+	static HashMap<StringName, std::function<T *()>> _registered_nodes;
 
 public:
 	typedef std::function<bool(const T *)> NodePredicate;
@@ -69,6 +73,7 @@ private:
 
 protected:
 	HashMap<RID, T*> _nodes = {};
+	HashMap<RID, RID> _node_parents = {};
 	RID_PtrOwner<T> _nodes_owner = {};
 	T *_root = nullptr;
 
@@ -154,7 +159,6 @@ protected:
 		return nodes;
 	}
 
-
 	template<typename U> 
 	Vector<U> _collect_nodes() const {
 		std::scoped_lock lock(*_mutex);
@@ -172,7 +176,93 @@ protected:
 		return collected_nodes;
 	}
 
+	void _unparent(const T *p_node) {
+		auto parent_rid_iter = _node_parents.find(p_node);
+		if (likely(parent_rid_iter != _node_parents.end())) {
+			T *parent = get_node(parent_rid_iter->value);
+
+			if (likely(parent)) {
+				IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(parent);
+				if (likely(composite != nullptr)) {
+					bool result = composite->remove_child_node(p_node);
+					if (unlikely(!result)) {
+						ERR_PRINT("Node already removed, this shouldn't happen.");
+					}
+				}
+
+				IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(parent);
+				if (unlikely(decorator != nullptr)) {
+					decorator->set_pipline_node(nullptr);
+				}
+			}
+			else {
+				ERR_PRINT("Couldn't find parent node.");
+			}
+			_node_parents.erase(p_node->get_self());
+		}
+	}
+
+	RID _create_node(const StringName &p_node_type_name) override {
+		const auto iter = _registered_nodes.find(p_node_type_name);
+        ERR_FAIL_COND_V(iter == _registered_nodes.end(), RID());
+
+		T *node = iter->value();
+		RID rid = _nodes_owner.make_rid(node);
+		node->set_self(rid);
+		_nodes[rid] = node;
+		
+        return rid;
+	}
+
+	bool _destroy_node(RID p_node) override {
+		
+		T *node = get_node(p_node);
+		ERR_FAIL_NULL_V(node, false);
+
+		_unparent(node);
+
+		Vector<T*> children = {};
+		node->get_children(children);
+		for(T* child : children) {
+			RID child_rid = child->get_self();
+			_node_parents.erase(child_rid);
+		}
+
+		RID rid = node->get_self();
+		_nodes.erase(rid);
+		_nodes_owner.free(rid);
+		memdelete(node);
+		return true;
+	}
+
 public:
+
+	template<typename U,
+		std::enable_if_t<
+			std::is_base_of_v<T, U> &&
+			!std::is_abstract_v<U>>
+	>
+	static void register_node() {
+		StringName node_type_name = U::get_node_name();
+		auto iter = _registered_nodes.find(node_type_name);
+		if (iter == _registered_nodes.end()) {
+			auto create_func = []() { return memnew(U); };
+			_registered_nodes[node_type_name] = create_func;
+		}
+		else {
+			WARN_PRINT_ED("Node type already registered");
+		}
+	}
+
+	static LocalVector<StringName> get_registered_node_type_names() {
+		LocalVector<StringName> type_names = {};
+		type_names.resize(_registered_nodes.size());
+		int32_t idx = 0;
+		for (const auto &kvp : _registered_nodes) {
+			type_names[idx++] = kvp.key;
+		}
+		return type_names;
+	}
 
 	~PipelineGraph() override {
 		_root = nullptr;
