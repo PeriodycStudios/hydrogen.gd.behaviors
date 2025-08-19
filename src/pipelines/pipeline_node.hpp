@@ -2,6 +2,7 @@
 #define PIPELINE_NODE_HPP
 
 #include "node_interfaces.hpp"
+#include "rid_data.hpp"
 
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/core/error_macros.hpp>
@@ -12,12 +13,14 @@
 
 namespace hydrogen::pipelines {
 
-class PipelineNode : public IPipelineNode {
+class PipelineNode : public RidData, public IPipelineNode {
 protected:
     PipelineNode() = default;
 
 public:
     ~PipelineNode() override = default;
+
+    RID get_id() const override { return get_self(); }
 
     [[nodiscard]] int32_t get_input_port_count() const override {
         return 0;
@@ -45,6 +48,12 @@ public:
 
     void get_input_port_infos(Vector<NodePortInfo> &p_infos) const override {}
     void get_output_port_infos(Vector<NodePortInfo> &p_infos) const override {}
+
+    bool supports_children() const override { return false; }
+    bool has_children() const override { return false; }
+
+    void get_children(Vector<const IPipelineNode *> &p_nodes) const override {}
+    void get_descendants(Vector<const IPipelineNode *> &p_nodes) const override {}
 };
 
 }

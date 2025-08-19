@@ -5,6 +5,7 @@
 #ifndef TESTS_HPP
 #define TESTS_HPP
 
+#include "test_runner.hpp"
 #define DOCTEST_CONFIG_IMPLEMENTATION_IN_DLL
 #define DOCTEST_CONFIG_IMPLEMENT
 
@@ -42,6 +43,9 @@ int behavior_test_runner() {
 
 	return result;
 }
+
+void behavior_tests_runner_include() {}
+
 }
 
 #endif //TESTS_HPP

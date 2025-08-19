@@ -104,14 +104,14 @@ private:
 		return rid;
 	}
 
-	template<typename TPIPELINE> 
+	template<typename TPIPELINE, typename TGRAPH> 
 	RID _pipeline_create_helper(RID p_blackboard, RID p_graph) {
 		LOCK_THREE_V(_pipeline_mutex, _blackboard_mutex, _graph_mutex, RID());
 		
-		Blackboard* blackboard = _blackboard_owner.get_or_null(p_blackboard);
+		const Blackboard* blackboard = _blackboard_owner.get_or_null(p_blackboard);
 		ERR_FAIL_NULL_V(blackboard, RID());
 
-		IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+		TGRAPH *graph = dynamic_cast<TGRAPH *>(_graph_owner.get_or_null(p_graph));
 		ERR_FAIL_NULL_V(graph, RID());
 
 		TPIPELINE *pipeline = memnew(TPIPELINE(blackboard, graph));
@@ -213,8 +213,7 @@ public:
 	bool graph_is_bound(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
-	TypedArray<RID> graph_get_unrooted_nodes(RID p_graph);
-	TypedArray<RID> graph_get_rooted_nodes(RID p_graph);
+	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
 
 	// ---- Graphs END ----
 
@@ -381,8 +380,7 @@ public:
 	bool graph_is_bound(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
-	TypedArray<RID> graph_get_unrooted_nodes(RID p_graph);
-	TypedArray<RID> graph_get_rooted_nodes(RID p_graph);
+	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
 
 	// ---- Graphs END ----
 

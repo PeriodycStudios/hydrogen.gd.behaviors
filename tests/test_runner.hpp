@@ -5,6 +5,8 @@ namespace hydrogen::tests {
 
 int behavior_test_runner();
 
+void behavior_tests_runner_include();
+
 }
 
 #endif

@@ -2,7 +2,14 @@
 #include "behavior_trees/behavior_tree_graph.hpp"
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "behavior_trees/behavior_trees.hpp"
+#include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/templates/pair.hpp"
+#include "godot_cpp/templates/vector.hpp"
+#include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/typed_array.hpp"
+#include "pipelines/node_interfaces.hpp"
 
+#include <cstdint>
 #include <godot_cpp/core/property_info.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
@@ -83,7 +90,7 @@ RID BehaviorServer::pipeline_create(GraphType p_graph_type, RID p_blackboard, RI
 
 	switch (p_graph_type) {
 	case BEHAVIOR_TREE:
-		return _pipeline_create_helper<BehaviorTree>(p_blackboard, p_graph);
+		return _pipeline_create_helper<BehaviorTree, BehaviorTreeGraph>(p_blackboard, p_graph);
 	default:
 		ERR_FAIL_V(RID());
 	}
@@ -301,7 +308,7 @@ Dictionary BehaviorServer::blackboard_export_type_infos() {
 // ---- Behavior Tree ----
 
 void BehaviorServer::_graph_erase(IPipelineGraph *p_graph) {
-	_graph_emit_destroyed(p_graph->get_self());
+	_graph_emit_destroyed(p_graph->get_id());
 }
 
 void BehaviorServer::_pipeline_erase(Pipeline *p_behavior_tree) {
@@ -335,11 +342,11 @@ void BehaviorServer::_pipeline_emit_destroyed(RID p_behavior_tree) {
 	ERR_FAIL_NULL_V(graph, fail_result)							\
 
 #define TRY_GET_CONST_NODE(fail_result)								\
-	const IPipelineNode *node = graph->get_pipeline_node(p_node);	\
+	const IPipelineNode *node = graph->get_node(p_node);	\
 	ERR_FAIL_NULL_V(node, fail_result)								\
 
 #define TRY_GET_NODE(fail_result)							\
-	IPipelineNode *node = graph->get_pipeline_node(p_node);	\
+	IPipelineNode *node = graph->get_node(p_node);	\
 	ERR_FAIL_NULL_V(node, fail_result)						\
 
 #define TRY_GET_CONST_GRAPH_AND_NODE(fail_result)	\
@@ -365,13 +372,14 @@ TypedArray<RID> BehaviorServer::graph_get_sub_graphs(RID p_graph) {
 
 	TypedArray<RID> rids = {};
 
-	Vector<const IPipelineGraph *> sub_graphs = graph->get_pipeline_sub_graphs();
+	Vector<const IPipelineGraph *> sub_graphs = {};
+	graph->get_sub_graphs(sub_graphs);
 	const int64_t sub_graphs_count = sub_graphs.size();
 	if (likely(sub_graphs_count > 0)) {
 		rids.resize(sub_graphs.size());
 	}
 	for (int64_t i = 0; i < sub_graphs.size(); ++i) {
-		rids[i] = sub_graphs[i]->get_self();
+		rids[i] = sub_graphs[i]->get_id();
 	}
 
 	return rids;
@@ -382,14 +390,15 @@ TypedArray<RID> BehaviorServer::graph_get_nodes(RID p_graph) {
 
 	TypedArray<RID> rids = {};
 	
-	Vector<const IPipelineNode *> nodes = graph->get_pipeline_nodes();
+	Vector<const IPipelineNode *> nodes = {};
+	graph->get_nodes(nodes);
 	const int64_t nodes_count = nodes.size();
 	if (likely(nodes_count > 0)) {
 		rids.resize(nodes_count);
 	}
 
 	for(int64_t i = 0; i < nodes_count; ++i) {
-		rids[i] = nodes[i]->get_self();
+		rids[i] = nodes[i]->get_id();
 	}
 
 	return rids;
@@ -412,38 +421,53 @@ bool BehaviorServer::graph_is_bound(RID p_graph) {
 
 bool BehaviorServer::graph_set_root(RID p_graph, RID p_node) {
 	TRY_GET_GRAPH_EDITABLE(false);
-	return graph->set_root_id(p_node);
+	return graph->set_root(p_node);
 }
 
 RID BehaviorServer::graph_get_root(RID p_graph) {
 	TRY_GET_CONST_GRAPH(RID());
-	return graph->get_root_id();
+	return graph->get_root();
 }
 
-TypedArray<RID> prepare_nodes(const Vector<RID> &p_nodes) {
-	TypedArray<RID>	result = {};
-	if (p_nodes.is_empty()) {
-		return result;
+TypedArray<Dictionary> BehaviorServer::graph_get_rooted_statuses(RID p_graph) {
+	TRY_GET_CONST_GRAPH({});
+
+	Vector<Pair<const IPipelineNode *, bool>> statuses = {};
+	graph->get_rooted_statuses(statuses);
+
+	if (likely(statuses.is_empty())) {
+		return {};
 	}
 
-	const int32_t nodes_count = p_nodes.size();
+	const int64_t nodes_count = statuses.size();
+
+	TypedArray<Dictionary> result = {};
 	result.resize(nodes_count);
-	for (int32_t i = 0; i < nodes_count; ++i) {
-		result[i] = p_nodes[i];
-	}
 
+	for (int64_t idx = 0; idx < nodes_count; ++idx) {
+		Dictionary dict = {};
+		auto pair = statuses[idx];
+		dict["node"] = pair.first->get_id();
+		dict["is_rooted"] = pair.second;
+	}
+	
 	return result;
 }
 
-TypedArray<RID> BehaviorServer::graph_get_unrooted_nodes(RID p_graph) {
-	TRY_GET_CONST_GRAPH({});
-	return prepare_nodes(graph->get_unrooted_nodes());
-}
+// TypedArray<RID> prepare_nodes(const Vector<RID> &p_nodes) {
+// 	TypedArray<RID>	result = {};
+// 	if (p_nodes.is_empty()) {
+// 		return result;
+// 	}
 
-TypedArray<RID> BehaviorServer::graph_get_rooted_nodes(RID p_graph) {
-	TRY_GET_CONST_GRAPH({});
-	return prepare_nodes(graph->get_rooted_nodes());
-}
+// 	const int32_t nodes_count = p_nodes.size();
+// 	result.resize(nodes_count);
+// 	for (int32_t i = 0; i < nodes_count; ++i) {
+// 		result[i] = p_nodes[i];
+// 	}
+
+// 	return result;
+// }
 
 // ---- Graph END ----
 
@@ -456,7 +480,7 @@ StringName BehaviorServer::node_get_type_name(RID p_graph, RID p_node) {
 
 bool BehaviorServer::node_is_compatible(RID p_graph, RID p_node, RID p_other_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE(false);
-	const IPipelineNode *other_node = graph->get_pipeline_node(p_other_node);
+	const IPipelineNode *other_node = graph->get_node(p_other_node);
 	ERR_FAIL_NULL_V(other_node, false);
 
 	return node->is_compatible(other_node);
@@ -670,8 +694,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("graph_is_bound", "graph"), &HydrogenBehaviorServer::graph_is_bound);
 	ClassDB::bind_method(D_METHOD("graph_set_root", "graph", "node"), &HydrogenBehaviorServer::graph_set_root);
 	ClassDB::bind_method(D_METHOD("graph_get_root", "graph"), &HydrogenBehaviorServer::graph_get_root);
-	ClassDB::bind_method(D_METHOD("graph_get_unrooted_nodes", "graph"), &HydrogenBehaviorServer::graph_get_unrooted_nodes);
-	ClassDB::bind_method(D_METHOD("graph_get_rooted_nodes", "graph"), &HydrogenBehaviorServer::graph_get_rooted_nodes);
+	ClassDB::bind_method(D_METHOD("graph_get_rooted_statuses", "graph"), &HydrogenBehaviorServer::graph_get_rooted_statuses);
 
 	ClassDB::bind_method(D_METHOD("node_get_input_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_input_port_count);
 	ClassDB::bind_method(D_METHOD("node_get_output_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_output_port_count);
@@ -804,12 +827,8 @@ RID HydrogenBehaviorServer::graph_get_root(RID p_graph) {
 	return BehaviorServer::get_singleton()->graph_get_root(p_graph);
 }
 
-TypedArray<RID> HydrogenBehaviorServer::graph_get_unrooted_nodes(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_unrooted_nodes(p_graph);
-}
-
-TypedArray<RID> HydrogenBehaviorServer::graph_get_rooted_nodes(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_rooted_nodes(p_graph);
+TypedArray<Dictionary> HydrogenBehaviorServer::graph_get_rooted_statuses(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_rooted_statuses(p_graph);
 }
 
 // ---- Graphs END ----

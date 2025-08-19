@@ -1,8 +1,11 @@
 #ifndef NODE_WRAPPER_HPP
 #define NODE_WRAPPER_HPP
 
+#include "godot_cpp/core/memory.hpp"
+#include "mutex_helpers.hpp"
 #include "node_interfaces.hpp"
 #include <godot_cpp/core/defs.hpp>
+#include <mutex>
 #include <type_traits>
 
 namespace hydrogen::pipelines {
@@ -12,19 +15,29 @@ class PipelineNodeDecorator {};
 
 template <typename T>
 class PipelineNodeDecorator<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeDecorator {
-	T* _decorated_node = nullptr;
-
 protected:
-	T* get_child() { return _decorated_node; }
-	PipelineNodeDecorator() = default;
+	T* _decorated_node = nullptr;
+	std::mutex *_mutex = nullptr;
+
+	PipelineNodeDecorator() : _mutex(memnew(std::mutex)) {}
 
 public:
 
-	[[nodiscard]] IPipelineNode *get_pipeline_node() const override { return _decorated_node; }
-	[[nodiscard]] _FORCE_INLINE_ T *get_child() const { return _decorated_node; }
-	_FORCE_INLINE_ void set_child(T *p_node) { _decorated_node = p_node; }
+	~PipelineNodeDecorator() override {
+		memdelete(_mutex);
+		_mutex = nullptr;
+		_decorated_node = nullptr;
+	}
 
-	~PipelineNodeDecorator() override = default;
+	[[nodiscard]] IPipelineNode *get_node() const override { 
+		LOCK_ONE_V(_mutex, nullptr);
+		return _decorated_node;
+	}
+	
+	void set_node(const IPipelineNode *p_node) override {
+		LOCK_ONE(_mutex);
+		_decorated_node = p_node;
+	}
 };
 }
 

@@ -14,7 +14,8 @@ _instance_blackboard(memnew(Blackboard)), _state_blackboard(memnew(Blackboard)),
 	_state_blackboard->set_parent(_instance_blackboard);
 	_state_blackboard->set_entry_fast(error_name(), String(""));
 
-	const Vector<const IPipelineNode *> collected_nodes = _graph->get_pipeline_nodes();
+	Vector<const IPipelineNode *> collected_nodes = {};
+	_graph->get_nodes(collected_nodes);
 	LocalVector<Pair<RID, const IPipelineNodeStateful *>> stateful_nodes = {};
 	stateful_nodes.reserve(collected_nodes.size());
 

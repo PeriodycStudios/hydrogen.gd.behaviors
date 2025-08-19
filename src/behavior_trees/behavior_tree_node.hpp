@@ -3,6 +3,7 @@
 
 #include "../name_helpers.hpp"
 #include "../pipelines/pipeline_node.hpp"
+#include "godot_cpp/templates/vector.hpp"
 
 namespace hydrogen::behavior_trees {
 
@@ -30,6 +31,9 @@ public:
 	Result execute(BehaviorTreeContext &p_context) const;
 
 	void halt(BehaviorTreeContext &p_context) const;
+
+	virtual void get_children(Vector<const BehaviorTreeNode *> &p_nodes) const {}
+	virtual void get_descendants(Vector<const BehaviorTreeNode *> &p_nodes) const {}
 };
 }
 

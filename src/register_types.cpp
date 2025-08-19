@@ -5,8 +5,10 @@
 #include <godot_cpp/classes/engine.hpp>
 
 #include "behavior_server.hpp"
+#include "behavior_trees/behavior_tree_graph.hpp"
 #include "blackboard.hpp"
 #include "hydrogen_blackboard.hpp"
+#include "behavior_trees/behavior_trees.hpp"
 
 #ifdef TESTS_ENABLED
 #include "test_runner.hpp"
@@ -14,6 +16,8 @@
 
 using namespace godot;
 using namespace hydrogen;
+using namespace pipelines;
+using namespace behavior_trees;
 
 static BehaviorServer *behavior_server = nullptr;
 static HydrogenBehaviorServer *hydrogen_behavior_server = nullptr;
@@ -26,7 +30,15 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 		return;
 	}
 
+#if TESTS_ENABLED
+	// get rid of warnings about unused test header
+	// this function does nothing
+	tests::behavior_tests_runner_include();
+#endif
+
 	Blackboard::registration_init();
+	BehaviorTreeGraph::init();
+	BehaviorTree::register_types();
 
 	GDREGISTER_INTERNAL_CLASS(BehaviorServer);
 	GDREGISTER_CLASS(HydrogenBehaviorServer);
@@ -39,7 +51,7 @@ void initialize_gdextension_types(ModuleInitializationLevel p_level)
 
 	Engine::get_singleton()->register_singleton(k_server_name, HydrogenBehaviorServer::get_singleton());
 
-	behavior_trees::BehaviorTree::register_types();
+	
 }
 
 void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
@@ -58,6 +70,7 @@ void uninitialize_gdextension_types(ModuleInitializationLevel p_level) {
 		memdelete(behavior_server);
 	}
 
+	BehaviorTreeGraph::finish();
 	Blackboard::registration_finish();
 }
 

@@ -1,6 +1,7 @@
 
 #include "behavior_trees.hpp"
 #include "behavior_tree_node.hpp"
+#include "pipelines/pipeline.hpp"
 #include <godot_cpp/core/defs.hpp>
 
 namespace hydrogen::behavior_trees {
