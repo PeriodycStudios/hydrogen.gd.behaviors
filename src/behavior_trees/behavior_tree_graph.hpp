@@ -20,6 +20,8 @@ class BehaviorTreeGraph : public PipelineGraph<BehaviorTreeNode> {
 public:
 	BehaviorTreeGraph() = default;
 	~BehaviorTreeGraph() override = default;
+
+	static void register_core_nodes();
 };
 
 } // hydrogen

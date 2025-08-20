@@ -37,6 +37,13 @@ class BehaviorTreeNodeDecorator : public BehaviorTreeNode, public PipelineNodeDe
 
 protected:
 	BehaviorTreeNodeDecorator() = default;
+
+	void _halt(BehaviorTreeContext &p_context) const override {
+		if (likely(_decorated_node != nullptr)) {
+			_decorated_node->halt(p_context);
+		}
+	}
+
 public:
 	~BehaviorTreeNodeDecorator() override = default;
 

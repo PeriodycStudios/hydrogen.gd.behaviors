@@ -4,34 +4,52 @@
 
 #ifndef SEQUENCE_NODE_HPP
 #define SEQUENCE_NODE_HPP
+#include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
+#include "godot_cpp/core/defs.hpp"
+#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-struct SequenceNode : public CompositeNode, pipelines::IPipelineNodeStateful {
+class SequenceNode : public CompositeNode {
+	DECLARE_PIPELINE_NODE(SequenceNode);
+protected:
+	Result _execute(BehaviorTreeContext &p_context) const override { 
+		CompositeNodeState * state = get_state(p_context);
+		if (unlikely(state == nullptr)) {
+			return FAILURE;
+		}
 
-	// struct SequenceNodeState : public pipelines::IPipelineNodeState {
-	// 	int current_child_index = 0;
-	// };
-	// Need to take into account resuming a paused node.
-	// const Vector<BehaviorTreeNode*> &children = get_children();
-	// for (const BehaviorTreeNode *child : children) {
-	// 	const Result child_result = child->run(p_blackboard);
-	// 	if (child_result != SUCCESS) {
-	// 		return child_result;
-	// 	}
-	// }
-	//
-	// return SUCCESS;
+		try_init_state(state);
+
+		while (state->current_child_index < get_node_count()) {
+			
+			const BehaviorTreeNode *child = _children.get(state->current_child_index);
+
+			Result result = child->execute(p_context);
+			switch (result) {
+				case BehaviorTreeNode::RUNNING:
+					return RUNNING;
+				case BehaviorTreeNode::SUCCESS:
+					state->current_child_index++;
+					continue;
+				case BehaviorTreeNode::FAILURE:
+					state->current_child_index = -1;
+					return FAILURE;
+				default:
+					unknown_result_handler(result);
+					return FAILURE;
+			}
+		}
+
+		return SUCCESS;
+	}
+
+public:
 	SequenceNode() = default;
 	~SequenceNode() override = default;
-
-	pipelines::IPipelineNodeState *create_state() const override { return nullptr; }
-
-	Result execute(BehaviorTreeContext &p_context) const override { return FAILURE; }
-	void halt(BehaviorTreeContext &p_context) const override { }
 };
 
 // TODO: NonDeterministic Selector

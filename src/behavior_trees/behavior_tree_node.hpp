@@ -4,6 +4,7 @@
 #include "../name_helpers.hpp"
 #include "../pipelines/pipeline_node.hpp"
 #include "godot_cpp/templates/vector.hpp"
+#include "godot_cpp/variant/string.hpp"
 
 namespace hydrogen::behavior_trees {
 
@@ -20,11 +21,24 @@ public:
 		RUNNING = 2,
 	};
 
+	static String get_result_name(Result p_result) {
+		switch (p_result) {
+			case SUCCESS: return "SUCCESS";
+			case FAILURE: return "FAILURE";
+			case RUNNING: return "RUNNING";
+			default: return "Unknown";
+		}
+	}
+
 protected:
 	friend class BehaviorTree;
 
 	virtual Result _execute(BehaviorTreeContext &p_context) const = 0;
 	virtual void _halt(BehaviorTreeContext &p_context) const = 0;
+
+	static void unknown_result_handler(Result result) {
+		ERR_PRINT(vformat("Unimplemented result behavior: {}", static_cast<int>(result)));
+	}
 
 public:
 	

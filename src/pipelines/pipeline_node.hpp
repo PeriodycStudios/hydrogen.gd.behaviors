@@ -64,9 +64,8 @@ const static Vector<NodePortInfo> _input_ports	    \
 #define DECLARE_OUTPUT_PORTS()                      \
 const static Vector<NodePortInfo> _output_ports	    \
 
-#define DECLARE_PIPELINE_NODE(type_name, graph_node_base)	                        \
+#define DECLARE_PIPELINE_NODE(type_name)                                            \
 	DEFINE_NAME_STATIC(type_name);					                                \
-    typedef graph_node_base node_type;                                              \
                                                                                     \
 public:												                                \
 	static StringName node_name() {					                                \

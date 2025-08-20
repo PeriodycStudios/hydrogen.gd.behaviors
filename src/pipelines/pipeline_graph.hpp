@@ -63,6 +63,7 @@ protected:
 
 	_FORCE_INLINE_ static void _finish() {
 		memdelete(_register_mutex);
+		_registered_nodes.clear();
 	}
 
 	friend class Pipeline;
@@ -184,6 +185,9 @@ protected:
 		memdelete(node);
 		return true;
 	}
+
+	template<typename U, typename = void>
+	static void _register_node() {}
 
 	template<typename U,
 		std::enable_if_t<
@@ -380,6 +384,7 @@ std::mutex *PipelineGraph<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>
 public:																				\
 	_FORCE_INLINE_ static void init() {												\
 		_init();																	\
+		register_core_nodes();														\
 	}																				\
 																					\
 	_FORCE_INLINE_ static void finish() {											\
@@ -387,12 +392,12 @@ public:																				\
 	}																				\
 																					\
 	template<typename T>															\
-	_FORCE_INLINE_ static void register_node(const StringName &p_node_type_name) {	\
-		PipelineGraph::_register_node<T>(p_node_type_name);							\
+	_FORCE_INLINE_ static void register_node() {									\
+		_register_node<T>();														\
 	}																				\
 																					\
 	_FORCE_INLINE_ static LocalVector<StringName> get_registered_node_type_names() {\
-		return PipelineGraph::_get_registered_node_type_names();					\
+		return _get_registered_node_type_names();									\
 	}																				\
 private:																			\
 

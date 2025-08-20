@@ -4,35 +4,52 @@
 
 #ifndef SELECTOR_NODES_HPP
 #define SELECTOR_NODES_HPP
+#include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
+#include "behavior_tree_context.hpp"
+#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
-class SelectorNode : public CompositeNode, public pipelines::IPipelineNodeStateful {
-	//
-	// struct SelectorNodeState : public pipelines::IPipelineNodeState{
-	// 	int current_child_index = 0;
-	// };
-	//
-/*
- *children : Task[]
- *run() -> Result {
- * foreach child in children:
- *   if c.run() return true
- * return false
-*/
+class SelectorNode : public CompositeNode {
+	DECLARE_PIPELINE_NODE(SelectorNode);
+protected:
+
+	Result _execute(BehaviorTreeContext &p_context) const override {
+		CompositeNodeState * state = get_state(p_context);
+		if (unlikely(state == nullptr)) {
+			return FAILURE;
+		}
+
+		try_init_state(state);
+
+		while (state->current_child_index < get_node_count()) {
+			const BehaviorTreeNode *child = _children.get(state->current_child_index);
+			Result result = child->execute(p_context);
+			switch (result) {
+				case BehaviorTreeNode::RUNNING:
+					return RUNNING;
+				case BehaviorTreeNode::SUCCESS:
+					state->current_child_index = -1;
+					return SUCCESS;
+				case BehaviorTreeNode::FAILURE:
+					state->current_child_index++;
+					continue;
+				default:
+					unknown_result_handler(result);
+					return FAILURE;
+			}
+		}
+
+		return FAILURE;
+	}
+
 public:
 	SelectorNode() = default;
 	~SelectorNode() override = default;
-
-	pipelines::IPipelineNodeState *create_state() const override { return nullptr; }
-
-	Result execute(BehaviorTreeContext &p_context) const override { return FAILURE; }
-
-	void halt(BehaviorTreeContext &p_context) const override {}
 };
 
-// TODO: Nondeterministic sequence
+// TODO: Nondeterministic selector
 
 } // hydrogen
 
