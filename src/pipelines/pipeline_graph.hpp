@@ -290,12 +290,22 @@ public:
 		}
 	}
 
-	const IPipelineNode* get_node(RID p_node_id) const override {
+	const IPipelineNode* get_node(RID p_node) const override {
 		LOCK_ONE_V(_mutex, nullptr);
-		return _get_node(p_node_id);
+		return _get_node(p_node);
+	}
+
+	IPipelineNode *get_node(RID p_node) override {
+		LOCK_ONE_V(_mutex, nullptr);
+		return _get_node(p_node);
 	}
 
 	const IPipelineNode *get_root_node() const override {
+		LOCK_ONE_V(_mutex, nullptr);
+		return _root;
+	}
+
+	IPipelineNode *get_root_node() override {
 		LOCK_ONE_V(_mutex, nullptr);
 		return _root;
 	}

@@ -222,40 +222,34 @@ public:
 	StringName node_get_type_name(RID p_graph, RID p_node);
 	bool node_is_compatible(RID p_graph, RID p_node, RID p_other_node);
 
-	int32_t node_get_input_port_count(RID p_graph, RID p_node);
-	int32_t node_get_output_port_count(RID p_graph, RID p_node);
-	StringName node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index);
-	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph, RID p_node);
-	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph, RID p_node);
+	TypedArray<Dictionary> node_get_port_infos(RID p_graph, RID p_node);
 
-	void node_is_composite(RID p_graph, RID p_node);
+	bool node_is_composite(RID p_graph, RID p_node);
 	bool node_is_decorator(RID p_graph, RID p_node);
 
 	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
-	bool node_composite_remove_child_at(RID p_graph, RID p_node, int32_t p_child_index);
+	bool node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_clear(RID p_graph, RID p_node);
 
 	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
-	bool node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
+	void node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
 	int64_t node_composite_child_count(RID p_graph, RID p_node);
 	void node_composite_resize(RID p_graph, RID p_node, uint64_t p_size);
 	void node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size);
 	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
 	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
-	void node_composite_append_children(RID p_graph, RID p_node, const Vector<RID> &p_childs);
-	bool node_composite_is_descendent(RID p_graph, RID p_node, RID p_candidate);
-	bool node_composite_is_child(RID p_graph, RID p_node, RID p_candidate);
+	void node_composite_append_children(RID p_graph, RID p_node, const Vector<RID> &p_children);
 	
-	RID node_decorator_get_child(RID p_graph, RID p_node);
-	void node_decorator_set_child(RID p_graph, RID p_node, RID p_child);
+	RID node_decorator_get_node(RID p_graph, RID p_node);
+	void node_decorator_set_node(RID p_graph, RID p_node, RID p_child);
 
 	// ---- Nodes END ----
 
 	// ---- Pipelines ----
+
+	void pipeline_execute(RID p_pipeline);
+	void pipeline_halt(RID p_pipeline);
 
 	// ---- Pipelines END ----
 };
@@ -389,14 +383,16 @@ public:
 	StringName node_get_type_name(RID p_graph, RID p_node);
 	bool node_is_compatible(RID p_graph, RID p_node, RID p_other_node);
 
-	int32_t node_get_input_port_count(RID p_graph, RID p_node);
-	int32_t node_get_output_port_count(RID p_graph, RID p_node);
-	StringName node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index);
-	StringName node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index);
-	TypedArray<Dictionary> node_get_input_port_infos(RID p_graph, RID p_node);
-	TypedArray<Dictionary> node_get_output_port_infos(RID p_graph, RID p_node);
+	TypedArray<Dictionary> node_get_port_infos(RID p_graph, RID p_node);
+
+	// int32_t node_get_input_port_count(RID p_graph, RID p_node);
+	// int32_t node_get_output_port_count(RID p_graph, RID p_node);
+	// StringName node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	// StringName node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index);
+	// StringName node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	// StringName node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index);
+	// TypedArray<Dictionary> node_get_input_port_infos(RID p_graph, RID p_node);
+	// TypedArray<Dictionary> node_get_output_port_infos(RID p_graph, RID p_node);
 
 	void node_is_composite(RID p_graph, RID p_node);
 	bool node_is_decorator(RID p_graph, RID p_node);

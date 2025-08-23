@@ -15,7 +15,7 @@ namespace hydrogen::behavior_trees {
 
 using namespace pipelines;
 
-class BehaviorTreeNodeDecorator : public BehaviorTreeNode, public PipelineNodeDecorator<BehaviorTreeNode> {
+class DecoratorNode : public BehaviorTreeNode, public PipelineNodeDecorator<BehaviorTreeNode> {
 
 	template<typename T>
 	void _get_children(Vector<const T *> &p_nodes) const {
@@ -36,7 +36,7 @@ class BehaviorTreeNodeDecorator : public BehaviorTreeNode, public PipelineNodeDe
 	}
 
 protected:
-	BehaviorTreeNodeDecorator() = default;
+	DecoratorNode() = default;
 
 	void _halt(BehaviorTreeContext &p_context) const override {
 		if (likely(_decorated_node != nullptr)) {
@@ -45,7 +45,7 @@ protected:
 	}
 
 public:
-	~BehaviorTreeNodeDecorator() override = default;
+	~DecoratorNode() override = default;
 
 	bool supports_children() const override { return true; }
 	bool has_children() const override {

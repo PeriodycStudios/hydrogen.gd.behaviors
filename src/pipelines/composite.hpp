@@ -45,17 +45,18 @@ public:
 		_children.clear();
 	}
 
-	void add_child_node(const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD();
-		add_child(node);
+	bool add_child_node(const IPipelineNode *p_node) override {
+		TRY_CONVERT_CHILD_V(false);
+		return add_child(node);
 	}
 
-	_FORCE_INLINE_ void add_child(const T *p_node) { 
-		LOCK_ONE(_mutex);
+	_FORCE_INLINE_ bool add_child(const T *p_node) { 
+		LOCK_ONE_V(_mutex, false);
 		if (unlikely(_children.has(p_node))) {
-			return;	
+			return false;	
 		}
-		_children.push_back(p_node); 
+		_children.push_back(p_node);
+		return true;
 	}
 
 	bool remove_child_node(const IPipelineNode *p_node) override {

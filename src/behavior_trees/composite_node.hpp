@@ -54,17 +54,9 @@ protected:
 		}
 	}
 
-	_FORCE_INLINE_ CompositeNodeState *get_state(BehaviorTreeContext &p_context) const {
-		CompositeNodeState * state = dynamic_cast<CompositeNodeState *>(p_context.get_state(get_self()));
-		if (unlikely(state == nullptr)) {
-			ERR_PRINT(vformat("Unable to get node state for {}", get_type_name()));
-		}
-		return state;
-	}
-
 	void _halt(BehaviorTreeContext &p_context) const override {
 		
-		CompositeNodeState *state = get_state(p_context);
+		CompositeNodeState *state = p_context.get_state<CompositeNodeState>(state_key());
 		
 		if (likely(state == nullptr)) {
 			state->current_child_index = -1;

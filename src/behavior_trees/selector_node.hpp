@@ -16,7 +16,7 @@ class SelectorNode : public CompositeNode {
 protected:
 
 	Result _execute(BehaviorTreeContext &p_context) const override {
-		CompositeNodeState * state = get_state(p_context);
+		CompositeNodeState *state = p_context.get_state<CompositeNodeState>(state_key());
 		if (unlikely(state == nullptr)) {
 			return FAILURE;
 		}

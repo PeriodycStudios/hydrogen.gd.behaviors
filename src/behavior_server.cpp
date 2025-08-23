@@ -2,12 +2,19 @@
 #include "behavior_trees/behavior_tree_graph.hpp"
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "behavior_trees/behavior_trees.hpp"
+#include "blackboard.hpp"
+#include "godot_cpp/classes/global_constants.hpp"
 #include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/templates/pair.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/rid.hpp"
+#include "godot_cpp/variant/string_name.hpp"
 #include "godot_cpp/variant/typed_array.hpp"
+#include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline.hpp"
 
 #include <cstdint>
 #include <godot_cpp/core/property_info.hpp>
@@ -60,12 +67,15 @@ void BehaviorServer::free_rid(RID p_rid) {
 #undef HANDLE_CLEANUP
 
 #define BLACKBOARDS_LOCK_V(fail_result) LOCK_ONE_V(_blackboard_mutex, fail_result)
+
 #define BLACKBOARDS_LOCK LOCK_ONE(_blackboard_mutex)
 	
 #define PIPELINES_LOCK_V(fail_result) LOCK_ONE_V(_pipeline_mutex, fail_result)
+
 #define PIPELINES_LOCK LOCK_ONE(_pipeline_mutex)
 
 #define GRAPHS_LOCK_V(fail_result) LOCK_ONE_V(_graph_mutex, fail_result)
+
 #define GRAPHS_LOCK LOCK_ONE(_graph_mutex)
 
 RID BehaviorServer::blackboard_create() {
@@ -357,6 +367,17 @@ void BehaviorServer::_pipeline_emit_destroyed(RID p_behavior_tree) {
 	TRY_GET_GRAPH(fail_result);				\
 	TRY_GET_NODE(fail_result)				\
 
+#define TRY_GET_GRAPH_AND_COMPOSITE_NODE(fail_result)									\
+	TRY_GET_GRAPH(fail_result);															\
+	TRY_GET_NODE(fail_result);															\
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(node);	\
+	ERR_FAIL_NULL_V(composite, fail_result)												\
+
+#define TRY_GET_GRAPH_COMPOSITE_AND_CHILD(fail_result)		\
+	TRY_GET_GRAPH_AND_COMPOSITE_NODE(fail_result);			\
+	const IPipelineNode *child = graph->get_node(p_child);	\
+	ERR_FAIL_NULL_V(child, fail_result)						\
+
 #define TRY_GET_GRAPH_EDITABLE(fail_result)														\
 	TRY_GET_GRAPH(fail_result);																	\
 	ERR_FAIL_COND_V_MSG(graph->is_bound(), fail_result, "Cannot edit graph while it's bound!")	\
@@ -454,21 +475,6 @@ TypedArray<Dictionary> BehaviorServer::graph_get_rooted_statuses(RID p_graph) {
 	return result;
 }
 
-// TypedArray<RID> prepare_nodes(const Vector<RID> &p_nodes) {
-// 	TypedArray<RID>	result = {};
-// 	if (p_nodes.is_empty()) {
-// 		return result;
-// 	}
-
-// 	const int32_t nodes_count = p_nodes.size();
-// 	result.resize(nodes_count);
-// 	for (int32_t i = 0; i < nodes_count; ++i) {
-// 		result[i] = p_nodes[i];
-// 	}
-
-// 	return result;
-// }
-
 // ---- Graph END ----
 
 // ---- Nodes ----
@@ -478,76 +484,179 @@ StringName BehaviorServer::node_get_type_name(RID p_graph, RID p_node) {
 	return node->get_type_name();
 }
 
-bool BehaviorServer::node_is_compatible(RID p_graph, RID p_node, RID p_other_node) {
-	TRY_GET_CONST_GRAPH_AND_NODE(false);
-	const IPipelineNode *other_node = graph->get_node(p_other_node);
-	ERR_FAIL_NULL_V(other_node, false);
-
-	return node->is_compatible(other_node);
-}
-
-int32_t BehaviorServer::node_get_input_port_count(RID p_graph, RID p_node) {
-	TRY_GET_CONST_GRAPH_AND_NODE(0);
-	return node->get_input_port_count();
-}
-
-int32_t BehaviorServer::node_get_output_port_count(RID p_graph, RID p_node) {
-	TRY_GET_CONST_GRAPH_AND_NODE(0);
-	return node->get_output_port_count();
-}
-
-StringName BehaviorServer::node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	TRY_GET_CONST_GRAPH_AND_NODE(StringName());
-	return node->get_input_port_type_name(p_port_index);
-}
-
-StringName BehaviorServer::node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	TRY_GET_CONST_GRAPH_AND_NODE(StringName());
-	return node->get_output_port_type_name(p_port_index);
-}
-
-StringName BehaviorServer::node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	TRY_GET_CONST_GRAPH_AND_NODE(StringName());
-	return node->get_input_port_name(p_port_index);
-}
-
-StringName BehaviorServer::node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	TRY_GET_CONST_GRAPH_AND_NODE(StringName());
-	return node->get_output_port_name(p_port_index);
-}
-
-TypedArray<Dictionary> prepare_port_infos(const Vector<NodePortInfo> &port_infos) {
-	TypedArray<Dictionary> result = {};
-	if(port_infos.is_empty()) {
-		return result;
-	}
-	const int32_t port_infos_count = port_infos.size();
-	result.resize(port_infos_count);
-	for (int32_t i = 0; i < port_infos_count; ++i) {
-		const NodePortInfo &port_info = port_infos[i];
-		Dictionary out_port_info = Dictionary();
-		out_port_info["name"] = port_info.name;
-		out_port_info["type_name"] = port_info.type_name;
-	}
-
-	return result;
-}
-
-TypedArray<Dictionary> BehaviorServer::node_get_input_port_infos(RID p_graph, RID p_node) {
+TypedArray<Dictionary> BehaviorServer::node_get_port_infos(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE({});
+
+	TypedArray<Dictionary> port_infos = {};
+	const Vector<NodePortInfo> &ports = node->get_port_infos();
+	const int64_t ports_count = ports.size();
+	port_infos.resize(ports_count);
+	for (int64_t i = 0; i < ports_count; ++i) {
+		port_infos[i] = ports[i].to_dictionary();
+	}
 	
-	Vector<NodePortInfo> port_infos = {};
-	node->get_input_port_infos(port_infos);
-	return prepare_port_infos(port_infos);
+	return port_infos;
 }
 
-TypedArray<Dictionary> BehaviorServer::node_get_output_port_infos(RID p_graph, RID p_node) {
-	TRY_GET_CONST_GRAPH_AND_NODE({});
+bool BehaviorServer::node_is_composite(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE(false);
 
-	Vector<NodePortInfo> port_infos;
-	node->get_output_port_infos(port_infos);
-	return prepare_port_infos(port_infos);
+	return dynamic_cast<const IPipelineNodeComposite *>(node) != nullptr;
 }
+
+bool BehaviorServer::node_is_decorator(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE(false);
+	return dynamic_cast<const IPipelineNodeDecorator *>(node) != nullptr;
+}
+
+bool BehaviorServer::node_composite_add_child(RID p_graph, RID p_node, RID p_child) {
+	TRY_GET_GRAPH_COMPOSITE_AND_CHILD(false);
+	return composite->add_child_node(child);
+}
+
+bool BehaviorServer::node_composite_remove_child(RID p_graph, RID p_node, RID p_child) {
+	TRY_GET_GRAPH_COMPOSITE_AND_CHILD(false);
+	return composite->remove_child_node(child);
+}
+
+bool BehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
+	TRY_GET_GRAPH_AND_COMPOSITE_NODE(false);
+	return composite->remove_child_node_at(p_child_index);
+}
+
+void BehaviorServer::node_composite_clear(RID p_graph, RID p_node) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+	IPipelineNodeComposite *node = dynamic_cast<IPipelineNodeComposite*>(graph->get_node(p_node));
+	ERR_FAIL_NULL(node);
+	node->clear();
+}
+
+RID BehaviorServer::node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index) {
+	TRY_GET_CONST_GRAPH_AND_NODE(RID());
+	const IPipelineNodeComposite *composite = dynamic_cast<const IPipelineNodeComposite *>(node);
+	ERR_FAIL_NULL_V(composite, RID());
+	const IPipelineNode *child = composite->get_child_node(p_child_index);
+	ERR_FAIL_NULL_V(child, RID());
+	return child->get_id();
+}
+
+void BehaviorServer::node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(composite);
+
+	const IPipelineNode *child = graph->get_node(p_child);
+	ERR_FAIL_NULL(child);
+
+	return composite->set_child_node(p_child_index, child);
+}
+
+int64_t BehaviorServer::node_composite_child_count(RID p_graph, RID p_node) {
+	TRY_GET_GRAPH_AND_COMPOSITE_NODE(0);
+	return composite->get_node_count();
+}
+
+void BehaviorServer::node_composite_resize(RID p_graph, RID p_node, uint64_t p_size) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(composite);
+
+	composite->resize(p_size);
+}
+
+void BehaviorServer::node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(composite);
+
+	composite->resize_zeroed(p_size);
+}
+
+void BehaviorServer::node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(composite);
+
+	composite->swap_child_nodes(p_first_index, p_second_index);
+}
+
+Error BehaviorServer::node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child) {
+	TRY_GET_GRAPH_AND_COMPOSITE_NODE(Error::ERR_INVALID_PARAMETER);
+
+	const IPipelineNode *child = graph->get_node(p_child);
+	ERR_FAIL_NULL_V(child, Error::ERR_INVALID_PARAMETER);
+
+	return composite->insert_child_node(p_pos, child);
+}
+
+void BehaviorServer::node_composite_append_children(RID p_graph, RID p_node, const Vector<RID> &p_children) {
+	if (unlikely(p_children.is_empty())) {
+		WARN_PRINT("Cannot append empty child vector!");
+		return;
+	}
+
+	GRAPHS_LOCK;
+
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(composite);
+
+	Vector<const IPipelineNode *> children = {};
+	for(const RID child_rid : p_children) {
+		const IPipelineNode *child = graph->get_node(child_rid);
+		ERR_CONTINUE(child == nullptr);
+		children.push_back(child);
+	}
+
+	composite->append_child_nodes(children);
+}
+
+RID BehaviorServer::node_decorator_get_node(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE(RID());
+	const IPipelineNodeDecorator *decorator = dynamic_cast<const IPipelineNodeDecorator *>(node);
+	ERR_FAIL_NULL_V(decorator, RID());
+
+	const IPipelineNode *child = decorator->get_node();
+	if (likely(child != nullptr)) {
+		return child->get_id();
+	}
+	else {
+		return RID();
+	}
+}
+
+void BehaviorServer::node_decorator_set_node(RID p_graph, RID p_node, RID p_child) {
+	GRAPHS_LOCK;
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL(graph);
+
+	IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(graph->get_node(p_node));
+	ERR_FAIL_NULL(decorator);
+
+	if (likely(p_child.is_valid())) {
+		const IPipelineNode *child = graph->get_node(p_child);
+		decorator->set_node(child);
+	}
+	else {
+		decorator->set_node(nullptr);
+	}
+} 
 
 #undef TRY_GET_CONST_GRAPH
 #undef TRY_GET_GRAPH
@@ -564,6 +673,26 @@ TypedArray<Dictionary> BehaviorServer::node_get_output_port_infos(RID p_graph, R
 #undef PIPELINES_LOCK
 #undef GRAPHS_LOCK_V
 #undef GRAPHS_LOCK
+
+// Nodes END
+
+// Pipelines
+
+void BehaviorServer::pipeline_execute(RID p_pipeline) {
+	LOCK_ONE(_pipeline_mutex);
+	Pipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL(pipeline);
+	pipeline->execute();
+}
+
+void BehaviorServer::pipeline_halt(RID p_pipeline) {
+	LOCK_ONE(_pipeline_mutex);
+	Pipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL(pipeline);
+	pipeline->halt();
+}
+
+// Pipelines END
 
 // ---- Behavior Tree END ----
 
@@ -696,14 +825,14 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("graph_get_root", "graph"), &HydrogenBehaviorServer::graph_get_root);
 	ClassDB::bind_method(D_METHOD("graph_get_rooted_statuses", "graph"), &HydrogenBehaviorServer::graph_get_rooted_statuses);
 
-	ClassDB::bind_method(D_METHOD("node_get_input_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_input_port_count);
-	ClassDB::bind_method(D_METHOD("node_get_output_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_output_port_count);
-	ClassDB::bind_method(D_METHOD("node_get_input_port_type_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_input_port_type_name);
-	ClassDB::bind_method(D_METHOD("node_get_output_port_type_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_output_port_type_name);
-	ClassDB::bind_method(D_METHOD("node_get_input_port_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_input_port_name);
-	ClassDB::bind_method(D_METHOD("node_get_output_port_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_output_port_name);
-	ClassDB::bind_method(D_METHOD("node_get_input_port_infos", "graph", "node"), &HydrogenBehaviorServer::node_get_input_port_infos);
-	ClassDB::bind_method(D_METHOD("node_get_output_port_infos", "graph", "node"), &HydrogenBehaviorServer::node_get_output_port_infos);
+	// ClassDB::bind_method(D_METHOD("node_get_input_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_input_port_count);
+	// ClassDB::bind_method(D_METHOD("node_get_output_port_count", "graph", "node"), &HydrogenBehaviorServer::node_get_output_port_count);
+	// ClassDB::bind_method(D_METHOD("node_get_input_port_type_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_input_port_type_name);
+	// ClassDB::bind_method(D_METHOD("node_get_output_port_type_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_output_port_type_name);
+	// ClassDB::bind_method(D_METHOD("node_get_input_port_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_input_port_name);
+	// ClassDB::bind_method(D_METHOD("node_get_output_port_name", "graph", "node", "port_index"), &HydrogenBehaviorServer::node_get_output_port_name);
+	// ClassDB::bind_method(D_METHOD("node_get_input_port_infos", "graph", "node"), &HydrogenBehaviorServer::node_get_input_port_infos);
+	// ClassDB::bind_method(D_METHOD("node_get_output_port_infos", "graph", "node"), &HydrogenBehaviorServer::node_get_output_port_infos);
 	
 
 	ADD_SIGNAL(MethodInfo("graph_created", PropertyInfo(Variant::RID, "graph")));
@@ -847,37 +976,42 @@ void HydrogenBehaviorServer::_pipeline_emit_destroyed(RID p_pipeline) {
 
 // ---- Nodes ----
 
-int32_t HydrogenBehaviorServer::node_get_input_port_count(RID p_graph, RID p_node) {
-	return BehaviorServer::get_singleton()->node_get_input_port_count(p_graph, p_node);
+StringName HydrogenBehaviorServer::node_get_type_name(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_get_type_name(p_graph, p_node);
 }
 
-int32_t HydrogenBehaviorServer::node_get_output_port_count(RID p_graph, RID p_node) {
-	return BehaviorServer::get_singleton()->node_get_output_port_count(p_graph, p_node);
-}
 
-StringName HydrogenBehaviorServer::node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->node_get_input_port_type_name(p_graph, p_node, p_port_index);
-}
+// int32_t HydrogenBehaviorServer::node_get_input_port_count(RID p_graph, RID p_node) {
+// 	return BehaviorServer::get_singleton()->node_get_input_port_count(p_graph, p_node);
+// }
 
-StringName HydrogenBehaviorServer::node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->node_get_output_port_type_name(p_graph, p_node, p_port_index);
-}
+// int32_t HydrogenBehaviorServer::node_get_output_port_count(RID p_graph, RID p_node) {
+// 	return BehaviorServer::get_singleton()->node_get_output_port_count(p_graph, p_node);
+// }
 
-StringName HydrogenBehaviorServer::node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->node_get_input_port_name(p_graph, p_node, p_port_index);
-}
+// StringName HydrogenBehaviorServer::node_get_input_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
+// 	return BehaviorServer::get_singleton()->node_get_input_port_type_name(p_graph, p_node, p_port_index);
+// }
 
-StringName HydrogenBehaviorServer::node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
-	return BehaviorServer::get_singleton()->node_get_output_port_name(p_graph, p_node, p_port_index);
-}
+// StringName HydrogenBehaviorServer::node_get_output_port_type_name(RID p_graph, RID p_node, int32_t p_port_index) {
+// 	return BehaviorServer::get_singleton()->node_get_output_port_type_name(p_graph, p_node, p_port_index);
+// }
 
-TypedArray<Dictionary> HydrogenBehaviorServer::node_get_input_port_infos(RID p_graph, RID p_node) {
-	return BehaviorServer::get_singleton()->node_get_input_port_infos(p_graph, p_node);
-}
+// StringName HydrogenBehaviorServer::node_get_input_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
+// 	return BehaviorServer::get_singleton()->node_get_input_port_name(p_graph, p_node, p_port_index);
+// }
 
-TypedArray<Dictionary> HydrogenBehaviorServer::node_get_output_port_infos(RID p_graph, RID p_node) {
-	return BehaviorServer::get_singleton()->node_get_output_port_infos(p_graph, p_node);
-}
+// StringName HydrogenBehaviorServer::node_get_output_port_name(RID p_graph, RID p_node, int32_t p_port_index) {
+// 	return BehaviorServer::get_singleton()->node_get_output_port_name(p_graph, p_node, p_port_index);
+// }
+
+// TypedArray<Dictionary> HydrogenBehaviorServer::node_get_input_port_infos(RID p_graph, RID p_node) {
+// 	return BehaviorServer::get_singleton()->node_get_input_port_infos(p_graph, p_node);
+// }
+
+// TypedArray<Dictionary> HydrogenBehaviorServer::node_get_output_port_infos(RID p_graph, RID p_node) {
+// 	return BehaviorServer::get_singleton()->node_get_output_port_infos(p_graph, p_node);
+// }
 
 
 // ---- Nodes END ----
