@@ -7,12 +7,9 @@
 #include "behavior_tree_node.hpp"
 #include "behavior_tree_context.hpp"
 #include "../pipelines/composite.hpp"
-#include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/core/memory.hpp"
 #include "godot_cpp/templates/vector.hpp"
-#include "godot_cpp/variant/string.hpp"
-#include "godot_cpp/variant/variant.hpp"
 #include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include <cstdint>
@@ -44,23 +41,24 @@ protected:
 	CompositeNode() = default;
 
 	struct CompositeNodeState : IPipelineNodeState {
-		int64_t current_child_index = -1;
+		int64_t current_child_index = 0;
+
+		CompositeNodeState() = default;
+		~CompositeNodeState() override = default;
 	};
 
-	void try_init_state(CompositeNodeState *state) const {
-		if (unlikely(state->current_child_index == -1)) {
-			// initialize from halted
-			state->current_child_index = 0;
-		}
+	CompositeNodeState *_get_state(BehaviorTreeContext &p_context) const {
+		return p_context.get_state<CompositeNodeState>(state_key());
+	}
+
+	void _reset_state(CompositeNodeState *state) const {
+		ERR_FAIL_NULL(state);
+		state->current_child_index = 0;
 	}
 
 	void _halt(BehaviorTreeContext &p_context) const override {
-		
-		CompositeNodeState *state = p_context.get_state<CompositeNodeState>(state_key());
-		
-		if (likely(state == nullptr)) {
-			state->current_child_index = -1;
-		}
+		CompositeNodeState *state = _get_state(p_context);
+		_reset_state(state);
 
 		for (const BehaviorTreeNode *child : _children) {
 			child->halt(p_context);

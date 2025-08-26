@@ -12,7 +12,6 @@
 #include "godot_cpp/core/type_info.hpp"
 #include "godot_cpp/templates/pair.hpp"
 #include "godot_cpp/variant/callable.hpp"
-#include "godot_cpp/variant/callable_method_pointer.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/variant.hpp"
 #include "variant_type_traits.hpp"
@@ -118,9 +117,9 @@ private:
 
 #define PORT(port) port##_name()
 
-#define BEGIN_NODE_PORTS()							\
-	static const Vector<NodePortInfo> get_ports() {	\
-		static const Vector<NodePortInfo> ports = {	\
+#define BEGIN_NODE_PORTS()								\
+	static const Vector<NodePortInfo> &get_ports() {	\
+		static const Vector<NodePortInfo> ports = {		\
 
 #define INPUT_PORT(port_name, port_type, default_value) 											\
 			NodePortInfo::create_input<port_type>(PORT(port_name), [](Blackboard *p_blackboard) {	\

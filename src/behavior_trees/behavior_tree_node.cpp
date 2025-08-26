@@ -4,7 +4,6 @@
 
 namespace hydrogen::behavior_trees {
 
-
     BehaviorTreeNode::Result BehaviorTreeNode::execute(BehaviorTreeContext &p_context) const {
 
         p_context._node_enter(this);

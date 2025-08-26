@@ -7,6 +7,7 @@
 #include "behavior_tree_node.hpp"
 #include "../pipelines/decorator.hpp"
 #include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
@@ -39,9 +40,8 @@ protected:
 	DecoratorNode() = default;
 
 	void _halt(BehaviorTreeContext &p_context) const override {
-		if (likely(_decorated_node != nullptr)) {
-			_decorated_node->halt(p_context);
-		}
+		ERR_FAIL_NULL(_decorated_node);
+		_decorated_node->halt(p_context);
 	}
 
 public:

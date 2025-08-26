@@ -17,12 +17,10 @@ class SequenceNode : public CompositeNode {
 	DECLARE_PIPELINE_NODE(SequenceNode);
 protected:
 	Result _execute(BehaviorTreeContext &p_context) const override { 
-		CompositeNodeState * state = p_context.get_state<CompositeNodeState>(state_key());
+		CompositeNodeState * state = _get_state(p_context);
 		if (unlikely(state == nullptr)) {
 			return FAILURE;
 		}
-
-		try_init_state(state);
 
 		while (state->current_child_index < get_node_count()) {
 			
@@ -36,14 +34,16 @@ protected:
 					state->current_child_index++;
 					continue;
 				case BehaviorTreeNode::FAILURE:
-					state->current_child_index = -1;
+					_reset_state(state);
 					return FAILURE;
 				default:
+					_reset_state(state);
 					unknown_result_handler(result);
 					return FAILURE;
 			}
 		}
 
+		_reset_state(state);
 		return SUCCESS;
 	}
 
