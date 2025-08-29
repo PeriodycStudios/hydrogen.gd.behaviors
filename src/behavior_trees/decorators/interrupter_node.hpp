@@ -6,14 +6,16 @@
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/core/error_macros.hpp"
-#include "godot_cpp/core/memory.hpp"
 #include "pipelines/node_interfaces.hpp"
-#include "pipelines/pipeline_node.hpp"
 #include <optional>
 
 namespace hydrogen::behavior_trees {
+
+using namespace godot;
+using namespace pipelines;
+
 class InterrupterNode : public DecoratorNode, public IPipelineNodeStateful {
-    DECLARE_PIPELINE_NODE(InterrupterNode);
+    DECLARE_PIPELINE_NODE(InterrupterNode, DecoratorNode);
 
     struct State : public IPipelineNodeState {
         bool is_running = false;
@@ -68,13 +70,10 @@ protected:
     }
 
 public:
-    InterrupterNode() = default;
-    ~InterrupterNode() override = default;
 
-    IPipelineNodeState *create_state() { return memnew(State); }
-    RID state_key() const override { return get_self(); }
+    DEFINE_STATEFUL_FUNCS(State);
 
-    void set_result(BehaviorTreeContext &p_context, Result p_override) {
+    void set_result(BehaviorTreeContext &p_context, Result p_override) const {
         State *state = _get_state(p_context);
         ERR_FAIL_NULL(state);
 

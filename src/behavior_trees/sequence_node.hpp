@@ -7,14 +7,15 @@
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "pipelines/pipeline_node.hpp"
+#include "pipelines/node_interfaces.hpp"
 
 namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
 class SequenceNode : public CompositeNode {
-	DECLARE_PIPELINE_NODE(SequenceNode);
+	DECLARE_PIPELINE_NODE(SequenceNode, CompositeNode);
+
 protected:
 	Result _execute(BehaviorTreeContext &p_context) const override { 
 		CompositeNodeState * state = _get_state(p_context);
@@ -22,7 +23,7 @@ protected:
 			return FAILURE;
 		}
 
-		while (state->current_child_index < get_node_count()) {
+		while (state->current_child_index < child_count()) {
 			
 			const BehaviorTreeNode *child = _children.get(state->current_child_index);
 
@@ -46,10 +47,6 @@ protected:
 		_reset_state(state);
 		return SUCCESS;
 	}
-
-public:
-	SequenceNode() = default;
-	~SequenceNode() override = default;
 };
 
 // TODO: NonDeterministic Selector

@@ -8,9 +8,7 @@
 #include "behavior_tree_context.hpp"
 #include "../pipelines/composite.hpp"
 #include "godot_cpp/core/error_macros.hpp"
-#include "godot_cpp/core/memory.hpp"
 #include "godot_cpp/templates/vector.hpp"
-#include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include <cstdint>
 
@@ -19,10 +17,10 @@ using namespace pipelines;
 using namespace godot;
 
 class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeComposite<BehaviorTreeNode>, public IPipelineNodeStateful {
+	ABSTRACT_PIPELINE_NODE(CompositeNode, BehaviorTreeNode);
 
 	template <typename T>
 	void _get_children(Vector<const T *> &p_nodes) const {
-		LOCK_ONE(_mutex);
 		for (const T *node : _children) {
 			p_nodes.push_back(node);
 		}
@@ -30,7 +28,6 @@ class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeCom
 
 	template<typename T>
 	void _get_descendants(Vector<const T *> &p_nodes) const {
-		LOCK_ONE(_mutex);
 		for (const T *node : _children) {
 			p_nodes.push_back(node);
 			node->get_descendants(p_nodes);
@@ -39,6 +36,9 @@ class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeCom
 
 protected:
 	CompositeNode() = default;
+
+	EMPTY_CONNECTION_LIST();
+	EMPTY_PORT_LIST();
 
 	struct CompositeNodeState : IPipelineNodeState {
 		int64_t current_child_index = 0;
@@ -68,9 +68,7 @@ protected:
 public:
 	~CompositeNode() override = default;
 
-	RID state_key() const override { return get_self(); }
-
-	IPipelineNodeState * create_state() const override { return memnew(CompositeNodeState); }
+	DEFINE_STATEFUL_FUNCS(CompositeNodeState);
 
 	bool supports_children() const override { return true; }
 	bool has_children() const override { return !is_empty(); }

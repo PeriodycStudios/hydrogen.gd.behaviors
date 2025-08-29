@@ -1,7 +1,6 @@
 
 #include "pipeline.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "godot_cpp/variant/string_name.hpp"
 
 #include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/templates/pair.hpp>
@@ -50,34 +49,5 @@ Pipeline::~Pipeline() {
 	_state_blackboard = nullptr;
 	_graph = nullptr;
 	_mutex = nullptr;
-}
-
-_FORCE_INLINE_ void Pipeline::set_alias(const StringName &p_name, const StringName &p_alias) {
-	std::scoped_lock lock(*mutex());
-	_aliases[p_name] = p_alias;
-}
-
-_FORCE_INLINE_ bool Pipeline::erase_alias(const StringName &p_name) {
-	std::scoped_lock lock(*mutex());
-	return _aliases.erase(p_name);
-}
-
-const StringName &Pipeline::get_alias(const StringName &p_name) const {
-	std::scoped_lock lock(*mutex());
-	const auto iter = _aliases.find(p_name);
-	if (likely(iter != _aliases.end())) {
-		static StringName empty = StringName();
-		return empty;
-	}
-	return iter->value;
-}
-
-TypedDictionary<StringName, StringName> Pipeline::get_aliases() const {
-	TypedDictionary<StringName, StringName> aliases {};
-	std::scoped_lock lock(*mutex());
-	for (const auto &kvp : _aliases) {
-		aliases[kvp.key] = kvp.value;
-	}
-	return aliases;
 }
 }

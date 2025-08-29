@@ -8,19 +8,19 @@
 #include "composite_node.hpp"
 #include "behavior_tree_context.hpp"
 #include "godot_cpp/core/error_macros.hpp"
-#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
 class SelectorNode : public CompositeNode {
-	DECLARE_PIPELINE_NODE(SelectorNode);
+	DECLARE_PIPELINE_NODE(SelectorNode, CompositeNode);
+
 protected:
 
 	Result _execute(BehaviorTreeContext &p_context) const override {
 		CompositeNodeState *state = _get_state(p_context);
 		ERR_FAIL_NULL_V(state, FAILURE);
 
-		while (state->current_child_index < get_node_count()) {
+		while (state->current_child_index < child_count()) {
 			const BehaviorTreeNode *child = _children.get(state->current_child_index);
 			Result result = child->execute(p_context);
 			switch (result) {
@@ -42,10 +42,6 @@ protected:
 		_reset_state(state);
 		return FAILURE;
 	}
-
-public:
-	SelectorNode() = default;
-	~SelectorNode() override = default;
 };
 
 // TODO: Nondeterministic selector

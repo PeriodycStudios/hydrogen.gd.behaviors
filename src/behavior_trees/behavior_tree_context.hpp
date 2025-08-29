@@ -22,12 +22,11 @@ class BehaviorTreeContext {
 	friend class BehaviorTree;
 	friend class BehaviorTreeNode;
 
-	Blackboard *blackboard;
-	const NodeStateMap *node_states;
-	const HashMap<StringName, StringName> *aliases;
+	Blackboard *_blackboard;
+	const NodeStateMap *_node_states;
 
-	BehaviorTreeContext(Blackboard *p_blackboard, const NodeStateMap *p_node_states, const godot::HashMap<StringName, StringName> *p_aliases)
-    : blackboard(p_blackboard), node_states (p_node_states), aliases(p_aliases) {}
+	BehaviorTreeContext(Blackboard *p_blackboard, const NodeStateMap *p_node_states)
+    : _blackboard(p_blackboard), _node_states (p_node_states) {}
 
 	// TODO: Handle profiling, editor debugging via context
 	void _node_enter(const BehaviorTreeNode *p_node) {}
@@ -38,8 +37,8 @@ class BehaviorTreeContext {
 
 public:
 	IPipelineNodeState *get_state(RID p_state_key) const {
-		auto iter = node_states->find(p_state_key);
-		if (unlikely(iter == node_states->end())) {
+		auto iter = _node_states->find(p_state_key);
+		if (unlikely(iter == _node_states->end())) {
 			return nullptr;
 		}
 		return iter->value;
@@ -55,28 +54,32 @@ public:
 		return state;
 	}
 
-	template<typename T>
-	void set(const StringName &p_output_port_name, const T &p_input_value) {
-		auto iter = aliases->find(p_output_port_name);
-		if (likely(iter == aliases->end())) {
-			blackboard->set_entry_fast(p_output_port_name, p_input_value);
-		}
-		else {
-			const StringName &alias_name = iter->value;
-			blackboard->set_entry_fast(alias_name, p_input_value);
-		}
+	Blackboard *blackboard() const {
+		return _blackboard;
 	}
 
-	template<typename T>
-	const T &get(const StringName &p_output_port_name, const T &p_default = {}) const {
-		auto iter = aliases->find(p_output_port_name);
-		if (likely(iter == aliases->end())) {
-			return blackboard->get_entry_fast<T>(p_output_port_name, p_default);
-		}
+	// template<typename T>
+	// void set(const StringName &p_output_port_name, const T &p_input_value) {
+	// 	auto iter = aliases->find(p_output_port_name);
+	// 	if (likely(iter == aliases->end())) {
+	// 		blackboard->set_entry_fast(p_output_port_name, p_input_value);
+	// 	}
+	// 	else {
+	// 		const StringName &alias_name = iter->value;
+	// 		blackboard->set_entry_fast(alias_name, p_input_value);
+	// 	}
+	// }
 
-		const StringName &alias_name = iter->value;
-		return blackboard->get_entry_fast<T>(alias_name, p_default);
-	}
+	// template<typename T>
+	// const T &get(const StringName &p_output_port_name, const T &p_default = {}) const {
+	// 	auto iter = aliases->find(p_output_port_name);
+	// 	if (likely(iter == aliases->end())) {
+	// 		return blackboard->get_entry_fast<T>(p_output_port_name, p_default);
+	// 	}
+
+	// 	const StringName &alias_name = iter->value;
+	// 	return blackboard->get_entry_fast<T>(alias_name, p_default);
+	// }
 };
 
 }

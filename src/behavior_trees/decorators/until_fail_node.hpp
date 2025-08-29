@@ -6,11 +6,10 @@
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/core/error_macros.hpp"
-#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 class UntilFailNode : public DecoratorNode {
-    DECLARE_PIPELINE_NODE(UntilFailNode);
+    DECLARE_PIPELINE_NODE(UntilFailNode, DecoratorNode);
 
 protected:
 
@@ -25,10 +24,6 @@ protected:
             return RUNNING;
         }
     }
-
-public:
-    UntilFailNode() = default;
-    ~UntilFailNode() override = default;
 };
 }
 

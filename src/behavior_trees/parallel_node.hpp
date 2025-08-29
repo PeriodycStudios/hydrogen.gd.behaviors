@@ -8,13 +8,14 @@
 #include "godot_cpp/core/memory.hpp"
 #include "godot_cpp/templates/local_vector.hpp"
 #include "godot_cpp/templates/vector.hpp"
-#include "pipelines/pipeline_node.hpp"
+#include "pipelines/node_interfaces.hpp"
 #include <cstdint>
 #include <optional>
 
 namespace hydrogen::behavior_trees {
 
 class ParallelNodeBase : public CompositeNode {
+    ABSTRACT_PIPELINE_NODE(ParallelNodeBase, CompositeNode);
 protected:
     struct ParallelNodeState : public CompositeNodeState {
         Vector<const BehaviorTreeNode *> running_nodes = {};
@@ -94,7 +95,7 @@ public:
 };
 
 class ParallelSequenceNode : public ParallelNodeBase {
-    DECLARE_PIPELINE_NODE(ParallelSequenceNode);
+    DECLARE_PIPELINE_NODE(ParallelSequenceNode, ParallelNodeBase);
 
 protected:
 
@@ -117,14 +118,10 @@ protected:
 
         return false;
     }
-
-public:
-    ParallelSequenceNode() = default;
-    ~ParallelSequenceNode() override = default;
 };
 
 class ParallelSelectorNode : public ParallelNodeBase {
-    DECLARE_PIPELINE_NODE(ParallelSelectorNode);
+    DECLARE_PIPELINE_NODE(ParallelSelectorNode, ParallelNodeBase);
 
 protected:
 
@@ -147,10 +144,6 @@ protected:
 
         return false;
     }
-
-public:
-    ParallelSelectorNode() = default;
-    ~ParallelSelectorNode() override = default;
 };
 }
 

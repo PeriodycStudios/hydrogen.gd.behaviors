@@ -24,15 +24,13 @@ class Pipeline : public RidData {
 	Blackboard *_state_blackboard;
 	IPipelineGraph *_graph;
 	NodeStateMap _node_states {};
-	HashMap<StringName, StringName> _aliases {};
 	std::mutex *_mutex;
 
 protected:
 	[[nodiscard]] _FORCE_INLINE_ std::mutex *mutex() const { return _mutex; }
 	_FORCE_INLINE_ NodeStateMap &node_states() { return _node_states; }
-	[[nodiscard]] _FORCE_INLINE_ HashMap<StringName, StringName> &aliases() { return _aliases; }
 
-	explicit Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph * p_graph);
+	explicit Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph *p_graph);
 
 	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_state_blackboard() const { return _state_blackboard; }
 	[[nodiscard]] _FORCE_INLINE_ const Blackboard *get_readonly_state_blackboard() const { return _state_blackboard; }
@@ -40,14 +38,6 @@ protected:
 
 public:
 	virtual ~Pipeline();
-
-	void set_alias(const StringName &p_name, const StringName &p_alias);
-
-	bool erase_alias(const StringName &p_name);
-
-	[[nodiscard]] const StringName &get_alias(const StringName &p_name) const;
-
-	[[nodiscard]] TypedDictionary<StringName, StringName> get_aliases() const;
 
 	virtual void execute() = 0;
 	virtual void halt() = 0;

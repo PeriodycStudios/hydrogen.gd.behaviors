@@ -9,10 +9,13 @@
 #include "blackboard.hpp"
 #include "godot_cpp/core/binder_common.hpp"
 #include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/core/type_info.hpp"
 #include "godot_cpp/templates/pair.hpp"
 #include "godot_cpp/variant/callable.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
+#include "godot_cpp/variant/string.hpp"
+#include "godot_cpp/variant/typed_dictionary.hpp"
 #include "godot_cpp/variant/variant.hpp"
 #include "variant_type_traits.hpp"
 
@@ -23,6 +26,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <initializer_list>
 #include <optional>
 
 namespace hydrogen::pipelines {
@@ -113,54 +117,210 @@ private:
 	: name(p_name), type_name(p_type_name), variant_type(p_variant_type), default_setter(p_setter), port_kind(p_kind) {}
 };
 
-#define DECLARE_PORT_NAME(port_name) DEFINE_NAME_STATIC(port_name)
+struct NodeConnectionInfo {
+	const StringName name;
+	const StringName type_name;
+
+	template<typename T>
+	static NodeConnectionInfo create(const StringName &p_name) {
+		return NodeConnectionInfo(p_name, get_type_name_static<T>());
+	}
+
+	Dictionary to_dictionary() const {
+		Dictionary dict = {};
+		dict["name"] = name;
+		dict["type_name"] = type_name;
+		return dict;
+	}
+
+private:
+	NodeConnectionInfo(const StringName &p_name, const StringName &p_type_name) 
+		: name(p_name), type_name(p_type_name) 
+		{}
+};
+
+namespace _detail {
+
+	template<typename T>
+	static Vector<T> _concat(const Vector<T> &p_src, std::initializer_list<T> p_init) {
+		Vector<T> result = p_src;
+		result.append_array(p_init);
+		return result;
+	}
+}
+
+#define DECLARE_INPUT_PORT(port_name, port_type, default_value) 		\
+	DEFINE_NAME_STATIC(port_name);										\
+	static constexpr port_type k_default_##port_name = default_value;	\
+	typedef port_type port_name##_type									\
+
+#define DECLARE_OUTPUT_PORT(port_name, port_type)					\
+	DEFINE_NAME_STATIC(port_name);									\
+	typedef port_type port_name##_type								\
 
 #define PORT(port) port##_name()
 
-#define BEGIN_NODE_PORTS()								\
-	static const Vector<NodePortInfo> &get_ports() {	\
-		static const Vector<NodePortInfo> ports = {		\
+#define BEGIN_NODE_PORTS()																					\
+	static const Vector<NodePortInfo> &_get_ports() {														\
+		static const Vector<NodePortInfo> &parent_ports = parent::_get_ports();								\
+		static const Vector<NodePortInfo> ports = hydrogen::pipelines::_detail::_concat(parent_ports, {		\
 
-#define INPUT_PORT(port_name, port_type, default_value) 											\
-			NodePortInfo::create_input<port_type>(PORT(port_name), [](Blackboard *p_blackboard) {	\
-				static const port_type def_val = default_value;										\
-				p_blackboard->set_entry_fast<port_type>(PORT(port_name), def_val);					\
-			}),																						\
+#define INPUT_PORT(port_name)				 															\
+			NodePortInfo::create_input<port_name##_type>(PORT(port_name), [](Blackboard *p_blackboard) {\
+				p_blackboard->set_entry_fast<port_name##_type>(PORT(port_name), k_default_##port_name);	\
+			}),																							\
 
-#define INPUT_OUTPUT_PORT(port_name, port_type, default_value)										\
-			NodePortInfo::create_in_out<port_type>(PORT(port_name), [](Blackboard *p_blackboard) {	\
-				static const port_type def_val = default_value;										\
-				p_blackboard->set_entry_fast<port_type>(def_val);									\
-			}),																						\
+#define INPUT_OUTPUT_PORT(port_name)																		\
+			NodePortInfo::create_in_out<port_name##_type>(PORT(port_name), [](Blackboard *p_blackboard) {	\
+				p_blackboard->set_entry_fast<port_name##_type>(k_default_##port_name);						\
+			}),																								\
 
-#define OUTPUT_PORT(port_name, port_type)							\
-			NodePortInfo::create_output<port_type>(PORT(port_name)),\
+#define OUTPUT_PORT(port_name)							\
+		NodePortInfo::create_output<port_name##_type>(PORT(port_name)),	\
 
-#define END_NODE_PORTS()\
-		};				\
-		return ports;	\
-	}					\
+#define END_NODE_PORTS()	\
+		});					\
+		return ports;		\
+	}						\
+
+#define DEFINE_STATEFUL_FUNCS(state_type) 												\
+	IPipelineNodeState * create_state() const override { return memnew(state_type); }	\
+	RID state_key() const override { return get_self(); }								\
+
+#define DECLARE_CONNECTION(connection_name, node_type)	\
+	DEFINE_NAME_STATIC(connection_name);				\
+	const node_type *_##connection_name = nullptr;		\
+	typedef const node_type *connection_name##_type		\
+
+
+#define DEFINE_CONNECTION(connection_name)												\
+	_FORCE_INLINE_ void set_##connection_name(connection_name##_type p_connection) {	\
+		_##connection_name = p_connection;												\
+	}																					\
+																						\
+	_FORCE_INLINE_ connection_name##_type get_##connection_name() const {				\
+		return _##connection_name;														\
+	}																					\
+
+	#define BEGIN_CONNECTIONS()																								\
+	static const Vector<NodeConnectionInfo> &_get_connections() {															\
+		static const Vector<NodeConnectionInfo> &parent_connections = parent::_get_connections();							\
+		static const Vector<NodeConnectionInfo> connections = hydrogen::pipelines::_detail::_concat(parent_connections, {	\
+
+#define CONNECTION(connection_name)													\
+			NodeConnectionInfo::create<connection_name##_type>(#connection_name),	\
+
+#define END_CONNECTIONS()	\
+		});					\
+		return connections;	\
+	}						\
+
+#define BEGIN_SET_CONNECTION()																\
+	bool set_connection(const StringName &p_name, const IPipelineNode *p_node) override {	\
+		if (unlikely(parent::set_connection(p_name, p_node))) {								\
+			return true;																	\
+		}																					\
+																							\
+
+
+#define SET_CONNECTION(connection_name)											\
+		if (p_name == connection_name##_name()) {								\
+			set_##connection_name(dynamic_cast<connection_name##_type>(p_node));\
+			return true;														\
+		}																		\
+
+#define END_SET_CONNECTION()									\
+		WARN_PRINT(vformat("Unknown connection: {}", p_name));	\
+		return false;											\
+	}															\
+
+
+#define BEGIN_GET_CONNECTION()														\
+	const IPipelineNode *get_connection(const StringName &p_name) const override {	\
+		const IPipelineNode *node = parent::get_connection(p_name);					\
+		if (unlikely(node != nullptr)) {											\
+			return node;															\
+		}																			\
+
+#define GET_CONNECTION(connection_name)				\
+		if (p_name == connection_name##_name())	{	\
+			return get_##connection_name();			\
+		}											\
+
+#define END_GET_CONNECTION()									\
+		WARN_PRINT(vformat("Unknown connection: {}", p_name));	\
+		return nullptr;											\
+	}															\
+
+
+#define EMPTY_PORT_LIST() static const Vector<NodePortInfo> &_get_ports() { return parent::_get_ports(); }
+
+#define EMPTY_CONNECTION_LIST() static const Vector<NodeConnectionInfo> &_get_connections() { return parent::_get_connections(); }
+
+#define ABSTRACT_PIPELINE_NODE(type_name, parent_type)	\
+														\
+public:													\
+	typedef type_name self;								\
+	typedef parent_type parent;							\
+														\
+private:												\
+
+#define DECLARE_PIPELINE_NODE(type_name, parent_type)	\
+	DEFINE_NAME_STATIC(type_name);              		\
+                                                		\
+public:										    		\
+	type_name() = default;								\
+	~type_name() override = default;					\
+														\
+	typedef type_name self;								\
+	typedef parent_type parent;							\
+                                                		\
+	const StringName & get_type_name() const override {	\
+		return type_name##_name();			    		\
+	}										    		\
+                                                		\
+private:                                        		\
+
+#define DEFINE_GET_PORTS()                                         	\
+    const Vector<NodePortInfo> &get_ports() const override {   		\
+        return _get_ports();                                        \
+    }                                                               \
+
+#define DEFINE_GET_CONNECTIONS()																		\
+	const Vector<NodeConnectionInfo> &get_connections() const override { return _get_connections(); }	\
 
 class IPipelineGraph;
 
-class IPipelineNode {
-protected:
-	IPipelineNode() = default;
+typedef TypedDictionary<StringName, StringName> PortAliases;
 
-public:
+struct IPipelineNode {
 	virtual ~IPipelineNode() = default;
 
 	virtual RID get_id() const = 0;
 
-	[[nodiscard]] virtual StringName get_type_name() const = 0;
-	[[nodiscard]] virtual bool is_compatible(const IPipelineNode *p_other_node) const = 0;
+	[[nodiscard]] virtual const StringName &get_type_name() const = 0;
 
-	virtual const Vector<NodePortInfo> &get_port_infos() const = 0;
+	virtual const Vector<NodePortInfo> &get_ports() const = 0;
+	virtual const Vector<NodeConnectionInfo> &get_connections() const = 0;
+
+	virtual bool set_connection(const StringName &p_name, const IPipelineNode *p_target) = 0;
+	virtual const IPipelineNode *get_connection(const StringName &p_name) const = 0;
+
+	virtual void set_name(const String &p_name) = 0;
+	virtual void set_input_aliases(const PortAliases &p_aliases) = 0;
+	virtual void set_output_aliases(const PortAliases &p_aliases) = 0;
+
+	virtual const String &get_name() const = 0;
+	virtual PortAliases get_input_aliases() const = 0;
+	virtual PortAliases get_output_aliases() const = 0;
 
 	[[nodiscard]] virtual bool supports_children() const = 0;
 	[[nodiscard]] virtual bool has_children() const = 0;
 	virtual void get_children(Vector<const IPipelineNode *> &p_nodes) const = 0;
 	virtual void get_descendants(Vector<const IPipelineNode *> &p_nodes) const = 0;
+
+protected:
+	IPipelineNode() = default;
 };
 
 struct IPipelineNodeState;
@@ -189,10 +349,7 @@ protected:
 typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
 
 
-class IPipelineNodeComposite {
-protected:
-	IPipelineNodeComposite() = default;
-public:
+struct IPipelineNodeComposite {
 	virtual ~IPipelineNodeComposite() = default;
 
 	virtual bool add_child_node(const IPipelineNode *p_node) = 0;
@@ -202,7 +359,7 @@ public:
 	[[nodiscard]] virtual bool is_empty() const = 0;
 	[[nodiscard]] virtual const IPipelineNode *get_child_node(int64_t p_index) const = 0;
 	virtual void set_child_node(int64_t p_index, const IPipelineNode *p_node) = 0;
-	[[nodiscard]] virtual int64_t get_node_count() const = 0;
+	[[nodiscard]] virtual int64_t child_count() const = 0;
 
 	virtual void resize(uint64_t p_size) = 0;
 	virtual void resize_zeroed(uint64_t p_size) = 0;
@@ -210,28 +367,22 @@ public:
 
 	virtual Error insert_child_node(int64_t p_pos, const IPipelineNode *p_node) = 0;
 	virtual void append_child_nodes(const Vector<const IPipelineNode *> &p_nodes) = 0;
+
+protected:
+	IPipelineNodeComposite() = default;
 };
 
-class IPipelineNodeDecorator {
-protected:
-	IPipelineNodeDecorator() = default;
-public:
+struct IPipelineNodeDecorator {
 	virtual ~IPipelineNodeDecorator() = default;
 
-	[[nodiscard]] virtual const IPipelineNode *get_node() const = 0;
-	virtual void set_node(const IPipelineNode *p_node) = 0;
+	[[nodiscard]] virtual const IPipelineNode *get_child() const = 0;
+	virtual void set_child(const IPipelineNode *p_node) = 0;
+
+protected:
+	IPipelineNodeDecorator() = default;
 };
 
-class IPipelineGraph {
-protected:
-
-	virtual RID _create_node(const StringName &p_node_type_name) = 0;
-	virtual bool _destroy_node(RID p_node_id) = 0;
-
-	friend class Pipeline;
-	IPipelineGraph() = default;
-
-public:
+struct IPipelineGraph {
 	virtual ~IPipelineGraph() = default;
 
 	virtual RID create_node(const StringName &p_node_type_name) = 0;
@@ -241,7 +392,8 @@ public:
 
 	virtual RID get_id() const = 0;
 
-	virtual void update_node(const IPipelineNode *p_node, const IPipelineNode *p_parent = nullptr) = 0;
+	// virtual void parent_changed(const IPipelineNode *p_node, const IPipelineNode *p_parent = nullptr) = 0;
+	// virtual void connection_changed() = 0;
 
 	virtual void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const = 0;
 
@@ -261,16 +413,24 @@ public:
 	virtual void query_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const = 0;
 
 	virtual void get_rooted_statuses(Vector<Pair<const IPipelineNode *, bool>> &p_statuses) const = 0;
+
+protected:
+
+	virtual RID _create_node(const StringName &p_node_type_name) = 0;
+	virtual bool _destroy_node(RID p_node_id) = 0;
+
+	friend class Pipeline;
+	IPipelineGraph() = default;
 };
 
-class IPipelineNodeSubGraph {
-protected:
-	IPipelineNodeSubGraph() = default;
-public:
+struct IPipelineNodeSubGraph {
 	virtual ~IPipelineNodeSubGraph() = default;
 
 	[[nodiscard]] virtual const IPipelineGraph *get_sub_graph() const = 0;
 	virtual void set_sub_graph(IPipelineGraph *p_graph) = 0;
+
+protected:
+	IPipelineNodeSubGraph() = default;
 };
 } // hydrogen
 

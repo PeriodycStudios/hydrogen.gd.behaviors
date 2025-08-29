@@ -38,22 +38,27 @@ class PipelineGraph {};
 
 template <typename T>
 class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>> : public RidData, public IPipelineGraph {
-
-	static HashMap<StringName, std::function<T *()>> _registered_nodes;
-	static std::mutex *_register_mutex;
-
 public:
-	typedef std::function<bool(const T *)> NodePredicate;
+	typedef const T * c_ptr;
+	typedef T * ptr;
+
+	typedef std::function<bool(c_ptr)> NodePredicate;
 
 private:
+	static HashMap<StringName, std::function<ptr()>> _registered_nodes;
+	static std::mutex *_register_mutex;
+
 	std::mutex *_mutex;
 	std::atomic_uint32_t _bind_count = { 0 };
 
 protected:
-	HashMap<RID, T*> _nodes = {};
-	HashMap<RID, RID> _child_to_parent = {};
+	HashMap<RID, ptr> _nodes = {};
+	// HashMap<RID, RID> _child_to_parent = {};
+	Vector<T *> _connectors = {};
+	Vector<IPipelineNodeComposite *> _composites = {};
+	Vector<IPipelineNodeDecorator *> _decorators = {};
 	RID_PtrOwner<T> _nodes_owner = {};
-	T *_root = nullptr;
+	ptr _root = nullptr;
 
 	PipelineGraph() : _mutex(memnew(std::mutex)) {}
 
@@ -73,7 +78,7 @@ protected:
 		--_bind_count;
 	}
 
-	const T *_get_node(RID p_node) const {
+	c_ptr _get_node(RID p_node) const {
 		auto iter = _nodes.find(p_node);
 		if (likely(iter != _nodes.end())) {
 			return iter->value;
@@ -83,7 +88,7 @@ protected:
 		}
 	}
 
-	T *_get_node(RID p_node) {
+	ptr _get_node(RID p_node) {
 		auto iter = _nodes.find(p_node);
 		if (likely(iter != _nodes.end())) {
 			return iter->value;
@@ -93,62 +98,62 @@ protected:
 		}
 	}
 
-	void _visit(const T * p_node, std::function<void(const T *)> p_visitor) const {
+	void _visit(c_ptr p_node, std::function<void(c_ptr)> p_visitor) const {
 		Vector<const T *> nodes = { p_node };
 		p_node->get_descendants(nodes);
 
-		for (const T * node : nodes) {
+		for (c_ptr node : nodes) {
 			p_visitor(node);
 		}
 	}
 
 	void _visit_all(std::function<void(const T *)> p_visitor) const {
 		for (const auto &kvp : _nodes) {
-			const T *node = kvp.value;
+			c_ptr node = kvp.value;
 			p_visitor(node);
 		}
 	}
 
-	void _unparent_helper(const T *p_node, RID p_parent_id) {
-		T *parent = _get_node(p_parent_id);
+	// void _unparent_helper(c_ptr p_node, RID p_parent_id) {
+	// 	T *parent = _get_node(p_parent_id);
 
-		if (likely(parent)) {
-			IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(parent);
-			if (likely(composite != nullptr)) {
-				bool result = composite->remove_child_node(p_node);
-				if (unlikely(!result)) {
-					ERR_PRINT("Node already removed, this shouldn't happen.");
-				}
-			}
+	// 	if (likely(parent)) {
+	// 		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(parent);
+	// 		if (likely(composite != nullptr)) {
+	// 			bool result = composite->remove_child_node(p_node);
+	// 			if (unlikely(!result)) {
+	// 				ERR_PRINT("Node already removed, this shouldn't happen.");
+	// 			}
+	// 		}
 
-			IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(parent);
-			if (unlikely(decorator != nullptr)) {
-				decorator->set_node(nullptr);
-			}
-		}
-		else {
-			ERR_PRINT("Couldn't find parent node.");
-		}
-		_child_to_parent.erase(p_node->get_self());
-	}
+	// 		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(parent);
+	// 		if (unlikely(decorator != nullptr)) {
+	// 			decorator->set_child(nullptr);
+	// 		}
+	// 	}
+	// 	else {
+	// 		ERR_PRINT("Couldn't find parent node.");
+	// 	}
+	// 	_child_to_parent.erase(p_node->get_self());
+	// }
 
-	void _unparent(const T *p_node) {
-		auto parent_rid_iter = _child_to_parent.find(p_node->get_self());
-		if (likely(parent_rid_iter != _child_to_parent.end())) {
-			_unparent_helper(p_node, parent_rid_iter->value);
-		}
-	}
+	// void _unparent(c_ptr p_node) {
+	// 	auto parent_rid_iter = _child_to_parent.find(p_node->get_self());
+	// 	if (likely(parent_rid_iter != _child_to_parent.end())) {
+	// 		_unparent_helper(p_node, parent_rid_iter->value);
+	// 	}
+	// }
 
-	void _reparent(const T *p_parent, const T *p_node) {
+	// void _reparent(c_ptr p_parent, c_ptr p_node) {
 
-		RID node_rid = p_node->get_self();
-		auto iter = _child_to_parent.find(node_rid);
-		if (likely(iter != _child_to_parent.end())) {
-			_unparent_helper(p_node, iter->value);
-		}
+	// 	RID node_rid = p_node->get_self();
+	// 	auto iter = _child_to_parent.find(node_rid);
+	// 	if (likely(iter != _child_to_parent.end())) {
+	// 		_unparent_helper(p_node, iter->value);
+	// 	}
 
-		_child_to_parent[node_rid] = p_parent->get_self();
-	}
+	// 	_child_to_parent[node_rid] = p_parent->get_self();
+	// }
 
 	RID _create_node(const StringName &p_node_type_name) override {
 		LOCK_TWO_V(_mutex, _register_mutex, RID());
@@ -156,10 +161,25 @@ protected:
 		const auto iter = _registered_nodes.find(p_node_type_name);
         ERR_FAIL_COND_V(iter == _registered_nodes.end(), RID());
 
-		T *node = iter->value();
+		ptr node = iter->value();
 		RID rid = _nodes_owner.make_rid(node);
 		node->set_self(rid);
 		_nodes[rid] = node;
+
+		const Vector<NodeConnectionInfo> &connections = node->get_connections();
+		if (unlikely(!connections.is_empty())) {
+			_connectors.push_back(node);
+		}
+
+		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(node);
+		if (unlikely(composite)) {
+			_composites.push_back(composite);
+		}
+
+		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(node);
+		if (unlikely(decorator)) {
+			_decorators.push_back(decorator);
+		}
 		
         return rid;
 	}
@@ -167,16 +187,35 @@ protected:
 	bool _destroy_node(RID p_node) override {
 		LOCK_ONE_V(_mutex, false);
 		
-		T *node = _get_node(p_node);
+		ptr node = _get_node(p_node);
 		ERR_FAIL_NULL_V(node, false);
 
-		_unparent(node);
+		for (ptr connector : _connectors) {
+			const auto &connections = connector->get_connections();
+			for (const auto &info : connections) {
+				if (unlikely(connector->get_connection(info.name) == node)) {
+					connector->set_connection(info.name, nullptr);
+				}
+			}
+		}
+		_connectors.erase(node);
 
-		Vector<const T*> children = {};
-		node->get_children(children);
-		for(const IPipelineNode* child : children) {
-			RID child_rid = child->get_id();
-			_child_to_parent.erase(child_rid);
+		for (IPipelineNodeComposite *composite : _composites) {
+			composite->remove_child_node(node);
+		}
+		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(node);
+		if (unlikely(composite != nullptr)) {
+			_composites.erase(composite);
+		}
+
+		for (IPipelineNodeDecorator *decorator : _decorators) {
+			if (unlikely(decorator->get_child() == node)) {
+				decorator->set_child(nullptr);
+			}
+		}
+		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(node);
+		if (unlikely(decorator != nullptr)) {
+			_decorators.erase(decorator);
 		}
 
 		RID rid = node->get_id();
@@ -224,12 +263,15 @@ public:
 		_root = nullptr;
 		for (const auto &kvp : _nodes) {
 			RID rid = kvp.key;
-			IPipelineNode *node = kvp.value;
+			ptr node = kvp.value;
 			_nodes_owner.free(rid);
 			memdelete(node);
 		}
-		
 		_nodes.clear();
+		_connectors.clear();
+		_composites.clear();
+		_decorators.clear();
+		// _child_to_parent.clear();
 		memdelete(_mutex);
 	}
 
@@ -247,24 +289,23 @@ public:
 	
 	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
 
-	void update_node(const IPipelineNode *p_node, const IPipelineNode *p_parent = nullptr) override {
-		LOCK_ONE(_mutex);
-		if (likely(p_parent != nullptr)) {
-			const T *parent = dynamic_cast<const T *>(p_parent);
-			ERR_FAIL_NULL(parent);
+	// void parent_changed(c_ptr p_child, c_ptr p_parent = nullptr) override {
+	// 	LOCK_ONE(_mutex);
 
-			const T *node = dynamic_cast<const T *>(p_node);
-			ERR_FAIL_NULL(node);
+	// 	c_ptr child = dynamic_cast<c_ptr>(p_child);
+	// 	ERR_FAIL_NULL(child);
 
-			_reparent(parent, node);
-		}
-		else {
-			const T *node = dynamic_cast<const T *>(p_node);
-			ERR_FAIL_NULL(node);
+	// 	if (likely(p_parent != nullptr)) {
+	// 		c_ptr parent = dynamic_cast<c_ptr>(p_parent);
+	// 		ERR_FAIL_NULL(parent);
 
-			_unparent(node);	
-		}
-	}
+	// 		_reparent(parent, child);
+	// 	}
+	// 	else {
+
+	// 		_unparent(child);	
+	// 	}
+	// }
 
 	void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const override {
 		LOCK_ONE(_mutex);

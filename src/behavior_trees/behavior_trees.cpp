@@ -11,7 +11,7 @@ _FORCE_INLINE_ const BehaviorTreeNode *BehaviorTree::get_root() const {
 }
 
 _FORCE_INLINE_ BehaviorTreeContext BehaviorTree::create_context() {
-    return {get_state_blackboard(), &node_states(), &aliases()};
+    return {get_state_blackboard(), &node_states()};
 }
 
 void BehaviorTree::register_types() {

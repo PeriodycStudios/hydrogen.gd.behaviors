@@ -5,8 +5,11 @@
 #include "../pipelines/pipeline_node.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "godot_cpp/variant/string.hpp"
+#include "pipelines/node_interfaces.hpp"
 
 namespace hydrogen::behavior_trees {
+
+using namespace pipelines;
 
 class BehaviorTree;
 class BehaviorTreeContext;
@@ -14,6 +17,8 @@ class BehaviorTreeContext;
 DEFINE_NAME_STATIC(last_result)
 
 class BehaviorTreeNode : public pipelines::PipelineNode {
+	ABSTRACT_PIPELINE_NODE(BehaviorTreeNode, PipelineNode);
+
 public:
 	enum Result {
 		SUCCESS = 0,
@@ -33,6 +38,14 @@ public:
 protected:
 	friend class BehaviorTree;
 
+	static const Vector<NodePortInfo> &_get_ports() {
+		return parent::_get_ports();
+	}
+
+	static const Vector<NodeConnectionInfo> &_get_connections() {
+		return parent::_get_connections();
+	}
+
 	virtual Result _execute(BehaviorTreeContext &p_context) const = 0;
 	virtual void _halt(BehaviorTreeContext &p_context) const = 0;
 
@@ -41,6 +54,9 @@ protected:
 	}
 
 public:
+
+	DEFINE_GET_PORTS();
+	DEFINE_GET_CONNECTIONS();
 	
 	Result execute(BehaviorTreeContext &p_context) const;
 
