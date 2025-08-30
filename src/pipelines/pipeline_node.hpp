@@ -20,11 +20,13 @@ namespace hydrogen::pipelines {
 class PipelineNode : public RidData, public IPipelineNode {
     ABSTRACT_PIPELINE_NODE(PipelineNode, IPipelineNode);
 
-    String _name = "";
-    HashMap<StringName, StringName> _input_aliases = {};
-    HashMap<StringName, StringName> _output_aliases = {};
+    typedef HashMap<StringName, StringName> AliasMap;
 
-    static void _setup_aliases(HashMap<StringName, StringName> &p_internal_aliases, const PortAliases &p_aliases) {
+    String _name = "";
+    AliasMap _input_aliases = {};
+    AliasMap _output_aliases = {};
+
+    static void _setup_aliases(AliasMap &p_internal_aliases, const PortAliases &p_aliases) {
         p_internal_aliases.clear();
         p_internal_aliases.reserve(p_aliases.size());
         TypedArray<StringName> keys = p_aliases.keys();
@@ -34,7 +36,7 @@ class PipelineNode : public RidData, public IPipelineNode {
         }
     }
 
-    static PortAliases _get_aliases(const HashMap<StringName, StringName> &p_internal_aliases) {
+    static PortAliases _get_aliases(const AliasMap &p_internal_aliases) {
         PortAliases aliases = {};
         for (const auto &kvp : p_internal_aliases) {
             aliases.set(kvp.key, kvp.value);
@@ -43,7 +45,7 @@ class PipelineNode : public RidData, public IPipelineNode {
         return aliases;
     }
 
-    static const StringName &_get_mapped_name(const HashMap<StringName, StringName> &p_aliases, const StringName &p_port_name) {
+    static const StringName &_get_alias(const AliasMap &p_aliases, const StringName &p_port_name) {
         const auto iter = p_aliases.find(p_port_name);
         if (likely(iter != p_aliases.end())) {
             return iter->value;
@@ -65,26 +67,26 @@ protected:
     }
 
     template<typename T>
-    T _get_port(const Blackboard *p_blackboard, const StringName &p_port_name) const {
-        StringName port_name = _get_mapped_name(_input_aliases, p_port_name);
-        return p_blackboard->get_entry<T>(port_name);
+    _FORCE_INLINE_ T _get_port(const Blackboard *p_blackboard, const StringName &p_port_name, T p_default, bool p_check_parents = true) const {
+        const StringName &port_name = _get_alias(_input_aliases, p_port_name);
+        return p_blackboard->get_entry<T>(port_name, p_default, p_check_parents);
     }
 
     template<typename T>
-    const T &_get_port_fast(const Blackboard *p_blackboard, const StringName &p_port_name) const {
-        StringName port_name = _get_mapped_name(_input_aliases, p_port_name);
+    _FORCE_INLINE_ const T &_get_port_fast(const Blackboard *p_blackboard, const StringName &p_port_name, const T &p_default, bool p_check_parents = true) const {
+        const StringName &port_name = _get_alias(_input_aliases, p_port_name, p_default, p_check_parents);
         return p_blackboard->get_entry_fast<T>(port_name);
     }
 
     template<typename T>
-    void _set_port(Blackboard *p_blackboard, const StringName &p_port_name, T p_value) const {
-        StringName port_name = _get_mapped_name(_output_aliases, p_port_name);
+    _FORCE_INLINE_ void _set_port(Blackboard *p_blackboard, const StringName &p_port_name, T p_value) const {
+        const StringName &port_name = _get_alias(_output_aliases, p_port_name);
         p_blackboard->set_entry<T>(port_name, p_value);
     }
 
     template<typename T>
-    void _set_port_fast(Blackboard *p_blackboard, const StringName &p_port_name, const T &p_value) const {
-        StringName port_name = _get_mapped_name(_output_aliases, p_port_name);
+    _FORCE_INLINE_ void _set_port_fast(Blackboard *p_blackboard, const StringName &p_port_name, const T &p_value) const {
+        const StringName &port_name = _get_alias(_output_aliases, p_port_name);
         p_blackboard->set_entry_fast<T>(port_name, p_value);
     }
 
@@ -124,6 +126,14 @@ public:
         return _get_aliases(_output_aliases);
     }
 
+    const StringName &get_input_alias(const StringName &p_port) const override {
+        return _get_alias(_input_aliases, p_port);
+    }
+
+    const StringName &get_output_alias(const StringName &p_port) const override {
+        return _get_alias(_output_aliases, p_port);
+    }
+
     bool supports_children() const override { return false; }
     bool has_children() const override { return false; }
 
@@ -135,5 +145,14 @@ public:
 };
 
 }
+
+#define GET_PORT_LOCAL(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name, false)
+#define GET_PORT_LOCAL_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name, false)
+
+#define GET_PORT(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name)
+#define GET_PORT_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name)
+
+#define SET_PORT(port_name, value) _set_port<port_name##_type>(p_context.blackboard(), port_name##_name(), value)
+#define SET_PORT_FAST(port_name, value) _set_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), value)
 
 #endif

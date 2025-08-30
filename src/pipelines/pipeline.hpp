@@ -20,8 +20,7 @@ namespace hydrogen::pipelines {
 using namespace godot;
 
 class Pipeline : public RidData {
-	Blackboard *_instance_blackboard;
-	Blackboard *_state_blackboard;
+	Blackboard *_blackboard;
 	IPipelineGraph *_graph;
 	NodeStateMap _node_states {};
 	std::mutex *_mutex;
@@ -32,8 +31,6 @@ protected:
 
 	explicit Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph *p_graph);
 
-	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_state_blackboard() const { return _state_blackboard; }
-	[[nodiscard]] _FORCE_INLINE_ const Blackboard *get_readonly_state_blackboard() const { return _state_blackboard; }
 	[[nodiscard]] _FORCE_INLINE_ const IPipelineNode *get_pipeline_root() const { return _graph->get_root_node(); }
 
 public:
@@ -42,10 +39,10 @@ public:
 	virtual void execute() = 0;
 	virtual void halt() = 0;
 
-	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_blackboard() const { return _instance_blackboard; }
+	[[nodiscard]] _FORCE_INLINE_ Blackboard *get_blackboard() const { return _blackboard; }
 
 	[[nodiscard]] _FORCE_INLINE_ String get_error() const {
-		return _state_blackboard->get_entry_fast<String>(error_name(), "", false);
+		return _blackboard->get_entry_fast<String>(_error_name(), "", false);
 	}
 };
 }

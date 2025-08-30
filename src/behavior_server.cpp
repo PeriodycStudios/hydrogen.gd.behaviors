@@ -9,17 +9,18 @@
 #include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/templates/pair.hpp"
 #include "godot_cpp/templates/vector.hpp"
+#include "godot_cpp/variant/callable.hpp"
 #include "godot_cpp/variant/dictionary.hpp"
 #include "godot_cpp/variant/rid.hpp"
 #include "godot_cpp/variant/string.hpp"
 #include "godot_cpp/variant/string_name.hpp"
 #include "godot_cpp/variant/typed_array.hpp"
+#include "godot_cpp/variant/variant.hpp"
 #include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "pipelines/pipeline.hpp"
 
 #include <cstdint>
-#include <functional>
 #include <godot_cpp/core/property_info.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
@@ -461,6 +462,36 @@ void BehaviorServer::_pipeline_emit_destroyed(RID p_behavior_tree) {
 
 // ---- Graph ----
 
+RID BehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) {
+	TRY_GET_GRAPH_EDITABLE_V(RID());
+	return graph->create_node(p_node_type_name, p_input_aliases, p_output_aliases);
+}
+
+bool BehaviorServer::graph_destroy_node(RID p_graph, RID p_node) {
+	TRY_GET_GRAPH_EDITABLE_V(false);
+	return graph->destroy_node(p_node);
+}
+
+bool BehaviorServer::graph_is_bound(RID p_graph) {
+	TRY_GET_CONST_GRAPH_V(false);
+	return graph->is_bound();
+}
+
+TypedArray<RID> _nodes_to_ids(const Vector<const IPipelineNode *> p_nodes) {
+	if (unlikely(p_nodes.is_empty())) {
+		return {};
+	}
+
+	const int64_t nodes_count = p_nodes.size();
+	TypedArray<RID> results = {};
+	results.resize(nodes_count);
+	for (int64_t idx = 0; idx < nodes_count; ++idx) {
+		results[idx] = p_nodes[idx]->get_id();
+	}
+
+	return results;
+}
+
 TypedArray<RID> BehaviorServer::graph_get_sub_graphs(RID p_graph) {
 	TRY_GET_CONST_GRAPH_V({});
 
@@ -486,31 +517,8 @@ TypedArray<RID> BehaviorServer::graph_get_nodes(RID p_graph) {
 	
 	Vector<const IPipelineNode *> nodes = {};
 	graph->get_nodes(nodes);
-	const int64_t nodes_count = nodes.size();
-	if (likely(nodes_count > 0)) {
-		rids.resize(nodes_count);
-	}
 
-	for(int64_t i = 0; i < nodes_count; ++i) {
-		rids[i] = nodes[i]->get_id();
-	}
-
-	return rids;
-}
-
-RID BehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name) {
-	TRY_GET_GRAPH_EDITABLE_V(RID());
-	return graph->create_node(p_node_type_name);
-}
-
-bool BehaviorServer::graph_destroy_node(RID p_graph, RID p_node) {
-	TRY_GET_GRAPH_EDITABLE_V(false);
-	return graph->destroy_node(p_node);
-}
-
-bool BehaviorServer::graph_is_bound(RID p_graph) {
-	TRY_GET_CONST_GRAPH_V(false);
-	return graph->is_bound();
+	return _nodes_to_ids(nodes);
 }
 
 bool BehaviorServer::graph_set_root(RID p_graph, RID p_node) {
@@ -521,6 +529,36 @@ bool BehaviorServer::graph_set_root(RID p_graph, RID p_node) {
 RID BehaviorServer::graph_get_root(RID p_graph) {
 	TRY_GET_CONST_GRAPH_V(RID());
 	return graph->get_root();
+}
+
+TypedArray<RID> BehaviorServer::graph_query_node(RID p_graph, RID p_node, Callable p_predicate) {
+	TRY_GET_CONST_GRAPH_V({});
+	ERR_FAIL_COND_V(p_predicate.is_null(), {});
+
+	IPipelineGraph::PipelineNodePredicate predicate_wrapper = [&p_predicate](const IPipelineNode *p_node) -> bool {
+		bool result = p_predicate.call(p_node->get_id());
+		return result;
+	};
+
+	Vector<const IPipelineNode *> nodes = {};
+	graph->query_node(p_node, nodes, predicate_wrapper);
+
+	return _nodes_to_ids(nodes);
+}
+
+TypedArray<RID> BehaviorServer::graph_query_nodes(RID p_graph, Callable p_predicate) {
+	TRY_GET_CONST_GRAPH_V({});
+	ERR_FAIL_COND_V(p_predicate.is_null(), {});
+
+	IPipelineGraph::PipelineNodePredicate predicate_wrapper = [&p_predicate](const IPipelineNode *p_node) -> bool {
+		bool result = p_predicate.call(p_node->get_id());
+		return result;
+	};
+
+	Vector<const IPipelineNode *> nodes = {};
+	graph->query_nodes(nodes, predicate_wrapper);
+
+	return _nodes_to_ids(nodes);
 }
 
 TypedArray<Dictionary> BehaviorServer::graph_get_rooted_statuses(RID p_graph) {
@@ -563,33 +601,43 @@ const StringName &BehaviorServer::node_get_type_name(RID p_graph, RID p_node) {
 	return node->get_type_name();
 }
 
-template<typename T>
-TypedArray<Dictionary> _get_infos(const IPipelineNode *p_node, std::function<const Vector<T> &(const IPipelineNode *)> p_getter) {
-	const Vector<T> &infos = p_getter(p_node);
-	if (likely(infos.is_empty())) {
-		return {};
-	}
-
-	TypedArray<Dictionary> infos_array = {};
-	const int64_t ports_count = infos.size();
-	infos_array.resize(ports_count);
-	for (int64_t i = 0; i < ports_count; ++i) {
-		infos_array[i] = infos[i].to_dictionary();
-	}
-	
-	return infos_array;
-}
 
 TypedArray<Dictionary> BehaviorServer::node_get_ports(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE_V({});
-	static const auto get_ports = [](const IPipelineNode *n) -> const Vector<NodePortInfo> & { return n->get_ports(); };
-	return _get_infos<NodePortInfo>(node, get_ports);
+
+	const Vector<NodePortInfo> &ports = node->get_ports();
+	if (likely(ports.is_empty())) {
+		return {};
+	}
+
+	Blackboard bb = Blackboard();
+
+	TypedArray<Dictionary> ports_array = {};
+	const int64_t ports_count = ports.size();
+	ports_array.resize(ports_count);
+	for (int64_t i = 0; i < ports_count; ++i) {
+		ports_array[i] = ports[i].to_dictionary(node, &bb);
+	}
+	
+	return ports_array;
 }
 
 TypedArray<Dictionary> BehaviorServer::node_get_connections(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE_V({});
-	static const auto get_connections = [](const IPipelineNode *n) -> const Vector<NodeConnectionInfo> & { return n->get_connections(); };
-	return _get_infos<NodeConnectionInfo>(node, get_connections);
+
+	const Vector<NodeConnectionInfo> &connections = node->get_connections();
+	if (likely(connections.is_empty())) {
+		return {};
+	}
+
+	TypedArray<Dictionary> connections_array = {};
+	const int64_t connections_count = connections.size();
+	connections_array.resize(connections_count);
+	for(int64_t idx = 0; idx < connections_count; ++idx) {
+		connections_array[idx] = connections[idx].to_dictionary();
+	}
+
+	return connections_array;
 }
 
 bool BehaviorServer::node_set_connection(RID p_graph, RID p_node, const StringName &p_name, RID p_target_node) {
@@ -650,6 +698,51 @@ void BehaviorServer::node_set_output_aliases(RID p_graph, RID p_node, const Port
 PortAliases BehaviorServer::node_get_output_aliases(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE_V({});
 	return node->get_output_aliases();
+}
+
+bool BehaviorServer::node_supports_children(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V(false);
+	return node->supports_children();
+}
+
+bool BehaviorServer::node_has_children(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V(false);
+	return node->has_children();
+}
+
+TypedArray<RID> BehaviorServer::node_get_children(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V({});
+
+	Vector<const IPipelineNode *> children = {};
+	node->get_children(children);
+
+	return _nodes_to_ids(children);
+}
+
+TypedArray<RID> BehaviorServer::node_get_descendants(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V({});
+
+	Vector<const IPipelineNode *> descendants = {};
+	node->get_descendants(descendants);
+	return _nodes_to_ids(descendants);
+}
+
+bool BehaviorServer::node_has_child(RID p_graph, RID p_node, RID p_candidate) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V(false);
+
+	const IPipelineNode *candidate = graph->get_node(p_candidate);
+	ERR_FAIL_NULL_V(candidate, false);
+
+	return node->has_child(candidate);
+}
+
+bool BehaviorServer:: node_has_descendant(RID p_graph, RID p_node, RID p_candidate) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V(false);
+
+	const IPipelineNode *candidate = graph->get_node(p_candidate);
+	ERR_FAIL_NULL_V(candidate, false);
+
+	return node->has_descendant(candidate);
 }
 
 bool BehaviorServer::node_parent_has_child(RID p_graph, RID p_node, RID p_child) {
@@ -981,11 +1074,15 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("graph_created", PropertyInfo(Variant::RID, "graph")));
 	ADD_SIGNAL(MethodInfo("graph_destroyed", PropertyInfo(Variant::RID, "graph")));
 
-	ClassDB::bind_method(D_METHOD("graph_create_node", "graph", "node_type_name"), &HydrogenBehaviorServer::graph_create_node);
+	ClassDB::bind_method(D_METHOD("graph_create_node", "graph", "node_type_name", "input_aliases", "output_aliases"), &HydrogenBehaviorServer::graph_create_node, DEFVAL(PortAliases()), DEFVAL(PortAliases()));
 	ClassDB::bind_method(D_METHOD("graph_destroy_node", "graph", "node"), &HydrogenBehaviorServer::graph_destroy_node);
 	ClassDB::bind_method(D_METHOD("graph_is_bound", "graph"), &HydrogenBehaviorServer::graph_is_bound);
+	ClassDB::bind_method(D_METHOD("graph_get_sub_graphs", "graph"), &HydrogenBehaviorServer::graph_get_sub_graphs);
+	ClassDB::bind_method(D_METHOD("graph_get_nodes", "graph"),&HydrogenBehaviorServer::graph_get_nodes);
 	ClassDB::bind_method(D_METHOD("graph_set_root", "graph", "node"), &HydrogenBehaviorServer::graph_set_root);
 	ClassDB::bind_method(D_METHOD("graph_get_root", "graph"), &HydrogenBehaviorServer::graph_get_root);
+	ClassDB::bind_method(D_METHOD("graph_query_node", "graph", "node", "predicate"), &HydrogenBehaviorServer::graph_query_node);
+	ClassDB::bind_method(D_METHOD("graph_query_nodes", "graph", "predicate"), &HydrogenBehaviorServer::graph_query_nodes);
 	ClassDB::bind_method(D_METHOD("graph_get_rooted_statuses", "graph"), &HydrogenBehaviorServer::graph_get_rooted_statuses);
 	ClassDB::bind_method(D_METHOD("graph_node_is_parented", "graph", "node"), &HydrogenBehaviorServer::graph_node_is_parented);
 	// ---- Graphs End ----
@@ -1006,6 +1103,12 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("node_get_input_alias", "graph", "node"), &HydrogenBehaviorServer::node_get_input_aliases);
 	ClassDB::bind_method(D_METHOD("node_set_output_aliases", "graph", "node", "aliases"), &HydrogenBehaviorServer::node_set_output_aliases);
 	ClassDB::bind_method(D_METHOD("node_get_output_aliases", "graph", "node"), &HydrogenBehaviorServer::node_get_output_aliases);
+	ClassDB::bind_method(D_METHOD("node_supports_children", "graph", "node"), &HydrogenBehaviorServer::node_supports_children);
+	ClassDB::bind_method(D_METHOD("node_has_children", "graph", "node"), &HydrogenBehaviorServer::node_has_children);
+	ClassDB::bind_method(D_METHOD("node_get_children", "graph", "node"), &HydrogenBehaviorServer::node_get_children);
+	ClassDB::bind_method(D_METHOD("node_get_descendants", "graph", "node"), &HydrogenBehaviorServer::node_get_descendants);
+	ClassDB::bind_method(D_METHOD("node_has_child", "graph", "node", "candidate"), &HydrogenBehaviorServer::node_has_child);
+	ClassDB::bind_method(D_METHOD("node_has_descendant", "graph", "node", "candidate"), &HydrogenBehaviorServer::node_has_descendant);
 	ClassDB::bind_method(D_METHOD("node_parent_has_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_parent_has_child);
 	ClassDB::bind_method(D_METHOD("node_composite_add_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_composite_add_child);
 	ClassDB::bind_method(D_METHOD("node_composite_remove_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_composite_remove_child);
@@ -1125,16 +1228,8 @@ void HydrogenBehaviorServer::_graph_emit_destroyed(RID p_graph) {
 	emit_signal("graph_destroyed", p_graph);
 }
 
-TypedArray<RID> HydrogenBehaviorServer::graph_get_sub_graphs(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_sub_graphs(p_graph);
-}
-
-TypedArray<RID> HydrogenBehaviorServer::graph_get_nodes(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_nodes(p_graph);
-}
-
-RID HydrogenBehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name) {
-	return BehaviorServer::get_singleton()->graph_create_node(p_graph, p_node_type_name);
+RID HydrogenBehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) {
+	return BehaviorServer::get_singleton()->graph_create_node(p_graph, p_node_type_name, p_input_aliases, p_output_aliases);
 }
 
 bool HydrogenBehaviorServer::graph_destroy_node(RID p_graph, RID p_node) {
@@ -1145,12 +1240,28 @@ bool HydrogenBehaviorServer::graph_is_bound(RID p_graph) {
 	return BehaviorServer::get_singleton()->graph_is_bound(p_graph);
 }
 
+TypedArray<RID> HydrogenBehaviorServer::graph_get_sub_graphs(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_sub_graphs(p_graph);
+}
+
+TypedArray<RID> HydrogenBehaviorServer::graph_get_nodes(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_nodes(p_graph);
+}
+
 bool HydrogenBehaviorServer::graph_set_root(RID p_graph, RID p_node) {
 	return BehaviorServer::get_singleton()->graph_set_root(p_graph, p_node);
 }
 
 RID HydrogenBehaviorServer::graph_get_root(RID p_graph) {
 	return BehaviorServer::get_singleton()->graph_get_root(p_graph);
+}
+
+TypedArray<RID> HydrogenBehaviorServer::graph_query_node(RID p_graph, RID p_node, Callable p_predicate) {
+	return BehaviorServer::get_singleton()->graph_query_node(p_graph, p_node, p_predicate);
+}
+
+TypedArray<RID> HydrogenBehaviorServer::graph_query_nodes(RID p_graph, Callable p_predicate) {
+	return BehaviorServer::get_singleton()->graph_query_nodes(p_graph, p_predicate);
 }
 
 TypedArray<Dictionary> HydrogenBehaviorServer::graph_get_rooted_statuses(RID p_graph) {
@@ -1219,6 +1330,30 @@ void HydrogenBehaviorServer::node_set_output_aliases(RID p_graph, RID p_node, co
 
 PortAliases HydrogenBehaviorServer::node_get_output_aliases(RID p_graph, RID p_node) {
 	return BehaviorServer::get_singleton()->node_get_output_aliases(p_graph, p_node);
+}
+
+bool HydrogenBehaviorServer::node_supports_children(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_supports_children(p_graph, p_node);
+}
+
+bool HydrogenBehaviorServer::node_has_children(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_has_children(p_graph, p_node);
+}
+
+TypedArray<RID> HydrogenBehaviorServer::node_get_children(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_get_children(p_graph, p_node);
+}
+
+TypedArray<RID> HydrogenBehaviorServer::node_get_descendants(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_get_descendants(p_graph, p_node);
+}
+
+bool HydrogenBehaviorServer::node_has_child(RID p_graph, RID p_node, RID p_candidate) {
+	return BehaviorServer::get_singleton()->node_has_child(p_graph, p_node, p_candidate);
+}
+
+bool HydrogenBehaviorServer::node_has_descendant(RID p_graph, RID p_node, RID p_candidate) {
+	return BehaviorServer::get_singleton()->node_has_descendant(p_graph, p_node, p_candidate);
 }
 
 bool HydrogenBehaviorServer::node_parent_has_child(RID p_graph, RID p_node, RID p_child) {

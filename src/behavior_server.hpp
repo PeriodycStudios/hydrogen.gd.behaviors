@@ -6,6 +6,8 @@
 #define BEHAVIOR_SERVER_HPP
 
 #include "blackboard.hpp"
+#include "godot_cpp/variant/callable.hpp"
+#include "godot_cpp/variant/rid.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "pipelines/pipeline.hpp"
 
@@ -203,19 +205,17 @@ public:
 	// ---- Blackboard END ----
 
 	// ---- Graphs ----
-
+	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases);
+	bool graph_destroy_node(RID p_graph, RID p_node);
+	bool graph_is_bound(RID p_graph);
 	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
 	TypedArray<RID> graph_get_nodes(RID p_graph);
-
-	RID graph_create_node(RID p_graph, const StringName &p_node_type_name);
-	bool graph_destroy_node(RID p_graph, RID p_node);
-
-	bool graph_is_bound(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
+	TypedArray<RID> graph_query_node(RID p_graph, RID p_node, Callable p_predicate);
+	TypedArray<RID> graph_query_nodes(RID p_graph, Callable p_predicate);
 	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
 	bool graph_node_is_parented(RID p_graph, RID p_node);
-
 	// ---- Graphs END ----
 
 	// ---- Nodes ----
@@ -240,6 +240,13 @@ public:
 
 	void node_set_output_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases node_get_output_aliases(RID p_graph, RID p_node);
+
+	bool node_supports_children(RID p_graph, RID p_node);
+	bool node_has_children(RID p_graph, RID p_node);
+	TypedArray<RID> node_get_children(RID p_graph, RID p_node);
+	TypedArray<RID> node_get_descendants(RID p_graph, RID p_node);
+	bool node_has_child(RID p_graph, RID p_node, RID p_candidate);
+	bool node_has_descendant(RID p_graph, RID p_node, RID p_candidate);
 
 	bool node_parent_has_child(RID p_graph, RID p_node, RID p_child);
 
@@ -377,16 +384,15 @@ public:
 	// ---- Blackboard END ----
 
 	// ---- Graphs ----
-
+	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases = {}, const PortAliases &p_output_aliases = {});
+	bool graph_destroy_node(RID p_graph, RID p_node);
+	bool graph_is_bound(RID p_graph);
 	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
 	TypedArray<RID> graph_get_nodes(RID p_graph);
-
-	RID graph_create_node(RID p_graph, const StringName &p_node_type_name);
-	bool graph_destroy_node(RID p_graph, RID p_node);
-
-	bool graph_is_bound(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
+	TypedArray<RID> graph_query_node(RID p_graph, RID p_node, Callable p_predicate);
+	TypedArray<RID> graph_query_nodes(RID p_graph, Callable p_predicate);
 	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
 	bool graph_node_is_parented(RID p_graph, RID p_node);
 
@@ -414,6 +420,13 @@ public:
 
 	void node_set_output_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases node_get_output_aliases(RID p_graph, RID p_node);
+
+	bool node_supports_children(RID p_graph, RID p_node);
+	bool node_has_children(RID p_graph, RID p_node);
+	TypedArray<RID> node_get_children(RID p_graph, RID p_node);
+	TypedArray<RID> node_get_descendants(RID p_graph, RID p_node);
+	bool node_has_child(RID p_graph, RID p_node, RID p_candidate);
+	bool node_has_descendant(RID p_graph, RID p_node, RID p_candidate);
 
 	bool node_parent_has_child(RID p_graph, RID p_node, RID p_child);
 

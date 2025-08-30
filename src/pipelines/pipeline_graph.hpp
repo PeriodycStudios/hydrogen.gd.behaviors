@@ -113,16 +113,19 @@ protected:
 		}
 	}
 
-	RID _create_node(const StringName &p_node_type_name) override {
+	RID _create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) override {
 		LOCK_TWO_V(_mutex, _register_mutex, RID());
 
 		const auto iter = _registered_nodes.find(p_node_type_name);
         ERR_FAIL_COND_V(iter == _registered_nodes.end(), RID());
 
 		ptr node = iter->value();
+		ERR_FAIL_NULL_V(node, RID());
 		RID rid = _nodes_owner.make_rid(node);
 		node->set_self(rid);
 		_nodes[rid] = node;
+		node->set_input_aliases(p_input_aliases);
+		node->set_output_aliases(p_output_aliases);
 
 		const Vector<NodeConnectionInfo> &connections = node->get_connections();
 		if (unlikely(!connections.is_empty())) {
@@ -228,9 +231,9 @@ public:
 		memdelete(_mutex);
 	}
 
-	RID create_node(const StringName &p_node_type_name) override {
-		ERR_FAIL_COND_V_MSG(is_bound(), RID(), "Cannot create nodes while bound!");
-		return _create_node(p_node_type_name);
+	RID create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) override {
+		ERR_FAIL_COND_V_MSG(is_bound(), RID(), "Cannoot create nodes while bound!");
+		return _create_node(p_node_type_name, p_input_aliases, p_output_aliases);
 	}
 
 	bool destroy_node(RID p_node) override {

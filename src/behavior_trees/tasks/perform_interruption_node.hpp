@@ -5,6 +5,7 @@
 #include "behavior_trees/decorators/interrupter_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
@@ -29,7 +30,7 @@ protected:
 
     Result _execute(BehaviorTreeContext &p_context) const override {
         if (likely(_interrupter != nullptr)) {
-            Result desired = _get_port<Result>(p_context.blackboard(), desiredResult_name());
+            Result desired = GET_PORT(desiredResult);
             _interrupter->set_result(p_context, desired);
             return SUCCESS;
         }

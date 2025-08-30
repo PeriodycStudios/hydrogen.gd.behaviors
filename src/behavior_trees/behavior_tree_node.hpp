@@ -14,7 +14,7 @@ using namespace pipelines;
 class BehaviorTree;
 class BehaviorTreeContext;
 
-DEFINE_NAME_STATIC(last_result)
+DEFINE_NAME_STATIC(_last_result);
 
 class BehaviorTreeNode : public pipelines::PipelineNode {
 	ABSTRACT_PIPELINE_NODE(BehaviorTreeNode, PipelineNode);

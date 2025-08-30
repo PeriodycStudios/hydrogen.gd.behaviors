@@ -6,6 +6,7 @@
 #include "../behavior_tree_node.hpp"
 #include "godot_cpp/core/error_macros.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline_node.hpp"
 #include <cstdint>
 
 namespace hydrogen::behavior_trees {
@@ -34,7 +35,7 @@ protected:
         LimitNodeState *state = p_context.get_state<LimitNodeState>(state_key());
         ERR_FAIL_NULL_V(state, FAILURE);
 
-        const uint32_t executeLimit = _get_port<uint32_t>(p_context.blackboard(), executeLimit_name());
+        const uint32_t executeLimit = GET_PORT(executeLimit);
         while (state->execute_counter < executeLimit) {
             Result result = _decorated_node->execute(p_context);
             switch (result) {

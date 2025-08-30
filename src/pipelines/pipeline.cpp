@@ -1,17 +1,18 @@
 
 #include "pipeline.hpp"
 #include "godot_cpp/core/defs.hpp"
+#include "godot_cpp/templates/vector.hpp"
+#include "pipelines/node_interfaces.hpp"
 
 #include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/templates/pair.hpp>
 
 namespace hydrogen::pipelines {
 
-Pipeline::Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph *p_graph) :
-_instance_blackboard(memnew(Blackboard)), _state_blackboard(memnew(Blackboard)), _graph(p_graph), _mutex(memnew(std::mutex)) {
-	_instance_blackboard->set_parent(p_source_blackboard);
-	_state_blackboard->set_parent(_instance_blackboard);
-	_state_blackboard->set_entry_fast(error_name(), String(""));
+Pipeline::Pipeline(const Blackboard *p_source_blackboard, IPipelineGraph *p_graph)
+	: _blackboard(memnew(Blackboard)), _graph(p_graph), _mutex(memnew(std::mutex)) {
+	_blackboard->set_parent(p_source_blackboard);
+	_blackboard->set_entry_fast(_error_name(), String(""));
 
 	Vector<const IPipelineNode *> collected_nodes = {};
 	_graph->get_nodes(collected_nodes);
@@ -41,12 +42,10 @@ Pipeline::~Pipeline() {
 	}
 	_node_states.clear();
 
-	memdelete(_state_blackboard);
-	memdelete(_instance_blackboard);
+	memdelete(_blackboard);
 	memdelete(_mutex);
 
-	_instance_blackboard = nullptr;
-	_state_blackboard = nullptr;
+	_blackboard = nullptr;
 	_graph = nullptr;
 	_mutex = nullptr;
 }

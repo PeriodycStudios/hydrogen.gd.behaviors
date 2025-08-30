@@ -47,15 +47,18 @@ protected:
         p_state->time_remaining = {};
     }
 
+    virtual T _get_duration_default() const { return {}; }
+    virtual T _get_delta_default() const { return {}; }
+
     Result _execute(BehaviorTreeContext &p_context) const override {
         WaitForNodeState *state = _get_state(p_context);
 
         if (state->time_remaining == k_zero) {
-            state->time_remaining = _get_port<T>(p_context.blackboard(), duration_name());
+            state->time_remaining = _get_port<T>(p_context.blackboard(), duration_name(), _get_duration_default());
             return RUNNING;
         }
         else if (likely(state->time_remaining > k_zero)) {
-            T delta = _get_port<T>(p_context.blackboard(), delta_name());
+            T delta = _get_port<T>(p_context.blackboard(), delta_name(), _get_delta_default());
             state->time_remaining -= delta;
             state->time_remaining = Math::max<T>(state->time_remaining, k_zero);
             if (likely(state->time_remaining > k_zero)) {
@@ -93,6 +96,14 @@ protected:
     static constexpr real_t k_default_delta = 0.1;
     static constexpr real_t k_default_duration = 1.0;
 
+    real_t _get_duration_default() const override {
+        return k_default_duration;
+    }
+
+    real_t _get_delta_default() const override {
+        return k_default_delta;
+    }
+
     BEGIN_NODE_PORTS()
         INPUT_PORT(delta)
         INPUT_PORT(duration)
@@ -110,6 +121,14 @@ class WaitForMillisecondsNode : public WaitForNodeBase<uint64_t> {
 
     static constexpr uint64_t k_default_delta = 0;
     static constexpr uint64_t k_default_duration = 1000;
+
+    uint64_t _get_duration_default() const override {
+        return k_default_duration;
+    }
+
+    uint64_t _get_delta_default() const override {
+        return k_default_delta;
+    }
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(delta)
@@ -131,11 +150,12 @@ class WaitForTicksNode : public WaitForNodeBase<uint64_t> {
     END_NODE_PORTS()
 
 protected:
+
     Result _execute(BehaviorTreeContext &p_context) const override {
         WaitForNodeState *state = _get_state(p_context);
 
         if (unlikely(state->time_remaining == k_zero)) {
-            state->time_remaining = _get_port<uint32_t>(p_context.blackboard(), duration_name());
+            state->time_remaining = GET_PORT(duration);
             return RUNNING;
         }
         else if (likely(state->time_remaining > k_one)) {
@@ -177,7 +197,7 @@ protected:
         ERR_FAIL_NULL_V(state, FAILURE);
 
         if (unlikely(state->time_point == 0.0)) {
-            double duration = _get_port<uint32_t>(p_context.blackboard(), duration_name());
+            double duration = GET_PORT(duration);
             state->time_point = Time::get_singleton()->get_unix_time_from_system() + duration;
             return RUNNING;
         }
