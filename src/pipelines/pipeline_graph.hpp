@@ -52,11 +52,10 @@ private:
 	std::atomic_uint32_t _bind_count = { 0 };
 
 protected:
+
 	HashMap<RID, ptr> _nodes = {};
-	// HashMap<RID, RID> _child_to_parent = {};
+	HashMap<RID, IPipelineNodeParent *> _parent_lookup = {};
 	Vector<T *> _connectors = {};
-	Vector<IPipelineNodeComposite *> _composites = {};
-	Vector<IPipelineNodeDecorator *> _decorators = {};
 	RID_PtrOwner<T> _nodes_owner = {};
 	ptr _root = nullptr;
 
@@ -114,47 +113,6 @@ protected:
 		}
 	}
 
-	// void _unparent_helper(c_ptr p_node, RID p_parent_id) {
-	// 	T *parent = _get_node(p_parent_id);
-
-	// 	if (likely(parent)) {
-	// 		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(parent);
-	// 		if (likely(composite != nullptr)) {
-	// 			bool result = composite->remove_child_node(p_node);
-	// 			if (unlikely(!result)) {
-	// 				ERR_PRINT("Node already removed, this shouldn't happen.");
-	// 			}
-	// 		}
-
-	// 		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(parent);
-	// 		if (unlikely(decorator != nullptr)) {
-	// 			decorator->set_child(nullptr);
-	// 		}
-	// 	}
-	// 	else {
-	// 		ERR_PRINT("Couldn't find parent node.");
-	// 	}
-	// 	_child_to_parent.erase(p_node->get_self());
-	// }
-
-	// void _unparent(c_ptr p_node) {
-	// 	auto parent_rid_iter = _child_to_parent.find(p_node->get_self());
-	// 	if (likely(parent_rid_iter != _child_to_parent.end())) {
-	// 		_unparent_helper(p_node, parent_rid_iter->value);
-	// 	}
-	// }
-
-	// void _reparent(c_ptr p_parent, c_ptr p_node) {
-
-	// 	RID node_rid = p_node->get_self();
-	// 	auto iter = _child_to_parent.find(node_rid);
-	// 	if (likely(iter != _child_to_parent.end())) {
-	// 		_unparent_helper(p_node, iter->value);
-	// 	}
-
-	// 	_child_to_parent[node_rid] = p_parent->get_self();
-	// }
-
 	RID _create_node(const StringName &p_node_type_name) override {
 		LOCK_TWO_V(_mutex, _register_mutex, RID());
 
@@ -170,18 +128,40 @@ protected:
 		if (unlikely(!connections.is_empty())) {
 			_connectors.push_back(node);
 		}
-
-		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(node);
-		if (unlikely(composite)) {
-			_composites.push_back(composite);
-		}
-
-		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(node);
-		if (unlikely(decorator)) {
-			_decorators.push_back(decorator);
-		}
 		
         return rid;
+	}
+
+	void _clear_connections(T *p_node) {
+		for (ptr connector : _connectors) {
+			const auto &connections = connector->get_connections();
+			for (const auto &info : connections) {
+				if (unlikely(connector->get_connection(info.name) == p_node)) {
+					connector->set_connection(info.name, nullptr);
+				}
+			}
+		}
+		_connectors.erase(p_node);
+	}
+
+	void _clear_parentage(T *p_node) {
+		IPipelineNodeParent *parent = dynamic_cast<IPipelineNodeParent *>(p_node);
+		if (unlikely(parent)) {
+			Vector<const T *> children = {};
+			p_node->get_children(children);
+			for (const T *child : children) {
+				_parent_lookup.erase(child->get_id());
+			}
+			parent->remove_all_children();
+		}
+
+		RID rid = p_node->get_id();
+		auto iter = _parent_lookup.find(rid);
+		if (likely(iter != _parent_lookup.end())) {
+			IPipelineNodeParent *parent = iter->value;
+			parent->remove_child(p_node);
+			_parent_lookup.erase(rid);
+		}
 	}
 
 	bool _destroy_node(RID p_node) override {
@@ -190,34 +170,9 @@ protected:
 		ptr node = _get_node(p_node);
 		ERR_FAIL_NULL_V(node, false);
 
-		for (ptr connector : _connectors) {
-			const auto &connections = connector->get_connections();
-			for (const auto &info : connections) {
-				if (unlikely(connector->get_connection(info.name) == node)) {
-					connector->set_connection(info.name, nullptr);
-				}
-			}
-		}
-		_connectors.erase(node);
-
-		for (IPipelineNodeComposite *composite : _composites) {
-			composite->remove_child_node(node);
-		}
-		IPipelineNodeComposite *composite = dynamic_cast<IPipelineNodeComposite *>(node);
-		if (unlikely(composite != nullptr)) {
-			_composites.erase(composite);
-		}
-
-		for (IPipelineNodeDecorator *decorator : _decorators) {
-			if (unlikely(decorator->get_child() == node)) {
-				decorator->set_child(nullptr);
-			}
-		}
-		IPipelineNodeDecorator *decorator = dynamic_cast<IPipelineNodeDecorator *>(node);
-		if (unlikely(decorator != nullptr)) {
-			_decorators.erase(decorator);
-		}
-
+		_clear_connections(node);
+		_clear_parentage(node);
+		
 		RID rid = node->get_id();
 		_nodes.erase(rid);
 		_nodes_owner.free(rid);
@@ -269,9 +224,7 @@ public:
 		}
 		_nodes.clear();
 		_connectors.clear();
-		_composites.clear();
-		_decorators.clear();
-		// _child_to_parent.clear();
+		_parent_lookup.clear();
 		memdelete(_mutex);
 	}
 
@@ -288,24 +241,6 @@ public:
 	RID get_id() const override { return get_self(); }
 	
 	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
-
-	// void parent_changed(c_ptr p_child, c_ptr p_parent = nullptr) override {
-	// 	LOCK_ONE(_mutex);
-
-	// 	c_ptr child = dynamic_cast<c_ptr>(p_child);
-	// 	ERR_FAIL_NULL(child);
-
-	// 	if (likely(p_parent != nullptr)) {
-	// 		c_ptr parent = dynamic_cast<c_ptr>(p_parent);
-	// 		ERR_FAIL_NULL(parent);
-
-	// 		_reparent(parent, child);
-	// 	}
-	// 	else {
-
-	// 		_unparent(child);	
-	// 	}
-	// }
 
 	void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const override {
 		LOCK_ONE(_mutex);
@@ -423,6 +358,50 @@ public:
 			p_statuses.push_back(Pair(node, rooted_ids.has(node->get_id())));
 		}
 	}
+
+	bool is_parented(const IPipelineNode *p_node) const override {
+		LOCK_ONE_V(_mutex, false);
+
+		c_ptr node = dynamic_cast<c_ptr>(p_node);
+		if (unlikely(node == nullptr)) {
+			return false;
+		}
+
+		if (unlikely(_parent_lookup.is_empty())) {
+			return false;
+		}
+
+		return _parent_lookup.has(node->get_id());
+	}
+
+	void update_parent(const IPipelineNode *p_node, IPipelineNodeParent* p_parent = nullptr) override {
+		LOCK_ONE(_mutex);
+
+		const T *node = dynamic_cast<c_ptr>(p_node);
+		ERR_FAIL_NULL(node);
+
+		RID rid = node->get_id();
+
+		const bool needs_removal = p_parent != nullptr;
+
+		auto iter = _parent_lookup.find(rid);
+		if (likely(iter != _parent_lookup.end())) {
+			IPipelineNodeParent *previous = iter->value;
+			if (unlikely(needs_removal)) {
+				previous->remove_child(node);
+			}
+
+			if (unlikely(p_parent == nullptr)) {
+				_parent_lookup.remove(iter);
+			}
+			else {
+				iter->value = p_parent;
+			}
+		}
+		else if (likely(p_parent != nullptr)) {
+			_parent_lookup.insert(rid, p_parent);
+		}
+	} 
 };
 
 template<typename T>

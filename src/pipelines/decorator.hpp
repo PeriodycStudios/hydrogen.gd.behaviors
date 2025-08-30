@@ -23,12 +23,41 @@ public:
 		_decorated_node = nullptr;
 	}
 
+	bool has_child(const IPipelineNode *p_node) const override {
+		const T *node = dynamic_cast<const T *>(p_node);
+		if (unlikely(node == nullptr)) {
+			return false;
+		}
+
+		return _decorated_node != nullptr && _decorated_node == node;
+	}
+
+	bool remove_child(const IPipelineNode *p_node) override {
+		const T *node = dynamic_cast<const T *>(p_node);
+		if (unlikely(node == nullptr)) {
+			return false;
+		}
+
+		if (likely(node == _decorated_node)) {
+			_decorated_node = nullptr;
+			return true;
+		}
+		else {
+			return false;
+		}
+	}
+
+	void remove_all_children() override {
+		_decorated_node = nullptr;
+	}
+
 	[[nodiscard]] IPipelineNode *get_child() const override { 
 		return _decorated_node;
 	}
 	
 	void set_child(const IPipelineNode *p_node) override {
-		_decorated_node = p_node;
+		T * node = dynamic_cast<T *>(p_node);
+		_decorated_node = node;
 	}
 };
 }

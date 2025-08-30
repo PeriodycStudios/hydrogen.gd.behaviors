@@ -214,6 +214,7 @@ public:
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
 	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
+	bool graph_node_is_parented(RID p_graph, RID p_node);
 
 	// ---- Graphs END ----
 
@@ -227,6 +228,7 @@ public:
 	bool node_set_connection(RID p_graph, RID p_node, const StringName &p_name, RID p_target_node);
 	RID node_get_connection(RID p_graph, RID p_node, const StringName &p_name);
 
+	bool node_is_parent(RID p_graph, RID p_node);
 	bool node_is_composite(RID p_graph, RID p_node);
 	bool node_is_decorator(RID p_graph, RID p_node);
 
@@ -239,16 +241,15 @@ public:
 	void node_set_output_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases node_get_output_aliases(RID p_graph, RID p_node);
 
+	bool node_parent_has_child(RID p_graph, RID p_node, RID p_child);
+
 	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_clear(RID p_graph, RID p_node);
-
 	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
 	int64_t node_composite_child_count(RID p_graph, RID p_node);
-	void node_composite_resize(RID p_graph, RID p_node, uint64_t p_size);
-	void node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size);
 	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
 	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
 	void node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_children);
@@ -387,6 +388,7 @@ public:
 	bool graph_set_root(RID p_graph, RID p_node);
 	RID graph_get_root(RID p_graph);
 	TypedArray<Dictionary> graph_get_rooted_statuses(RID p_graph);
+	bool graph_node_is_parented(RID p_graph, RID p_node);
 
 	// ---- Graphs END ----
 
@@ -400,6 +402,7 @@ public:
 	bool node_set_connection(RID p_graph, RID p_node, const StringName &p_name, RID p_target_node);
 	RID node_get_connection(RID p_graph, RID p_node, const StringName &p_name);
 
+	bool node_is_parent(RID p_graph, RID p_node);
 	bool node_is_composite(RID p_graph, RID p_node);
 	bool node_is_decorator(RID p_graph, RID p_node);
 
@@ -412,16 +415,15 @@ public:
 	void node_set_output_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases node_get_output_aliases(RID p_graph, RID p_node);
 
+	bool node_parent_has_child(RID p_graph, RID p_node, RID p_child);
+
 	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_clear(RID p_graph, RID p_node);
-
 	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
 	int64_t node_composite_child_count(RID p_graph, RID p_node);
-	void node_composite_resize(RID p_graph, RID p_node, uint64_t p_size);
-	void node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size);
 	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
 	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
 	void node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_childs);

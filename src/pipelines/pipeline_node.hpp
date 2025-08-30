@@ -129,6 +129,9 @@ public:
 
     void get_children(Vector<const IPipelineNode *> &p_nodes) const override {}
     void get_descendants(Vector<const IPipelineNode *> &p_nodes) const override {}
+
+    bool has_child(const IPipelineNode *p_node) const override { return false; }
+    bool has_descendant(const IPipelineNode *p_node) const override { return false; }
 };
 
 }

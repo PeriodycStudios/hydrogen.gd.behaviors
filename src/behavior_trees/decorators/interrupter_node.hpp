@@ -43,6 +43,8 @@ protected:
     }
 
     Result _execute(BehaviorTreeContext &p_context) const override {
+        DECORATOR_FAILURE_IF_NULL();
+
         State *state = _get_state(p_context);
         ERR_FAIL_NULL_V(state, FAILURE);
 

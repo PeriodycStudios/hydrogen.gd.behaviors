@@ -29,7 +29,7 @@ class LimitNode : public DecoratorNode, public IPipelineNodeStateful {
 protected:
 
     Result _execute(BehaviorTreeContext &p_context) const override {
-        ERR_FAIL_NULL_V(_decorated_node, FAILURE);
+        DECORATOR_FAILURE_IF_NULL();
 
         LimitNodeState *state = p_context.get_state<LimitNodeState>(state_key());
         ERR_FAIL_NULL_V(state, FAILURE);

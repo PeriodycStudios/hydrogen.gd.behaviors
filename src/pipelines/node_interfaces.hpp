@@ -319,6 +319,9 @@ struct IPipelineNode {
 	virtual void get_children(Vector<const IPipelineNode *> &p_nodes) const = 0;
 	virtual void get_descendants(Vector<const IPipelineNode *> &p_nodes) const = 0;
 
+	virtual bool has_child(const IPipelineNode *p_node) const = 0;
+	virtual bool has_descendant(const IPipelineNode *p_node) const = 0;
+
 protected:
 	IPipelineNode() = default;
 };
@@ -348,9 +351,20 @@ protected:
 
 typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
 
+struct IPipelineNodeParent { 
+	virtual ~IPipelineNodeParent() = default;
 
-struct IPipelineNodeComposite {
-	virtual ~IPipelineNodeComposite() = default;
+	virtual bool has_child(const IPipelineNode *p_node) const = 0;
+	virtual bool remove_child(const IPipelineNode *p_node) = 0;
+	virtual void remove_all_children() = 0;
+
+protected:
+	IPipelineNodeParent() = default;
+};
+
+
+struct IPipelineNodeComposite : public IPipelineNodeParent {
+	~IPipelineNodeComposite() override = default;
 
 	virtual bool add_child_node(const IPipelineNode *p_node) = 0;
 	virtual	bool remove_child_node(const IPipelineNode *p_node) = 0;
@@ -360,9 +374,6 @@ struct IPipelineNodeComposite {
 	[[nodiscard]] virtual const IPipelineNode *get_child_node(int64_t p_index) const = 0;
 	virtual void set_child_node(int64_t p_index, const IPipelineNode *p_node) = 0;
 	[[nodiscard]] virtual int64_t child_count() const = 0;
-
-	virtual void resize(uint64_t p_size) = 0;
-	virtual void resize_zeroed(uint64_t p_size) = 0;
 	virtual void swap_child_nodes(uint64_t p_first_index, uint64_t p_second_index) = 0;
 
 	virtual Error insert_child_node(int64_t p_pos, const IPipelineNode *p_node) = 0;
@@ -372,8 +383,8 @@ protected:
 	IPipelineNodeComposite() = default;
 };
 
-struct IPipelineNodeDecorator {
-	virtual ~IPipelineNodeDecorator() = default;
+struct IPipelineNodeDecorator : public IPipelineNodeParent {
+	~IPipelineNodeDecorator() override = default;
 
 	[[nodiscard]] virtual const IPipelineNode *get_child() const = 0;
 	virtual void set_child(const IPipelineNode *p_node) = 0;
@@ -391,10 +402,7 @@ struct IPipelineGraph {
 	[[nodiscard]] virtual bool is_bound() const = 0;
 
 	virtual RID get_id() const = 0;
-
-	// virtual void parent_changed(const IPipelineNode *p_node, const IPipelineNode *p_parent = nullptr) = 0;
-	// virtual void connection_changed() = 0;
-
+	
 	virtual void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const = 0;
 
 	virtual void get_nodes(Vector<const IPipelineNode*> &p_nodes) const = 0;
@@ -413,6 +421,9 @@ struct IPipelineGraph {
 	virtual void query_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const = 0;
 
 	virtual void get_rooted_statuses(Vector<Pair<const IPipelineNode *, bool>> &p_statuses) const = 0;
+
+	virtual bool is_parented(const IPipelineNode *p_node) const = 0;
+	virtual void update_parent(const IPipelineNode *p_node, IPipelineNodeParent *p_parent = nullptr) = 0;
 
 protected:
 

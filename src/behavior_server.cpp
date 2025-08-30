@@ -4,6 +4,7 @@
 #include "behavior_trees/behavior_trees.hpp"
 #include "blackboard.hpp"
 #include "godot_cpp/classes/global_constants.hpp"
+#include "godot_cpp/classes/graph_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/templates/pair.hpp"
@@ -547,6 +548,11 @@ TypedArray<Dictionary> BehaviorServer::graph_get_rooted_statuses(RID p_graph) {
 	return result;
 }
 
+bool BehaviorServer::graph_node_is_parented(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_NODE_V(false);
+	return graph->is_parented(node);
+}
+
 // ---- Graph END ----
 
 // ---- Nodes ----
@@ -576,14 +582,14 @@ TypedArray<Dictionary> _get_infos(const IPipelineNode *p_node, std::function<con
 
 TypedArray<Dictionary> BehaviorServer::node_get_ports(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE_V({});
-
-	return _get_infos<NodePortInfo>(node, [](const IPipelineNode *n) { return n->get_ports(); });
+	static const auto get_ports = [](const IPipelineNode *n) -> const Vector<NodePortInfo> & { return n->get_ports(); };
+	return _get_infos<NodePortInfo>(node, get_ports);
 }
 
 TypedArray<Dictionary> BehaviorServer::node_get_connections(RID p_graph, RID p_node) {
 	TRY_GET_CONST_GRAPH_AND_NODE_V({});
-
-	return _get_infos<NodeConnectionInfo>(node, [](const IPipelineNode *n) { return n->get_connections(); });
+	static const auto get_connections = [](const IPipelineNode *n) -> const Vector<NodeConnectionInfo> & { return n->get_connections(); };
+	return _get_infos<NodeConnectionInfo>(node, get_connections);
 }
 
 bool BehaviorServer::node_set_connection(RID p_graph, RID p_node, const StringName &p_name, RID p_target_node) {
@@ -598,6 +604,11 @@ RID BehaviorServer::node_get_connection(RID p_graph, RID p_node, const StringNam
 	const IPipelineNode *target = node->get_connection(p_name);
 	ERR_FAIL_NULL_V(target, RID());
 	return target->get_id();
+}
+
+bool BehaviorServer::node_is_parent(RID p_graph, RID p_node) {
+	TRY_GET_CONST_GRAPH_AND_DECORATOR_NODE_V(false);
+	return dynamic_cast<const IPipelineNodeParent *>(node) != nullptr;
 }
 
 bool BehaviorServer::node_is_composite(RID p_graph, RID p_node) {
@@ -641,14 +652,35 @@ PortAliases BehaviorServer::node_get_output_aliases(RID p_graph, RID p_node) {
 	return node->get_output_aliases();
 }
 
+bool BehaviorServer::node_parent_has_child(RID p_graph, RID p_node, RID p_child) {
+	TRY_GET_CONST_GRAPH_AND_DECORATOR_NODE_V(false);
+	const IPipelineNode *child = graph->get_node(p_child);
+	ERR_FAIL_NULL_V(child, false);
+
+	const IPipelineNodeParent *parent = dynamic_cast<const IPipelineNodeParent *>(node);
+	ERR_FAIL_NULL_V(parent, false);
+
+	return parent->has_child(child);
+}
+
 bool BehaviorServer::node_composite_add_child(RID p_graph, RID p_node, RID p_child) {
 	TRY_GET_GRAPH_COMPOSITE_AND_CHILD_V(false);
-	return composite->add_child_node(child);
+	ERR_FAIL_COND_V(child->has_descendant(node), false);
+	bool result = composite->add_child_node(child);
+	if (likely(result)) {
+		graph->update_parent(child, composite);
+	}
+	return result;
 }
 
 bool BehaviorServer::node_composite_remove_child(RID p_graph, RID p_node, RID p_child) {
 	TRY_GET_GRAPH_COMPOSITE_AND_CHILD_V(false);
-	return composite->remove_child_node(child);
+	bool result = composite->remove_child_node(child);
+	if (likely(result)) {
+		graph->update_parent(child);
+	}
+
+	return false;
 }
 
 bool BehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
@@ -656,12 +688,22 @@ bool BehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int
 
 	const IPipelineNode *child = composite->get_child_node(p_child_index);
 	ERR_FAIL_NULL_V(child, false);
+	bool result = composite->remove_child_node_at(p_child_index);
+	
+	if (likely(result)) {
+		graph->update_parent(child);
+	}
 
-	return composite->remove_child_node_at(p_child_index);
+	return result;
 }
 
 void BehaviorServer::node_composite_clear(RID p_graph, RID p_node) {
 	TRY_GET_GRAPH_AND_COMPOSITE_NODE();
+	Vector<const IPipelineNode *> nodes = {};
+	node->get_children(nodes);
+	for(const IPipelineNode *child : nodes) {
+		graph->update_parent(child);
+	}
 	composite->clear();
 }
 
@@ -674,26 +716,22 @@ RID BehaviorServer::node_composite_get_child(RID p_graph, RID p_node, int64_t p_
 
 void BehaviorServer::node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child) {
 	TRY_GET_GRAPH_AND_COMPOSITE_NODE();
+	ERR_FAIL_INDEX(p_child_index, composite->child_count());
 
 	const IPipelineNode *child = graph->get_node(p_child);
 	ERR_FAIL_NULL(child);
-
+	ERR_FAIL_COND(child->has_descendant(node));
+	const IPipelineNode *prev_child = composite->get_child_node(p_child_index);
+	if (likely(prev_child)) {
+		graph->update_parent(prev_child);
+	}
+	graph->update_parent(child, composite);
 	composite->set_child_node(p_child_index, child);
 }
 
 int64_t BehaviorServer::node_composite_child_count(RID p_graph, RID p_node) {
 	TRY_GET_GRAPH_AND_COMPOSITE_NODE_V(0);
 	return composite->child_count();
-}
-
-void BehaviorServer::node_composite_resize(RID p_graph, RID p_node, uint64_t p_size) {
-	TRY_GET_GRAPH_AND_COMPOSITE_NODE();
-	composite->resize(p_size);
-}
-
-void BehaviorServer::node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size) {
-	TRY_GET_GRAPH_AND_COMPOSITE_NODE();
-	composite->resize_zeroed(p_size);
 }
 
 void BehaviorServer::node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index) {
@@ -706,8 +744,13 @@ Error BehaviorServer::node_composite_insert_child(RID p_graph, RID p_node, int64
 
 	const IPipelineNode *child = graph->get_node(p_child);
 	ERR_FAIL_NULL_V(child, Error::ERR_INVALID_PARAMETER);
+	ERR_FAIL_COND_V(child->has_descendant(node), Error::ERR_CYCLIC_LINK);
 
-	return composite->insert_child_node(p_pos, child);
+	Error result = composite->insert_child_node(p_pos, child);
+	if (likely(result == godot::OK)) {
+		graph->update_parent(child, composite);
+	}
+	return result;
 }
 
 void BehaviorServer::node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_children) {
@@ -724,9 +767,11 @@ void BehaviorServer::node_composite_append_children(RID p_graph, RID p_node, con
 		RID child_rid = p_children[idx];
 		const IPipelineNode *child = graph->get_node(child_rid);
 		ERR_CONTINUE(child == nullptr);
+		ERR_CONTINUE(child->has_descendant(node));
+		graph->update_parent(child, composite);
 		children.push_back(child);
 	}
-	
+
 	composite->append_child_nodes(children);
 }
 
@@ -739,10 +784,22 @@ RID BehaviorServer::node_decorator_get_child(RID p_graph, RID p_node) {
 
 void BehaviorServer::node_decorator_set_child(RID p_graph, RID p_node, RID p_child) {
 	TRY_GET_GRAPH_AND_DECORATOR_NODE();
-	const IPipelineNode *child = graph->get_node(p_child);
-	ERR_FAIL_NULL(child);
+
+	const IPipelineNode *child = nullptr;
+	if (likely(p_child != RID())) {
+		child = graph->get_node(p_child);
+		ERR_FAIL_NULL(child);
+		ERR_FAIL_COND(child->has_descendant(node));
+		graph->update_parent(child);
+	}
+
+	const IPipelineNode *prev_child = decorator->get_child();
+	if (unlikely(prev_child != nullptr)) {
+		graph->update_parent(prev_child);
+	}
+
 	decorator->set_child(child);
-}                                            
+}
 
 #undef TRY_GET_CONST_GRAPH
 #undef TRY_GET_GRAPH
@@ -930,7 +987,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("graph_set_root", "graph", "node"), &HydrogenBehaviorServer::graph_set_root);
 	ClassDB::bind_method(D_METHOD("graph_get_root", "graph"), &HydrogenBehaviorServer::graph_get_root);
 	ClassDB::bind_method(D_METHOD("graph_get_rooted_statuses", "graph"), &HydrogenBehaviorServer::graph_get_rooted_statuses);
-
+	ClassDB::bind_method(D_METHOD("graph_node_is_parented", "graph", "node"), &HydrogenBehaviorServer::graph_node_is_parented);
 	// ---- Graphs End ----
 
 	// ---- Nodes ----
@@ -940,6 +997,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("node_get_connections", "graph", "node"), &HydrogenBehaviorServer::node_get_connections);
 	ClassDB::bind_method(D_METHOD("node_set_connection", "graph", "node", "name", "target_node"), &HydrogenBehaviorServer::node_set_connection);
 	ClassDB::bind_method(D_METHOD("node_get_connection", "graph", "node", "name"), &HydrogenBehaviorServer::node_get_connection);
+	ClassDB::bind_method(D_METHOD("node_is_parent", "graph", "node"), &HydrogenBehaviorServer::node_is_parent);
 	ClassDB::bind_method(D_METHOD("node_is_composite", "graph", "node"), &HydrogenBehaviorServer::node_is_composite);
 	ClassDB::bind_method(D_METHOD("node_is_decorator", "graph", "node"), &HydrogenBehaviorServer::node_is_decorator);
 	ClassDB::bind_method(D_METHOD("node_set_name", "graph", "node", "name"), &HydrogenBehaviorServer::node_set_name);
@@ -948,14 +1006,13 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("node_get_input_alias", "graph", "node"), &HydrogenBehaviorServer::node_get_input_aliases);
 	ClassDB::bind_method(D_METHOD("node_set_output_aliases", "graph", "node", "aliases"), &HydrogenBehaviorServer::node_set_output_aliases);
 	ClassDB::bind_method(D_METHOD("node_get_output_aliases", "graph", "node"), &HydrogenBehaviorServer::node_get_output_aliases);
+	ClassDB::bind_method(D_METHOD("node_parent_has_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_parent_has_child);
 	ClassDB::bind_method(D_METHOD("node_composite_add_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_composite_add_child);
 	ClassDB::bind_method(D_METHOD("node_composite_remove_child", "graph", "node", "child"), &HydrogenBehaviorServer::node_composite_remove_child);
 	ClassDB::bind_method(D_METHOD("node_remove_child_at", "graph", "node", "child_index"), &HydrogenBehaviorServer::node_composite_remove_child_at);
 	ClassDB::bind_method(D_METHOD("node_composite_clear", "graph", "node"), &HydrogenBehaviorServer::node_composite_clear);
 	ClassDB::bind_method(D_METHOD("node_composite_get_child", "graph", "node", "child_index"), &HydrogenBehaviorServer::node_composite_get_child);
 	ClassDB::bind_method(D_METHOD("node_composite_set_child", "graph", "node", "child_index", "child"), &HydrogenBehaviorServer::node_composite_set_child);
-	ClassDB::bind_method(D_METHOD("node_composite_resize", "graph", "node", "size"), &HydrogenBehaviorServer::node_composite_resize);
-	ClassDB::bind_method(D_METHOD("node_composite_resize_zeroed", "graph", "node", "size"), &HydrogenBehaviorServer::node_composite_resize_zeroed);
 	ClassDB::bind_method(D_METHOD("node_composite_swap_children", "graph", "node", "first_index", "second_index"), &HydrogenBehaviorServer::node_composite_swap_children);
 	ClassDB::bind_method(D_METHOD("node_composite_insert_child"), &HydrogenBehaviorServer::node_composite_insert_child);
 	ClassDB::bind_method(D_METHOD("node_composite_append_children", "graph", "node", "children"), &HydrogenBehaviorServer::node_composite_append_children);
@@ -1100,6 +1157,10 @@ TypedArray<Dictionary> HydrogenBehaviorServer::graph_get_rooted_statuses(RID p_g
 	return BehaviorServer::get_singleton()->graph_get_rooted_statuses(p_graph);
 }
 
+bool HydrogenBehaviorServer::graph_node_is_parented(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->graph_node_is_parented(p_graph, p_node);
+}
+
 // ---- Graphs END ----
 
 // ---- Nodes ----
@@ -1122,6 +1183,10 @@ bool HydrogenBehaviorServer::node_set_connection(RID p_graph, RID p_node, const 
 
 RID HydrogenBehaviorServer::node_get_connection(RID p_graph, RID p_node, const StringName &p_name) {
 	return BehaviorServer::get_singleton()->node_get_connection(p_graph, p_node, p_name);
+}
+
+bool HydrogenBehaviorServer::node_is_parent(RID p_graph, RID p_node) {
+	return BehaviorServer::get_singleton()->node_is_parent(p_graph, p_node);
 }
 
 bool HydrogenBehaviorServer::node_is_composite(RID p_graph, RID p_node) {
@@ -1156,6 +1221,10 @@ PortAliases HydrogenBehaviorServer::node_get_output_aliases(RID p_graph, RID p_n
 	return BehaviorServer::get_singleton()->node_get_output_aliases(p_graph, p_node);
 }
 
+bool HydrogenBehaviorServer::node_parent_has_child(RID p_graph, RID p_node, RID p_child) {
+	return BehaviorServer::get_singleton()->node_parent_has_child(p_graph, p_node, p_child);
+}
+
 bool HydrogenBehaviorServer::node_composite_add_child(RID p_graph, RID p_node, RID p_child) {
 	return BehaviorServer::get_singleton()->node_composite_add_child(p_graph, p_node, p_child);
 }
@@ -1182,14 +1251,6 @@ void HydrogenBehaviorServer::node_composite_set_child(RID p_graph, RID p_node, i
 
 int64_t HydrogenBehaviorServer::node_composite_child_count(RID p_graph, RID p_node) {
 	return BehaviorServer::get_singleton()->node_composite_child_count(p_graph, p_node);
-}
-
-void HydrogenBehaviorServer::node_composite_resize(RID p_graph, RID p_node, uint64_t p_size) {
-	BehaviorServer::get_singleton()->node_composite_resize(p_graph, p_node, p_size);
-}
-
-void HydrogenBehaviorServer::node_composite_resize_zeroed(RID p_graph, RID p_node, uint64_t p_size) {
-	BehaviorServer::get_singleton()->node_composite_resize_zeroed(p_graph, p_node, p_size);
 }
 
 void HydrogenBehaviorServer::node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index) {

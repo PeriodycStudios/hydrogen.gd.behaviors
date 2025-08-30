@@ -1,0 +1,6 @@
+#ifndef COUNTDOWN_NODE_HPP
+#define COUNTDOWN_NODE_HPP
+
+
+
+#endif

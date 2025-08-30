@@ -20,11 +20,11 @@ class PipelineNodeComposite {};
 
 #define TRY_CONVERT_CHILD()								\
 	const T* node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_COND(node == nullptr)						\
+	ERR_FAIL_NULL(node)									\
 
 #define TRY_CONVERT_CHILD_V(fail_result)				\
 	const T *node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_COND_V(node == nullptr, fail_result)		\
+	ERR_FAIL_NULL_V(node, fail_result)					\
 	
 template <typename T>
 class PipelineNodeComposite<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeComposite {
@@ -39,12 +39,32 @@ public:
 		_children.clear();
 	}
 
+	bool has_child(const IPipelineNode *p_node) const override {
+		const T *node = dynamic_cast<const T *>(p_node);
+		if (unlikely(node == nullptr)) {
+			return false;
+		}
+
+		return has_child(node);
+	}
+
+	bool has_child(const T *p_node) const {
+		return _children.has(p_node);
+	}
+
+	bool remove_child(const IPipelineNode *p_node) override {
+		return remove_child_node(p_node);
+	}
+
+	void remove_all_children() override { clear(); }
+
 	bool add_child_node(const IPipelineNode *p_node) override {
 		TRY_CONVERT_CHILD_V(false);
 		return add_child(node);
 	}
 
 	_FORCE_INLINE_ bool add_child(const T *p_node) {
+		ERR_FAIL_NULL_V(p_node, false);
 		if (unlikely(_children.has(p_node))) {
 			return false;	
 		}
@@ -58,6 +78,7 @@ public:
 	}
 
 	_FORCE_INLINE_ bool remove_child(T *p_node) {
+		ERR_FAIL_NULL_V(p_node, false);
 		auto iter = _children.find(p_node);
 		if (likely(iter != _children.end())) {
 			return _children.erase(iter);
@@ -94,13 +115,6 @@ public:
 
 	int64_t child_count() const override {
 		return _children.size();
-	}
-
-	void resize(uint64_t p_size) override {
-		_children.resize(p_size);
-	}
-	void resize_zeroed(uint64_t p_size) override {
-		_children.resize_zeroed(p_size);
 	}
 
 	void swap_child_nodes(uint64_t p_first_index, uint64_t p_second_index) override {
