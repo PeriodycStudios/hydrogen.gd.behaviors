@@ -10,7 +10,7 @@
 	static const StringName &entry_name##_name() {		\
 		const static StringName name(#entry_name, true);\
 		return name;									\
-	}
+	}													\
 
 template<typename T>
 godot::StringName get_type_name_static() {

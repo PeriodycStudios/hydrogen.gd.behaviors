@@ -117,9 +117,9 @@ RID BehaviorServer::agent_create() {
 }
 
 Error BehaviorServer::init() {
-	_blackboard_mutex = memnew(std::mutex);
-	_pipeline_mutex = memnew(std::mutex);
-	_graph_mutex = memnew(std::mutex);
+	_blackboard_mutex = memnew(std::recursive_mutex);
+	_pipeline_mutex = memnew(std::recursive_mutex);
+	_graph_mutex = memnew(std::recursive_mutex);
 
  	return OK;
 }
@@ -180,7 +180,6 @@ void BehaviorServer::_blackboard_remove_child(RID parent, RID child) {
 }
 
 void BehaviorServer::_blackboard_erase(Blackboard *blackboard) {
-	BLACKBOARDS_LOCK();
 	const RID self = blackboard->get_self();
 
 	if (const Blackboard *parent = blackboard->get_parent()) {
@@ -879,7 +878,7 @@ void BehaviorServer::node_decorator_set_child(RID p_graph, RID p_node, RID p_chi
 	TRY_GET_GRAPH_AND_DECORATOR_NODE();
 
 	const IPipelineNode *child = nullptr;
-	if (likely(p_child != RID())) {
+	if (likely(p_child.is_valid())) {
 		child = graph->get_node(p_child);
 		ERR_FAIL_NULL(child);
 		ERR_FAIL_COND(child->has_descendant(node));

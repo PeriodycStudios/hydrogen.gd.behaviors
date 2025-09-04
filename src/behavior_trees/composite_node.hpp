@@ -17,7 +17,7 @@ namespace hydrogen::behavior_trees {
 using namespace pipelines;
 using namespace godot;
 
-class CompositeNode : public BehaviorTreeNode, public pipelines::PipelineNodeComposite<BehaviorTreeNode>, public IPipelineNodeStateful {
+class CompositeNode : public BehaviorTreeNode, public PipelineNodeComposite<BehaviorTreeNode>, public IPipelineNodeStateful {
 	ABSTRACT_PIPELINE_NODE(CompositeNode, BehaviorTreeNode);
 
 	template <typename T>

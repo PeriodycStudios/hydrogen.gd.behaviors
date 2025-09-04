@@ -50,7 +50,7 @@ public:
 	template<typename T, std::enable_if_t<std::is_base_of_v<IPipelineNodeState, T>>>
 	_FORCE_INLINE_ T *get_state(RID p_state_key) {
 		T *state = dynamic_cast<T *>(get_state(p_state_key));
-		ERR_FAIL_NULL(state);
+		ERR_FAIL_NULL_V(state, nullptr);
 		return state;
 	}
 

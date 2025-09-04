@@ -40,6 +40,17 @@
             "problemMatcher": "$msCompile"
         },
         {
+            "label": "rebuild api",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": [
+                "use_llvm=yes",
+                "custom_api_file=../extension_api.json",
+                "compiledb=yes"
+            ]
+        },
+        {
             "label": "update compiledb",
             "group": "build",
             "type": "shell",
@@ -51,6 +62,13 @@
                 "tests=yes"
             ],
             "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "clean",
+            "group": "build",
+            "type": "shell",
+            "command": "scons",
+            "args": ["-c"]
         }
     ]
 }

@@ -130,9 +130,10 @@ HydrogenBlackboard::HydrogenBlackboard() {
 }
 
 HydrogenBlackboard::~HydrogenBlackboard() {
-	ERR_FAIL_NULL(BehaviorServer::get_singleton());
 	lookups.erase(blackboard);
-	BehaviorServer::get_singleton()->free_rid(blackboard);
+	BehaviorServer *server = BehaviorServer::get_singleton();
+	ERR_FAIL_NULL(server);
+	server->free_rid(blackboard);
 }
 
 _FORCE_INLINE_ bool HydrogenBlackboard::is_empty() const {

@@ -34,7 +34,7 @@ namespace hydrogen {
 using namespace godot;
 using namespace pipelines;
 
-#define BLACKBOARDS_LOCK LOCK_ONE(_blackboard_mutex)
+#define BLACKBOARDS_LOCK() LOCK_ONE(_blackboard_mutex)
 #define BLACKBOARDS_LOCK_V(fail_result)	LOCK_ONE_V(_blackboard_mutex, fail_result)
 
 #define TRY_GET_BLACKBOARD_V(fail_result)									\
@@ -42,8 +42,8 @@ using namespace pipelines;
 	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
 	ERR_FAIL_NULL_V(blackboard, fail_result)								\
 
-#define TRY_GET_BLACKBOARD													\
-	BLACKBOARDS_LOCK;														\
+#define TRY_GET_BLACKBOARD()												\
+	BLACKBOARDS_LOCK();														\
 	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
 	ERR_FAIL_NULL(blackboard)												\
 
@@ -65,14 +65,14 @@ private:
 	RID_PtrOwner<Blackboard> _blackboard_owner = {};
 	RID_PtrOwner<IPipelineGraph> _graph_owner = {};
 	RID_PtrOwner<Pipeline> _pipeline_owner = {};
-	std::mutex *_blackboard_mutex = nullptr;
-	std::mutex *_graph_mutex = nullptr;
-	std::mutex *_pipeline_mutex = nullptr;
+	std::recursive_mutex *_blackboard_mutex = nullptr;
+	std::recursive_mutex *_graph_mutex = nullptr;
+	std::recursive_mutex *_pipeline_mutex = nullptr;
 
 	template <typename T>
-	void _free_ptr_resource(RID_PtrOwner<T> &p_owner, std::mutex *p_mutex, RID p, std::function<void(T*)> p_cleanup = nullptr) {
+	void _free_ptr_resource(RID_PtrOwner<T> &p_owner, std::recursive_mutex *p_mutex, RID p, std::function<void(T*)> p_cleanup = nullptr) {
 		ERR_FAIL_NULL(p_mutex);
-		ERR_FAIL_COND(p == RID());
+		ERR_FAIL_COND(!p.is_valid());
 		std::scoped_lock lock(*p_mutex);
 
 		T *resource = p_owner.get_or_null(p);
@@ -295,13 +295,13 @@ T BehaviorServer::blackboard_get_entry(RID p_blackboard, const StringName &p_nam
 
 template <typename T>
 void BehaviorServer::blackboard_set_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_value) {
-	TRY_GET_BLACKBOARD;
+	TRY_GET_BLACKBOARD();
 	blackboard->set_entry_fast(p_name, p_value);
 }
 
 template <typename T>
 void BehaviorServer::blackboard_set_entry(RID p_blackboard, const StringName &p_name, T p_value) {
-	TRY_GET_BLACKBOARD;
+	TRY_GET_BLACKBOARD();
 	blackboard->set_entry(p_name, p_value);
 }
 

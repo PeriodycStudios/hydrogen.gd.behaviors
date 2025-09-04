@@ -188,7 +188,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Simple Get and Set") {
 	REQUIRE(server);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	TEST_SIMPLE_GET_SET(bool, true)
 	TEST_SIMPLE_GET_SET(const bool, false)
@@ -356,7 +356,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Set Overwrite") {
 	REQUIRE(server);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	uint8_t a = 128;
 	TEST_OVERWRITE_GET_SET(bool, true, false, a)
@@ -406,7 +406,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Get default values") {
 	REQUIRE(server != nullptr);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	TEST_DEFAULT_GET(bool, true)
 	TEST_DEFAULT_GET(int8_t, std::numeric_limits<int8_t>::min())
@@ -568,17 +568,17 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Get default values") {
 }
 
 void blackboard_on_created(RID p_bb_rid) {
-	CHECK(p_bb_rid != RID());
+	CHECK(p_bb_rid.is_valid());
 }
 
 void blackboard_on_destroyed(RID p_bb_rid) {
-	CHECK(p_bb_rid != RID());
+	CHECK(p_bb_rid.is_valid());
 }
 
 void blackboard_on_parent_set(RID p_child_rid, RID p_parent_rid) {
-	CHECK(p_child_rid != RID());
+	CHECK(p_child_rid.is_valid());
 
-	if (p_parent_rid != RID()) {
+	if (p_parent_rid.is_valid()) {
 		BehaviorServer *server = BehaviorServer::get_singleton();
 		CHECK(server);
 		if (server) {
@@ -604,24 +604,24 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	h_server->connect("blackboard_parent_set", on_parent_set_callable);
 
 	RID blackboard = server->blackboard_create();
-	CHECK(blackboard != RID());
+	CHECK(blackboard.is_valid());
 
 	const uint64_t a_number = 255;
 	server->blackboard_set_entry(blackboard, "First", a_number);
 
 	RID blackboard2 = server->blackboard_create();
-	CHECK(blackboard2 != RID());
+	CHECK(blackboard2.is_valid());
 	server->blackboard_set_entry(blackboard2, "Second", String("42"));
 
 	RID blackboard3 = server->blackboard_create();
-	CHECK(blackboard3 != RID());
+	CHECK(blackboard3.is_valid());
 	Array array = Array();
 	array.push_back(a_number);
 	array.push_back(42);
 	server->blackboard_set_entry(blackboard3, "Third", array);
 
 	RID blackboard4 = server->blackboard_create();
-	CHECK(blackboard4 != RID());
+	CHECK(blackboard4.is_valid());
 
 	Ref<JSON> json = {};
 	json.instantiate();
@@ -635,7 +635,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 	CHECK(server->blackboard_get_parent(blackboard) == blackboard2);
 	CHECK(server->blackboard_get_parent(blackboard2) == blackboard3);
 	CHECK(server->blackboard_get_parent(blackboard3) == blackboard4);
-	CHECK(server->blackboard_get_parent(blackboard4) == RID());
+	CHECK_FALSE(server->blackboard_get_parent(blackboard4).is_valid());
 
 	CHECK(server->blackboard_get_entry<String>(blackboard, "Second") == String("42"));
 	CHECK(server->blackboard_get_entry<Array>(blackboard,"Third") == array);
@@ -649,7 +649,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Parents") {
 
 	CHECK_FALSE(server->blackboard_is_ancestor(blackboard, blackboard4));
 	CHECK_FALSE(server->blackboard_is_ancestor(blackboard2, blackboard4));
-	CHECK(server->blackboard_get_parent(blackboard2) == RID());
+	CHECK_FALSE(server->blackboard_get_parent(blackboard2).is_valid());
 
 	server->free_rid(blackboard);
 	server->free_rid(blackboard2);
@@ -667,7 +667,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Export Entries") {
 	REQUIRE(server != nullptr);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	Dictionary entries = server->blackboard_export_entries(blackboard);
 	CHECK(entries.size() == 0);
@@ -721,7 +721,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Import from Dictionary") {
 	REQUIRE(server != nullptr);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	CHECK(server->blackboard_is_empty(blackboard));
 
@@ -905,7 +905,7 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Custom Native Types") {
 	REQUIRE(server);
 
 	RID blackboard = server->blackboard_create();
-	REQUIRE(blackboard != RID());
+	REQUIRE(blackboard.is_valid());
 
 	MyCustomTestType test;
 	MyCustomTestType *test_ptr = &test;
