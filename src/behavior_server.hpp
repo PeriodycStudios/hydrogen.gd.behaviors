@@ -6,11 +6,13 @@
 #define BEHAVIOR_SERVER_HPP
 
 #include "blackboard.hpp"
+#include "godot_cpp/templates/hash_set.hpp"
 #include "godot_cpp/variant/callable.hpp"
 #include "godot_cpp/variant/rid.hpp"
+#include "name_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
-#include "pipelines/pipeline.hpp"
 
+#include <functional>
 #include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
@@ -50,21 +52,26 @@ using namespace pipelines;
 class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
 
-public:
-	enum GraphType {
-		BEHAVIOR_TREE,
-		// FSM,
-		GRAPH_TYPE_MAX
-	};
+	typedef std::function<RID(const StringName &)> create_graph_type;
+	typedef std::function<RID(const StringName &, const Blackboard *, IPipelineGraph *, bool)> create_pipeline_type;
 
-private:
+	struct PipelineRegistration {
+		create_graph_type create_graph;
+		create_pipeline_type create_pipeline;
+
+		PipelineRegistration(create_graph_type p_create_graph, create_pipeline_type p_create_pipeline) {
+			create_graph = p_create_graph;
+			create_pipeline = p_create_pipeline;
+		}
+	};
 
 	static BehaviorServer *_singleton;
 
+	HashMap<StringName, PipelineRegistration> _pipeline_db = {};
 	HashMap<RID, LocalVector<RID>> _blackboard_parents_to_children = {};
 	RID_PtrOwner<Blackboard> _blackboard_owner = {};
 	RID_PtrOwner<IPipelineGraph> _graph_owner = {};
-	RID_PtrOwner<Pipeline> _pipeline_owner = {};
+	RID_PtrOwner<IPipeline> _pipeline_owner = {};
 	std::recursive_mutex *_blackboard_mutex = nullptr;
 	std::recursive_mutex *_graph_mutex = nullptr;
 	std::recursive_mutex *_pipeline_mutex = nullptr;
@@ -84,8 +91,6 @@ private:
 	}
 
 	RID _blackboard_create_helper() {
-		BLACKBOARDS_LOCK_V(RID());
-
 		Blackboard *blackboard = memnew(Blackboard);
 		RID rid = _blackboard_owner.make_rid(blackboard);
 		blackboard->set_self(rid);
@@ -94,10 +99,8 @@ private:
 	}
 
 	template<typename TGRAPH>
-	RID _graph_create_helper() {
-		LOCK_ONE_V(_graph_mutex, RID());
-
-		TGRAPH *graph = memnew(TGRAPH);
+	RID _graph_create_helper(const StringName &p_name_key) {
+		TGRAPH *graph = memnew(TGRAPH(p_name_key));
 		RID rid = _graph_owner.make_rid(graph);
 		graph->set_self(rid);
 
@@ -107,18 +110,18 @@ private:
 	}
 
 	template<typename TPIPELINE, typename TGRAPH> 
-	RID _pipeline_create_helper(RID p_blackboard, RID p_graph) {
-		LOCK_THREE_V(_pipeline_mutex, _blackboard_mutex, _graph_mutex, RID());
-		
-		const Blackboard* blackboard = _blackboard_owner.get_or_null(p_blackboard);
-		ERR_FAIL_NULL_V(blackboard, RID());
+	RID _pipeline_create_helper(const StringName &p_name_key, const Blackboard * p_blackboard, IPipelineGraph *p_graph, bool p_owns_source_blackboard) {
+		ERR_FAIL_NULL_V(p_blackboard, RID());
+		ERR_FAIL_NULL_V(p_graph, RID());
 
-		TGRAPH *graph = dynamic_cast<TGRAPH *>(_graph_owner.get_or_null(p_graph));
+		TGRAPH *graph = dynamic_cast<TGRAPH *>(p_graph);
 		ERR_FAIL_NULL_V(graph, RID());
 
-		TPIPELINE *pipeline = memnew(TPIPELINE(blackboard, graph));
+		TPIPELINE *pipeline = memnew(TPIPELINE(p_name_key, p_blackboard, graph, p_owns_source_blackboard));
 		RID rid = _pipeline_owner.make_rid(pipeline);
 		pipeline->set_self(rid);
+
+		_blackboard_acquire(pipeline->get_execution_blackboard());
 
 		_pipeline_emit_created(rid);
 
@@ -127,9 +130,12 @@ private:
 
 	// ---- Blackboard ----
 
+	void _blackboard_acquire(Blackboard *p_blackboard);
+	void _blackboard_release(Blackboard *p_blackboard);
+
 	void _blackboard_add_child(RID parent, RID child);
 	void _blackboard_remove_child(RID parent, RID child);
-	void _blackboard_erase(Blackboard *blackboard);
+	void _blackboard_erase(Blackboard *blackboard, bool p_is_final_shutdown = false);
 
 	void _blackboard_emit_set_parent(RID p_child, RID p_parent);
 	void _blackboard_emit_created(RID blackboard);
@@ -137,33 +143,96 @@ private:
 
 	// ---- Blackboard END ----
 
-	// ---- Behavior Tree ----
-
-	void _graph_erase(IPipelineGraph *p_graph);
-	void _pipeline_erase(Pipeline *p_pipeline);
-
+	// ---- Graphs ----
+	
+	void _graph_erase(IPipelineGraph *p_graph, bool p_is_final_shutdown = false);
 	void _graph_emit_created(RID p_behavior_tree_graph);
 	void _graph_emit_destroyed(RID p_behavior_tree_graph);
 
+	// ---- Graphs END ----
+
+	// ---- Pipelines ----
+	
+	void _pipeline_erase(IPipeline *p_pipeline, bool p_is_final_shutdown = false);
 	void _pipeline_emit_created(RID p_behavior_tree);
 	void _pipeline_emit_destroyed(RID p_behavior_tree);
-
-	// ---- Behavior Tree END ----
+	
+	// ---- Pipelines END ----
 
 protected:
 	static void _bind_methods();
 
 public:
+
+	DEFINE_NAME_STATIC(BehaviorTree);
+
 	static BehaviorServer *get_singleton();
 
 	BehaviorServer();
 	~BehaviorServer() override;
 
+	template<typename TGRAPH, typename TPIPELINE>
+	bool register_graph_group(const StringName &p_graph_group) {
+		LOCK_TWO_V(_pipeline_mutex, _graph_mutex, false);
+
+		if (unlikely(_pipeline_db.has(p_graph_group))) {
+			return false;
+		}
+
+		create_graph_type create_graph_func = [this](const StringName &p_group_key) -> RID {
+			return _graph_create_helper<TGRAPH>(p_group_key);
+		};
+		create_pipeline_type create_pipeline_func = [this](const StringName &p_group_key, const Blackboard *p_blackboard, IPipelineGraph *p_graph, bool p_owns_source_blackboard) -> RID {
+			return _pipeline_create_helper<TPIPELINE, TGRAPH>(p_group_key, p_blackboard, p_graph, p_owns_source_blackboard);
+		};
+
+		_pipeline_db.insert(p_graph_group, PipelineRegistration(create_graph_func, create_pipeline_func));
+		return true;
+	}
+
+	bool unregister_graph_group(const StringName &p_graph_group) {
+		LOCK_TWO_V(_pipeline_mutex, _graph_mutex, false);
+
+		if (unlikely(!_pipeline_db.has(p_graph_group))) {
+			return false;
+		}
+
+		const uint32_t pipeline_rid_count = _pipeline_owner.get_rid_count();
+		TightLocalVector<RID> pipeline_rids = TightLocalVector<RID>();
+		pipeline_rids.resize(pipeline_rid_count);
+		_pipeline_owner.fill_owned_buffer(pipeline_rids.ptr());
+
+		TightLocalVector<RID> destroy_pipelines = {};
+		HashSet<RID> destroy_graphs = {};
+		destroy_pipelines.reserve(pipeline_rid_count);
+		for (int32_t idx = 0; idx < pipeline_rid_count; ++idx) {
+			const IPipeline *pipeline = _pipeline_owner.get_or_null(pipeline_rids[idx]);
+			if (pipeline->group_key() == p_graph_group) {
+				destroy_pipelines.push_back(pipeline->get_id());
+				const IPipelineGraph *graph = pipeline->get_graph();
+				RID graph_rid = graph->get_id();
+				destroy_graphs.insert(graph_rid);
+			}
+		}
+
+		for(RID rid : pipeline_rids) {
+			free_rid(rid);
+		}
+
+		for (RID rid : destroy_graphs) {
+			free_rid(rid);
+		}
+
+		_pipeline_db.erase(p_graph_group);
+		return true;
+	}
+
 	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID graph_create(GraphType p_graph_type);
-	RID pipeline_create(GraphType p_graph_type, RID p_blackboard, RID p_graph);
+	RID graph_create(const StringName &p_graph_group);
+	RID behavior_tree_graph_create() { return graph_create(BehaviorTree_name()); }
+	RID pipeline_create(RID p_graph, RID p_blackboard = {});
 	RID agent_create();
 
 	Error init();
@@ -205,9 +274,16 @@ public:
 	// ---- Blackboard END ----
 
 	// ---- Graphs ----
+
+	const StringName &graph_get_type(RID p_graph);
+	const StringName &graph_get_group_key(RID p_graph);
+	bool graph_is_bound(RID p_graph);
+	uint32_t graph_get_bind_count(RID p_graph);
+
 	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases);
 	bool graph_destroy_node(RID p_graph, RID p_node);
-	bool graph_is_bound(RID p_graph);
+	
+	uint64_t graph_get_node_count(RID p_graph);
 	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
 	TypedArray<RID> graph_get_nodes(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
@@ -268,8 +344,15 @@ public:
 
 	// ---- Pipelines ----
 
+	const StringName &pipeline_get_group_key(RID p_pipeline);
+
 	void pipeline_execute(RID p_pipeline);
 	void pipeline_halt(RID p_pipeline);
+
+	RID pipeline_get_execution_blackboard(RID p_pipeline);
+	RID pipeline_get_source_blackboard(RID p_pipeline);
+	RID pipeline_get_graph(RID p_pipeline);
+	String pipeline_get_error(RID p_pipeline);
 
 	// ---- Pipelines END ----
 };
@@ -343,8 +426,9 @@ public:
 	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID graph_create(BehaviorServer::GraphType p_graph_type);
-	RID pipeline_create(BehaviorServer::GraphType p_graph_type, RID p_blackboard, RID p_behavior_tree_graph);
+	RID graph_create(const StringName &p_registration_key);
+	RID behavior_tree_graph_create();
+	RID pipeline_create(RID p_graph, RID p_blackboard = {});
 	RID agent_create();
 
 	// ---- Blackboard ----
@@ -384,9 +468,16 @@ public:
 	// ---- Blackboard END ----
 
 	// ---- Graphs ----
+
+	const StringName &graph_get_type(RID p_graph);
+	const StringName &graph_get_group_key(RID p_graph);
+	bool graph_is_bound(RID p_graph);
+	uint32_t graph_get_bind_count(RID p_graph);
+
 	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases = {}, const PortAliases &p_output_aliases = {});
 	bool graph_destroy_node(RID p_graph, RID p_node);
-	bool graph_is_bound(RID p_graph);
+
+	uint64_t graph_get_node_count(RID p_graph);
 	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
 	TypedArray<RID> graph_get_nodes(RID p_graph);
 	bool graph_set_root(RID p_graph, RID p_node);
@@ -448,8 +539,15 @@ public:
 
 	// ---- Pipelines ----
 
+	const StringName &pipeline_get_group_key(RID p_pipeline);
+
 	void pipeline_execute(RID p_pipeline);
 	void pipeline_halt(RID p_pipeline);
+
+	RID pipeline_get_execution_blackboard(RID p_pipeline);
+	RID pipeline_get_source_blackboard(RID p_pipeline);
+	RID pipeline_get_graph(RID p_pipeline);
+	String pipeline_get_error(RID p_pipeline);
 
 	// ---- Pipelines END ----
 
@@ -491,8 +589,6 @@ void HydrogenBehaviorServer::blackboard_set_entry(RID p_blackboard, const String
 }
 
 }
-
-VARIANT_ENUM_CAST(hydrogen::BehaviorServer::GraphType)
 
 
 #endif //BEHAVIOR_SERVER_HPP

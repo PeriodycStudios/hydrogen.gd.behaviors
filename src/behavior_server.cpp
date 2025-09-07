@@ -7,6 +7,7 @@
 #include "godot_cpp/classes/graph_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/core/error_macros.hpp"
+#include "godot_cpp/core/memory.hpp"
 #include "godot_cpp/templates/pair.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "godot_cpp/variant/callable.hpp"
@@ -18,9 +19,9 @@
 #include "godot_cpp/variant/variant.hpp"
 #include "mutex_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
-#include "pipelines/pipeline.hpp"
 
 #include <cstdint>
+#include <functional>
 #include <godot_cpp/core/property_info.hpp>
 #include <godot_cpp/core/class_db.hpp>
 
@@ -53,9 +54,11 @@ BehaviorServer::~BehaviorServer() {
 	const static auto initials##_cleanup = [this](type *item) { _##name##_erase(item); };	\
 	_free_ptr_resource<type>(_##name##_owner, _##name##_mutex, p_rid, initials##_cleanup);	\
 
+
+
 void BehaviorServer::free_rid(RID p_rid) {
 	if (_pipeline_owner.owns(p_rid)) {
-		HANDLE_CLEANUP(Pipeline, bt, pipeline)
+		HANDLE_CLEANUP(IPipeline, bt, pipeline)
 	}
 	else if (_graph_owner.owns(p_rid)) {
 		HANDLE_CLEANUP(IPipelineGraph, btg, graph)
@@ -82,35 +85,90 @@ void BehaviorServer::free_rid(RID p_rid) {
 
 #define GRAPHS_LOCK() LOCK_ONE(_graph_mutex)
 
+
+void BehaviorServer::_blackboard_acquire(Blackboard *p_blackboard) {
+	BLACKBOARDS_LOCK();
+
+	RID rid = _blackboard_owner.make_rid(p_blackboard);
+	p_blackboard->set_self(rid);
+
+	const Blackboard *parent = p_blackboard->get_parent();
+	if (likely(parent == nullptr)) {
+		_blackboard_add_child(parent->get_self(), rid);
+	}
+}
+
+void BehaviorServer::_blackboard_release(Blackboard *p_blackboard) {
+	ERR_FAIL_NULL(p_blackboard);
+	BLACKBOARDS_LOCK();
+
+	RID rid = p_blackboard->get_self();
+
+	const Blackboard *parent = p_blackboard->get_parent();
+	if (likely(parent != nullptr)) {
+		_blackboard_remove_child(parent->get_self(), rid);
+	}
+
+	_blackboard_owner.free(rid);
+	p_blackboard->set_self(RID());
+}
+
 RID BehaviorServer::blackboard_create() {
+	BLACKBOARDS_LOCK_V(RID());
 	RID rid = _blackboard_create_helper();
 
-	_blackboard_emit_created(rid);
+	if (likely(rid.is_valid())) {
+		_blackboard_emit_created(rid);
+	}
 
 	return rid;
 }
 
-RID BehaviorServer::graph_create(GraphType p_graph_type) {
+RID BehaviorServer::graph_create(const StringName &p_registration_key) {
+	LOCK_ONE_V(_graph_mutex, RID());
+	const auto iter = _pipeline_db.find(p_registration_key);
+	ERR_FAIL_COND_V(iter == _pipeline_db.end(), RID());
 
-	switch (p_graph_type) {
-	case BEHAVIOR_TREE:
-		return _graph_create_helper<BehaviorTreeGraph>();
-	default:
-		ERR_FAIL_V(RID());
+	const PipelineRegistration &reg = iter->value;
+	RID rid = reg.create_graph(p_registration_key);
+
+	if (likely(rid.is_valid())) {
+		_graph_emit_created(rid);
 	}
+
+	return rid;
 }
 
-RID BehaviorServer::pipeline_create(GraphType p_graph_type, RID p_blackboard, RID p_graph) {
+RID BehaviorServer::pipeline_create(RID p_graph, RID p_blackboard) {
+	ERR_FAIL_COND_V(!p_graph.is_valid(), RID());
+	LOCK_THREE_V(_pipeline_mutex, _blackboard_mutex, _graph_mutex, RID());
 
-	switch (p_graph_type) {
-	case BEHAVIOR_TREE:
-		return _pipeline_create_helper<BehaviorTree, BehaviorTreeGraph>(p_blackboard, p_graph);
-	default:
-		ERR_FAIL_V(RID());
+	bool owns_source_blackboard = false;
+	if (unlikely(!p_blackboard.is_valid())) {
+		p_blackboard = blackboard_create();
+		owns_source_blackboard = true;
 	}
+
+	const Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);
+	ERR_FAIL_NULL_V(blackboard, RID());
+
+	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
+	ERR_FAIL_NULL_V(graph, RID());
+
+	const StringName &reg_key = graph->group_key();
+	const auto iter = _pipeline_db.find(reg_key);
+	ERR_FAIL_COND_V(iter == _pipeline_db.end(), RID());
+
+	const PipelineRegistration &reg = iter->value;
+	RID rid = reg.create_pipeline(reg_key, blackboard, graph, owns_source_blackboard);
+
+	if (likely(rid.is_valid())) {
+		_pipeline_emit_created(rid);
+	}
+
+	return rid;
 }
 
-#undef SELECT_CREATE
 
 RID BehaviorServer::agent_create() {
 	return {};
@@ -121,30 +179,46 @@ Error BehaviorServer::init() {
 	_pipeline_mutex = memnew(std::recursive_mutex);
 	_graph_mutex = memnew(std::recursive_mutex);
 
+	register_graph_group<BehaviorTreeGraph, BehaviorTree>(BehaviorTree_name());
+
  	return OK;
 }
 
 template<typename T>
-void _cleanup_owned(RID_PtrOwner<T> &p_owner) {
+void _cleanup_owned(RID_PtrOwner<T> &p_owner, std::function<void(T *)> p_cleanup) {
 	TightLocalVector<RID> rids = {};
 	rids.resize(p_owner.get_rid_count());
 	p_owner.fill_owned_buffer(rids.ptr());
 	for(RID rid : rids) {
-		T *bb = p_owner.get_or_null(rid);
+		T *owned = p_owner.get_or_null(rid);
+		p_cleanup(owned);
 		p_owner.free(rid);
-		memdelete(bb);
+		memdelete(owned);
 	}
 }
 
 void BehaviorServer::finish() {
-
 	_blackboard_parents_to_children.clear();
+	_pipeline_db.clear();
+
+	std::function<void(IPipeline *)> cleanup_pipeline = [this](IPipeline *p_pipeline) {
+		_pipeline_erase(p_pipeline, true);
+	};
+
+	std::function<void(IPipelineGraph *)> cleanup_graphs = [this](IPipelineGraph *p_graph) {
+		_graph_erase(p_graph, true);
+	};
+
+	std::function<void(Blackboard *)> cleanup_blackboards = [this](Blackboard *	p_blackboard) {
+		_blackboard_erase(p_blackboard, true);
+	};
+
 	{
 		// destroy in reverse order of dependencies
 		LOCK_THREE(_pipeline_mutex, _graph_mutex, _blackboard_mutex);
-		_cleanup_owned(_pipeline_owner);
-		_cleanup_owned(_graph_owner);
-		_cleanup_owned(_blackboard_owner);
+		_cleanup_owned(_pipeline_owner, cleanup_pipeline);
+		_cleanup_owned(_graph_owner, cleanup_graphs);
+		_cleanup_owned(_blackboard_owner, cleanup_blackboards);
 	}
 	memdelete(_blackboard_mutex);
 	memdelete(_pipeline_mutex);
@@ -179,7 +253,11 @@ void BehaviorServer::_blackboard_remove_child(RID parent, RID child) {
 	}
 }
 
-void BehaviorServer::_blackboard_erase(Blackboard *blackboard) {
+void BehaviorServer::_blackboard_erase(Blackboard *blackboard, bool p_is_final_shutdown) {
+	if (unlikely(p_is_final_shutdown)) {
+		return;
+	}
+
 	const RID self = blackboard->get_self();
 
 	if (const Blackboard *parent = blackboard->get_parent()) {
@@ -320,12 +398,34 @@ Dictionary BehaviorServer::blackboard_export_type_infos() {
 
 // ---- Behavior Tree ----
 
-void BehaviorServer::_graph_erase(IPipelineGraph *p_graph) {
-	_graph_emit_destroyed(p_graph->get_id());
+void BehaviorServer::_graph_erase(IPipelineGraph *p_graph, bool p_is_final_shutdown) {
+	if (likely(!p_is_final_shutdown)) {
+		_graph_emit_destroyed(p_graph->get_id());
+	}
 }
 
-void BehaviorServer::_pipeline_erase(Pipeline *p_behavior_tree) {
-	_pipeline_emit_destroyed(p_behavior_tree->get_self());
+void BehaviorServer::_pipeline_erase(IPipeline *p_pipeline, bool p_is_final_shutdown) {
+	
+	Blackboard * blackboard = p_pipeline->get_execution_blackboard();
+
+	if (likely(!p_is_final_shutdown)) {
+
+		_blackboard_release(blackboard);
+
+		const Blackboard *parent = p_pipeline->get_source_blackboard();
+		bool delete_source = p_pipeline->owns_source_blackboard();
+
+		_pipeline_emit_destroyed(p_pipeline->get_id());
+
+		if (delete_source && parent) {
+			free_rid(parent->get_self());
+		}
+	}
+	else {
+		RID rid = blackboard->get_self();
+		_blackboard_owner.free(rid);
+		blackboard->set_self(RID());
+	}
 }
 
 void BehaviorServer::_graph_emit_created(RID p_graph) {
@@ -461,6 +561,29 @@ void BehaviorServer::_pipeline_emit_destroyed(RID p_behavior_tree) {
 
 // ---- Graph ----
 
+
+const StringName &BehaviorServer::graph_get_type(RID p_graph) {
+	static const StringName empty = StringName();
+	TRY_GET_CONST_GRAPH_V(empty);
+	return graph->graph_type();
+}
+
+const StringName &BehaviorServer::graph_get_group_key(RID p_graph) {
+	static const StringName empty = StringName();
+	TRY_GET_CONST_GRAPH_V(empty);
+	return graph->group_key();
+}
+
+bool BehaviorServer::graph_is_bound(RID p_graph) {
+	TRY_GET_CONST_GRAPH_V(false);
+	return graph->is_bound();
+}
+
+uint32_t BehaviorServer::graph_get_bind_count(RID p_graph) {
+	TRY_GET_CONST_GRAPH_V(0);
+	return graph->bind_count();
+}
+
 RID BehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) {
 	TRY_GET_GRAPH_EDITABLE_V(RID());
 	return graph->create_node(p_node_type_name, p_input_aliases, p_output_aliases);
@@ -471,9 +594,9 @@ bool BehaviorServer::graph_destroy_node(RID p_graph, RID p_node) {
 	return graph->destroy_node(p_node);
 }
 
-bool BehaviorServer::graph_is_bound(RID p_graph) {
-	TRY_GET_CONST_GRAPH_V(false);
-	return graph->is_bound();
+uint64_t BehaviorServer::graph_get_node_count(RID p_graph) {
+	TRY_GET_CONST_GRAPH_V(0);
+	return graph->nodes_count();
 }
 
 TypedArray<RID> _nodes_to_ids(const Vector<const IPipelineNode *> p_nodes) {
@@ -928,16 +1051,25 @@ void BehaviorServer::node_decorator_set_child(RID p_graph, RID p_node, RID p_chi
 
 // Pipelines
 
+const StringName &BehaviorServer::pipeline_get_group_key(RID p_pipeline) {
+	static const StringName empty = StringName();
+	PIPELINES_LOCK_V(empty);
+	IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL_V(pipeline, empty);
+
+	return pipeline->group_key();
+}
+
 void BehaviorServer::pipeline_execute(RID p_pipeline) {
 	PIPELINES_LOCK();
-	Pipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
 	ERR_FAIL_NULL(pipeline);
 	pipeline->execute();
 }
 
 void BehaviorServer::pipeline_halt(RID p_pipeline) {
 	PIPELINES_LOCK();
-	Pipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
 	ERR_FAIL_NULL(pipeline);
 	pipeline->halt();
 }
@@ -957,8 +1089,8 @@ HydrogenBehaviorServer *HydrogenBehaviorServer::get_singleton() {
 void HydrogenBehaviorServer::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("free_rid", "rid"), &HydrogenBehaviorServer::free_rid);
 	ClassDB::bind_method(D_METHOD("blackboard_create"), &HydrogenBehaviorServer::blackboard_create);
-	ClassDB::bind_method(D_METHOD("graph_create", "graph_type"), &HydrogenBehaviorServer::graph_create);
-	ClassDB::bind_method(D_METHOD("pipeline_create", "pipeline_type", "blackboard", "graph"), &HydrogenBehaviorServer::pipeline_create);
+	ClassDB::bind_method(D_METHOD("graph_create", "graph_group"), &HydrogenBehaviorServer::graph_create);
+	ClassDB::bind_method(D_METHOD("pipeline_create", "graph", "blackboard"), &HydrogenBehaviorServer::pipeline_create);
 	ClassDB::bind_method(D_METHOD("agent_create"), &HydrogenBehaviorServer::agent_create);
 
 	// ---- Blackboard ----
@@ -1073,9 +1205,14 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("graph_created", PropertyInfo(Variant::RID, "graph")));
 	ADD_SIGNAL(MethodInfo("graph_destroyed", PropertyInfo(Variant::RID, "graph")));
 
+	
+	ClassDB::bind_method(D_METHOD("graph_get_type", "graph"), &HydrogenBehaviorServer::graph_get_type);
+	ClassDB::bind_method(D_METHOD("graph_get_group_key", "graph"), &HydrogenBehaviorServer::graph_get_group_key);
+	ClassDB::bind_method(D_METHOD("graph_is_bound", "graph"), &HydrogenBehaviorServer::graph_is_bound);
+	ClassDB::bind_method(D_METHOD("graph_get_bind_count", "graph"), &HydrogenBehaviorServer::graph_get_bind_count);
 	ClassDB::bind_method(D_METHOD("graph_create_node", "graph", "node_type_name", "input_aliases", "output_aliases"), &HydrogenBehaviorServer::graph_create_node, DEFVAL(PortAliases()), DEFVAL(PortAliases()));
 	ClassDB::bind_method(D_METHOD("graph_destroy_node", "graph", "node"), &HydrogenBehaviorServer::graph_destroy_node);
-	ClassDB::bind_method(D_METHOD("graph_is_bound", "graph"), &HydrogenBehaviorServer::graph_is_bound);
+	ClassDB::bind_method(D_METHOD("graph_get_node_count", "graph"), &HydrogenBehaviorServer::graph_get_node_count);
 	ClassDB::bind_method(D_METHOD("graph_get_sub_graphs", "graph"), &HydrogenBehaviorServer::graph_get_sub_graphs);
 	ClassDB::bind_method(D_METHOD("graph_get_nodes", "graph"),&HydrogenBehaviorServer::graph_get_nodes);
 	ClassDB::bind_method(D_METHOD("graph_set_root", "graph", "node"), &HydrogenBehaviorServer::graph_set_root);
@@ -1128,13 +1265,17 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("pipeline_created", PropertyInfo(Variant::RID, "tree")));
 	ADD_SIGNAL(MethodInfo("pipeline_destroyed", PropertyInfo(Variant::RID, "tree")));
 
+	ClassDB::bind_method(D_METHOD("pipeline_get_group_key", "pipeline"), &HydrogenBehaviorServer::pipeline_get_group_key);
+
 	ClassDB::bind_method(D_METHOD("pipeline_execute", "pipeline"), &HydrogenBehaviorServer::pipeline_execute);
 	ClassDB::bind_method(D_METHOD("pipeline_halt", "pipeline"), &HydrogenBehaviorServer::pipeline_halt);
 
-	// ---- Pipelines End ----
+	ClassDB::bind_method(D_METHOD("pipeline_get_execution_blackboard", "pipeline"), &HydrogenBehaviorServer::pipeline_get_execution_blackboard);
+	ClassDB::bind_method(D_METHOD("pipeline_get_source_blackboard", "pipeline"), &HydrogenBehaviorServer::pipeline_get_source_blackboard);
+	ClassDB::bind_method(D_METHOD("pipeline_get_graph", "pipeline"), &HydrogenBehaviorServer::pipeline_get_graph);
+	ClassDB::bind_method(D_METHOD("pipeline_get_error", "pipeline"), &HydrogenBehaviorServer::pipeline_get_error);
 
-	BIND_ENUM_CONSTANT(BehaviorServer::BEHAVIOR_TREE);
-	BIND_ENUM_CONSTANT(BehaviorServer::GraphType::GRAPH_TYPE_MAX);
+	// ---- Pipelines End ----
 
 #if TESTS_ENABLED
 	ClassDB::bind_method(D_METHOD("run_tests"), &HydrogenBehaviorServer::run_tests);
@@ -1150,12 +1291,16 @@ RID HydrogenBehaviorServer::blackboard_create() {
 	return BehaviorServer::get_singleton()->blackboard_create();
 }
 
-RID HydrogenBehaviorServer::graph_create(BehaviorServer::GraphType p_graph_type) {
-	return BehaviorServer::get_singleton()->graph_create(p_graph_type);
+RID HydrogenBehaviorServer::graph_create(const StringName &p_pipeline_group) {
+	return BehaviorServer::get_singleton()->graph_create(p_pipeline_group);
 }
 
-RID HydrogenBehaviorServer::pipeline_create(BehaviorServer::GraphType p_graph_type, RID p_blackboard, RID p_behavior_tree_graph) {
-	return BehaviorServer::get_singleton()->pipeline_create(p_graph_type, p_blackboard, p_behavior_tree_graph);
+RID HydrogenBehaviorServer::behavior_tree_graph_create() {
+	return BehaviorServer::get_singleton()->behavior_tree_graph_create();
+}
+
+RID HydrogenBehaviorServer::pipeline_create(RID p_graph, RID p_blackboard) {
+	return BehaviorServer::get_singleton()->pipeline_create(p_graph, p_blackboard);
 }
 
 RID HydrogenBehaviorServer::agent_create() {
@@ -1227,6 +1372,22 @@ void HydrogenBehaviorServer::_graph_emit_destroyed(RID p_graph) {
 	emit_signal("graph_destroyed", p_graph);
 }
 
+const StringName &HydrogenBehaviorServer::graph_get_type(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_type(p_graph);
+}
+
+const StringName &HydrogenBehaviorServer::graph_get_group_key(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_group_key(p_graph);
+}
+
+bool HydrogenBehaviorServer::graph_is_bound(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_is_bound(p_graph);
+}
+
+uint32_t HydrogenBehaviorServer::graph_get_bind_count(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_bind_count(p_graph);
+}
+
 RID HydrogenBehaviorServer::graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) {
 	return BehaviorServer::get_singleton()->graph_create_node(p_graph, p_node_type_name, p_input_aliases, p_output_aliases);
 }
@@ -1235,8 +1396,8 @@ bool HydrogenBehaviorServer::graph_destroy_node(RID p_graph, RID p_node) {
 	return BehaviorServer::get_singleton()->graph_destroy_node(p_graph, p_node);
 }
 
-bool HydrogenBehaviorServer::graph_is_bound(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_is_bound(p_graph);
+uint64_t HydrogenBehaviorServer::graph_get_node_count(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_node_count(p_graph);
 }
 
 TypedArray<RID> HydrogenBehaviorServer::graph_get_sub_graphs(RID p_graph) {
@@ -1419,12 +1580,32 @@ void HydrogenBehaviorServer::_pipeline_emit_destroyed(RID p_pipeline) {
 	emit_signal("pipeline_destroyed", p_pipeline);
 }
 
+const StringName &HydrogenBehaviorServer::pipeline_get_group_key(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_group_key(p_pipeline);
+}
+
 void HydrogenBehaviorServer::pipeline_execute(RID p_pipeline) {
 	BehaviorServer::get_singleton()->pipeline_execute(p_pipeline);
 }
 
 void HydrogenBehaviorServer::pipeline_halt(RID p_pipeline) {
 	BehaviorServer::get_singleton()->pipeline_halt(p_pipeline);
+}
+
+RID HydrogenBehaviorServer::pipeline_get_execution_blackboard(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_execution_blackboard(p_pipeline);
+}
+
+RID HydrogenBehaviorServer::pipeline_get_source_blackboard(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_source_blackboard(p_pipeline);
+}
+
+RID HydrogenBehaviorServer::pipeline_get_graph(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_graph(p_pipeline);
+}
+
+String HydrogenBehaviorServer::pipeline_get_error(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_error(p_pipeline);
 }
 
 // ---- Pipelines END ----

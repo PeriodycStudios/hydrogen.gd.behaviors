@@ -18,8 +18,13 @@ using namespace godot;
 class BehaviorTreeGraph : public PipelineGraph<BehaviorTreeNode> {
 	DECLARE_PIPELINE_GRAPH()
 public:
-	BehaviorTreeGraph() = default;
+	BehaviorTreeGraph(const StringName &p_group_key) : PipelineGraph(p_group_key) {}
 	~BehaviorTreeGraph() override = default;
+
+	const StringName &graph_type() const override {
+		static const StringName type_name = StringName("BehaviorTree", true);
+		return type_name;
+	}
 
 	static void register_core_nodes();
 };

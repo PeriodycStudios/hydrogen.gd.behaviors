@@ -395,13 +395,18 @@ protected:
 struct IPipelineGraph {
 	virtual ~IPipelineGraph() = default;
 
-	virtual RID create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) = 0;
+	virtual const StringName &graph_type() const = 0;
+	virtual const StringName &group_key() const = 0;
+
+	[[nodiscard]] virtual RID get_id() const = 0;
+	[[nodiscard]] virtual bool is_bound() const = 0;
+	[[nodiscard]] virtual uint32_t bind_count() const = 0;
+	
+	[[nodiscard]] virtual RID create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) = 0;
 	virtual bool destroy_node(RID p_node) = 0;
 
-	[[nodiscard]] virtual bool is_bound() const = 0;
+	[[nodiscard]] virtual uint64_t nodes_count() const = 0;
 
-	virtual RID get_id() const = 0;
-	
 	virtual void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const = 0;
 	virtual void get_nodes(Vector<const IPipelineNode*> &p_nodes) const = 0;
 
@@ -420,7 +425,7 @@ struct IPipelineGraph {
 
 	virtual void get_rooted_statuses(Vector<Pair<const IPipelineNode *, bool>> &p_statuses) const = 0;
 
-	virtual bool is_parented(const IPipelineNode *p_node) const = 0;
+	[[nodiscard]] virtual bool is_parented(const IPipelineNode *p_node) const = 0;
 	virtual void update_parent(const IPipelineNode *p_node, IPipelineNodeParent *p_parent = nullptr) = 0;
 
 protected:
@@ -428,7 +433,7 @@ protected:
 	virtual RID _create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) = 0;
 	virtual bool _destroy_node(RID p_node_id) = 0;
 
-	friend class Pipeline;
+	friend class IPipeline;
 	IPipelineGraph() = default;
 };
 
@@ -441,6 +446,30 @@ struct IPipelineNodeSubGraph {
 protected:
 	IPipelineNodeSubGraph() = default;
 };
+
+struct IPipeline {
+
+	virtual ~IPipeline() = default;
+
+	virtual RID get_id() const = 0;
+	virtual const StringName &group_key() const = 0;
+
+	virtual void execute() = 0;
+	virtual void halt() = 0;
+
+	virtual bool owns_source_blackboard() const = 0;
+	virtual Blackboard *get_execution_blackboard() const = 0;
+	virtual const Blackboard *get_source_blackboard() const = 0;
+
+	virtual const IPipelineGraph *get_graph() const = 0;
+
+	virtual const String get_error() const = 0;
+	virtual void clear_error() const = 0;
+
+protected:
+	IPipeline() = default;
+};
+
 } // hydrogen
 
 VARIANT_BITFIELD_CAST(hydrogen::pipelines::NodePortInfo::PORT_KIND);

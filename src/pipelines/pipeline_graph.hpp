@@ -31,16 +31,14 @@
 
 namespace hydrogen::pipelines {
 
-class Pipeline;
-
-template<typename T, typename = void>
+template<typename TNODE, typename = void>
 class PipelineGraph {};
 
-template <typename T>
-class PipelineGraph<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>> : public RidData, public IPipelineGraph {
+template <typename TNODE>
+class PipelineGraph<TNODE, std::enable_if_t<std::is_base_of_v<PipelineNode, TNODE>>> : public RidData, public IPipelineGraph {
 public:
-	typedef const T * c_ptr;
-	typedef T * ptr;
+	typedef const TNODE * c_ptr;
+	typedef TNODE * ptr;
 
 	typedef std::function<bool(c_ptr)> NodePredicate;
 
@@ -51,15 +49,17 @@ private:
 	std::mutex *_mutex;
 	std::atomic_uint32_t _bind_count = { 0 };
 
+	StringName _group_key;
+
 protected:
 
 	HashMap<RID, ptr> _nodes = {};
 	HashMap<RID, IPipelineNodeParent *> _parent_lookup = {};
-	Vector<T *> _connectors = {};
-	RID_PtrOwner<T> _nodes_owner = {};
+	Vector<TNODE *> _connectors = {};
+	RID_PtrOwner<TNODE> _nodes_owner = {};
 	ptr _root = nullptr;
 
-	PipelineGraph() : _mutex(memnew(std::mutex)) {}
+	PipelineGraph(const StringName &p_group_key) : _group_key(p_group_key), _mutex(memnew(std::mutex)) {}
 
 	_FORCE_INLINE_ static void _init() {
 		_register_mutex = memnew(std::mutex);
@@ -68,13 +68,6 @@ protected:
 	_FORCE_INLINE_ static void _finish() {
 		memdelete(_register_mutex);
 		_registered_nodes.clear();
-	}
-
-	friend class Pipeline;
-	_FORCE_INLINE_ void _bind() { ++_bind_count; }
-	_FORCE_INLINE_ void _unbind() {
-		CRASH_COND(_bind_count == 0);
-		--_bind_count;
 	}
 
 	c_ptr _get_node(RID p_node) const {
@@ -98,7 +91,7 @@ protected:
 	}
 
 	void _visit(c_ptr p_node, std::function<void(c_ptr)> p_visitor) const {
-		Vector<const T *> nodes = { p_node };
+		Vector<const TNODE *> nodes = { p_node };
 		p_node->get_descendants(nodes);
 
 		for (c_ptr node : nodes) {
@@ -106,7 +99,7 @@ protected:
 		}
 	}
 
-	void _visit_all(std::function<void(const T *)> p_visitor) const {
+	void _visit_all(std::function<void(const TNODE *)> p_visitor) const {
 		for (const auto &kvp : _nodes) {
 			c_ptr node = kvp.value;
 			p_visitor(node);
@@ -135,7 +128,7 @@ protected:
         return rid;
 	}
 
-	void _clear_connections(T *p_node) {
+	void _clear_connections(TNODE *p_node) {
 		for (ptr connector : _connectors) {
 			const auto &connections = connector->get_connections();
 			for (const auto &info : connections) {
@@ -147,12 +140,12 @@ protected:
 		_connectors.erase(p_node);
 	}
 
-	void _clear_parentage(T *p_node) {
+	void _clear_parentage(TNODE *p_node) {
 		IPipelineNodeParent *parent = dynamic_cast<IPipelineNodeParent *>(p_node);
 		if (unlikely(parent)) {
-			Vector<const T *> children = {};
+			Vector<const TNODE *> children = {};
 			p_node->get_children(children);
-			for (const T *child : children) {
+			for (const TNODE *child : children) {
 				_parent_lookup.erase(child->get_id());
 			}
 			parent->remove_all_children();
@@ -188,7 +181,7 @@ protected:
 
 	template<typename U,
 		std::enable_if_t<
-			std::is_base_of_v<T, U> &&
+			std::is_base_of_v<TNODE, U> &&
 			!std::is_abstract_v<U>>
 	>
 	static void _register_node() {
@@ -217,6 +210,12 @@ protected:
 
 public:
 
+	_FORCE_INLINE_ void bind() { ++_bind_count; }
+	_FORCE_INLINE_ void unbind() {
+		CRASH_COND(_bind_count == 0);
+		--_bind_count;
+	}
+
 	~PipelineGraph() override {
 		_root = nullptr;
 		for (const auto &kvp : _nodes) {
@@ -231,7 +230,16 @@ public:
 		memdelete(_mutex);
 	}
 
-	RID create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) override {
+	[[nodiscard]] const StringName &group_key() const override {
+		return _group_key;
+	}
+
+	[[nodiscard]] RID get_id() const override { return get_self(); }
+	
+	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
+	[[nodiscard]] uint32_t bind_count() const override { return _bind_count; }
+
+	[[nodiscard]] RID create_node(const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases) override {
 		ERR_FAIL_COND_V_MSG(is_bound(), RID(), "Cannoot create nodes while bound!");
 		return _create_node(p_node_type_name, p_input_aliases, p_output_aliases);
 	}
@@ -241,14 +249,14 @@ public:
 		return _destroy_node(p_node);
 	}
 
-	RID get_id() const override { return get_self(); }
-	
-	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
+	[[nodiscard]] uint64_t nodes_count() const override {
+		return _nodes.size();
+	}
 
 	void get_sub_graphs(Vector<const IPipelineGraph *> &p_graphs) const override {
 		LOCK_ONE(_mutex);
 
-		auto visitor = [&p_graphs](const T *node) {
+		auto visitor = [&p_graphs](const TNODE *node) {
 			const IPipelineNodeSubGraph *sub_graph_node = dynamic_cast<const IPipelineNodeSubGraph *>(node);
 			if (unlikely(sub_graph_node != nullptr)) {
 				const IPipelineGraph *graph = sub_graph_node->get_sub_graph();
@@ -269,24 +277,40 @@ public:
 		}
 	}
 
-	const IPipelineNode* get_node(RID p_node) const override {
+	[[nodiscard]] _FORCE_INLINE_ c_ptr get_node_typed(RID p_node) const {
 		LOCK_ONE_V(_mutex, nullptr);
 		return _get_node(p_node);
 	}
 
-	IPipelineNode *get_node(RID p_node) override {
+	[[nodiscard]] _FORCE_INLINE_ ptr get_node_typed(RID p_node) {
 		LOCK_ONE_V(_mutex, nullptr);
 		return _get_node(p_node);
 	}
 
-	const IPipelineNode *get_root_node() const override {
+	[[nodiscard]] const IPipelineNode* get_node(RID p_node) const override {
+		return get_node_typed(p_node);
+	}
+
+	[[nodiscard]] IPipelineNode *get_node(RID p_node) override {
+		return get_node_typed(p_node);
+	}
+
+	[[nodiscard]] _FORCE_INLINE_ c_ptr get_root_typed() const {
 		LOCK_ONE_V(_mutex, nullptr);
 		return _root;
 	}
 
-	IPipelineNode *get_root_node() override {
+	[[nodiscard]] _FORCE_INLINE_ ptr get_root_typed() {
 		LOCK_ONE_V(_mutex, nullptr);
 		return _root;
+	}
+
+	[[nodiscard]] const IPipelineNode *get_root_node() const override {
+		return get_root_typed();
+	}
+
+	[[nodiscard]] IPipelineNode *get_root_node() override {
+		return get_root_typed();
 	}
 
 	bool set_root(RID p_node) override {
@@ -295,7 +319,7 @@ public:
 		LOCK_ONE_V(_mutex, false);
 		auto iter = _nodes.find(p_node);
 		ERR_FAIL_COND_V(iter == _nodes.end(), false);
-		T *node = iter->value;
+		TNODE *node = iter->value;
 
 		_root = node;
 		return true;
@@ -306,13 +330,15 @@ public:
 		return _root != nullptr ? _root->get_self() : RID();
 	}
 
+	typedef std::function<bool(const TNODE *)> TypedNodePredicate;
+
 	void query_node(RID p_node_id, Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const override {
 		LOCK_ONE(_mutex);
 
-		const T * node = _get_node(p_node_id);
+		c_ptr node = _get_node(p_node_id);
 		ERR_FAIL_NULL(node);
 
-		auto visitor = [&p_nodes, &p_predicate](const T *n) {
+		auto visitor = [&p_nodes, &p_predicate](c_ptr n) {
 			if (unlikely(p_predicate(n))) {
 				p_nodes.push_back(n);
 			}
@@ -321,12 +347,39 @@ public:
 		_visit(node, visitor);
 	}
 
+	void query_node_typed(RID p_node_id, Vector<c_ptr> &p_nodes, TypedNodePredicate p_predicate) const {
+		LOCK_ONE(_mutex);
+
+		c_ptr node = _get_node(p_node_id);
+		ERR_FAIL_NULL(node);
+
+		auto visitor = [&p_nodes, &p_predicate](const TNODE *n) {
+			if (unlikely(p_predicate(n))) {
+				p_nodes.push_back(n);
+			}
+		};
+
+		_visit(node, visitor);
+	}
+
 	void query_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const override {
 		LOCK_ONE(_mutex);
 		
-		auto visitor = [&p_nodes, &p_predicate](const T *node) {
+		auto visitor = [&p_nodes, &p_predicate](const TNODE *node) {
 			if (unlikely(p_predicate(node))) {
 				p_nodes.push_back(node);
+			}
+		};
+
+		_visit_all(visitor);
+	}
+
+	void query_nodes_typed(Vector<c_ptr> &p_nodes, TypedNodePredicate p_predicate) const {
+		LOCK_ONE(_mutex);
+
+		auto visitor = [&p_nodes, &p_predicate](c_ptr n) {
+			if (unlikely(p_predicate(n))) {
+				p_nodes.push_back(n);
 			}
 		};
 
@@ -350,7 +403,7 @@ public:
 
 		HashSet<RID> rooted_ids = {};
 		
-		auto visitor = [&rooted_ids](const T * node) {
+		auto visitor = [&rooted_ids](const TNODE * node) {
 			rooted_ids.insert(node->get_id());
 		};
 
@@ -362,11 +415,17 @@ public:
 		}
 	}
 
-	bool is_parented(const IPipelineNode *p_node) const override {
+	[[nodiscard]] bool is_parented(const IPipelineNode *p_node) const override {
+		c_ptr node = dynamic_cast<c_ptr>(p_node);
+		ERR_FAIL_NULL_V(node, false);
+
+		return is_parented_typed(node);
+	}
+
+	[[nodiscard]] bool is_parented_typed(c_ptr p_node) const {
 		LOCK_ONE_V(_mutex, false);
 
-		c_ptr node = dynamic_cast<c_ptr>(p_node);
-		if (unlikely(node == nullptr)) {
+		if (unlikely(p_node == nullptr)) {
 			return false;
 		}
 
@@ -374,16 +433,20 @@ public:
 			return false;
 		}
 
-		return _parent_lookup.has(node->get_id());
+		return _parent_lookup.has(p_node->get_id());
 	}
 
 	void update_parent(const IPipelineNode *p_node, IPipelineNodeParent* p_parent = nullptr) override {
-		LOCK_ONE(_mutex);
-
-		const T *node = dynamic_cast<c_ptr>(p_node);
+		c_ptr node = dynamic_cast<c_ptr>(p_node);
 		ERR_FAIL_NULL(node);
 
-		RID rid = node->get_id();
+		update_parent_typed(node);
+	}
+
+	void update_parent_typed(c_ptr p_node, IPipelineNodeParent *p_parent = nullptr) {
+		LOCK_ONE(_mutex);
+
+		RID rid = p_node->get_id();
 
 		const bool needs_removal = p_parent != nullptr;
 
@@ -391,7 +454,7 @@ public:
 		if (likely(iter != _parent_lookup.end())) {
 			IPipelineNodeParent *previous = iter->value;
 			if (unlikely(needs_removal)) {
-				previous->remove_child(node);
+				previous->remove_child(p_node);
 			}
 
 			if (unlikely(p_parent == nullptr)) {
@@ -404,7 +467,7 @@ public:
 		else if (likely(p_parent != nullptr)) {
 			_parent_lookup.insert(rid, p_parent);
 		}
-	} 
+	}
 };
 
 template<typename T>

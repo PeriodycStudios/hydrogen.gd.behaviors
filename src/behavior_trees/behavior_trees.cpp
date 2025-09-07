@@ -1,6 +1,7 @@
 
 #include "behavior_trees.hpp"
 #include "behavior_tree_node.hpp"
+#include "godot_cpp/variant/string_name.hpp"
 #include "pipelines/pipeline.hpp"
 #include <godot_cpp/core/defs.hpp>
 
@@ -11,15 +12,16 @@ _FORCE_INLINE_ const BehaviorTreeNode *BehaviorTree::get_root() const {
 }
 
 _FORCE_INLINE_ BehaviorTreeContext BehaviorTree::create_context() {
-    return {get_blackboard(), &node_states()};
+    return {get_execution_blackboard(), &node_states()};
 }
 
 void BehaviorTree::register_types() {
     Blackboard::register_type<BehaviorTreeNode::Result>();
 }
 
-BehaviorTree::BehaviorTree(const Blackboard *p_blackboard, BehaviorTreeGraph *p_graph) : Pipeline(p_blackboard, p_graph) {
-    get_blackboard()->set_entry_fast(_last_result_name(), BehaviorTreeNode::SUCCESS);
+BehaviorTree::BehaviorTree(const StringName &p_name_key, const Blackboard *p_parent, BehaviorTreeGraph *p_graph, bool p_auto_delete_blackboard)
+    : Pipeline(p_name_key, p_parent, p_graph, p_auto_delete_blackboard) {
+    get_execution_blackboard()->set_entry_fast(_last_result_name(), BehaviorTreeNode::SUCCESS);
 }
 
 BehaviorTree::~BehaviorTree() {
@@ -27,17 +29,17 @@ BehaviorTree::~BehaviorTree() {
 }
 
 void BehaviorTree::execute() {
-    std::scoped_lock<std::mutex> lock(*mutex());
+    std::scoped_lock lock(*mutex());
     BehaviorTreeContext context = create_context();
     const BehaviorTreeNode::Result result = get_root()->execute(context);
-    get_blackboard()->set_entry_fast(_last_result_name(), result);
+    get_execution_blackboard()->set_entry_fast(_last_result_name(), result);
 }
 
 void BehaviorTree::halt() {
-    std::scoped_lock<std::mutex> lock(*mutex());
+    std::scoped_lock lock(*mutex());
     BehaviorTreeContext context = create_context();
     get_root()->halt(context);
-    get_blackboard()->set_entry_fast(_last_result_name(), BehaviorTreeNode::SUCCESS);
+    get_execution_blackboard()->set_entry_fast(_last_result_name(), BehaviorTreeNode::SUCCESS);
 }
 
 }

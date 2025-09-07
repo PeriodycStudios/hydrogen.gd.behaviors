@@ -6,6 +6,7 @@
 #include "behavior_tree_context.hpp"
 #include "behavior_tree_graph.hpp"
 #include "behavior_tree_node.hpp"
+#include "godot_cpp/variant/string_name.hpp"
 
 #include <godot_cpp/core/defs.hpp>
 
@@ -13,7 +14,7 @@ namespace hydrogen::behavior_trees {
 
 using namespace godot;
 
-class BehaviorTree final : public Pipeline {
+class BehaviorTree final : public Pipeline<BehaviorTreeGraph, BehaviorTreeNode> {
 
 	[[nodiscard]] const BehaviorTreeNode *get_root() const;
 
@@ -23,7 +24,7 @@ public:
 
 	static void register_types();
 
-	explicit BehaviorTree(const Blackboard *p_blackboard, BehaviorTreeGraph *p_graph);
+	explicit BehaviorTree(const StringName &p_name_key, const Blackboard *p_blackboard, BehaviorTreeGraph *p_graph, bool p_owns_source_blackboard);
 	~BehaviorTree() override;
 
 	void execute() override;
