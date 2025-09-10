@@ -85,7 +85,17 @@ library = env.SharedLibrary(
     source=sources,
 )
 
-copy = env.InstallAs("{}/bin/{}/{}lib{}".format(projectdir, env["platform"], filepath, file), library)
+file_target = "{}/bin/{}/{}lib{}".format(projectdir, env["platform"], filepath, file)
+
+copy = env.InstallAs(file_target, library)
 
 default_args = [library, copy]
+
+dev_index = file_target.find(".dev")
+if dev_index > -1:
+    print_special("copying dev lib")
+    dev_target = file_target.replace(".dev", "")
+    dev_copy = env.InstallAs(dev_target, library)
+    default_args.append(dev_copy)
+
 Default(*default_args)

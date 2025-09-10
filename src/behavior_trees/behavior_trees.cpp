@@ -1,6 +1,7 @@
 
 #include "behavior_trees.hpp"
 #include "behavior_tree_node.hpp"
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/variant/string_name.hpp"
 #include "pipelines/pipeline.hpp"
 #include <godot_cpp/core/defs.hpp>
@@ -25,11 +26,16 @@ BehaviorTree::BehaviorTree(const StringName &p_name_key, const Blackboard *p_par
 }
 
 BehaviorTree::~BehaviorTree() {
-    halt();
 }
 
 void BehaviorTree::execute() {
     std::scoped_lock lock(*mutex());
+    const BehaviorTreeNode *root = get_root();
+    if (unlikely(root == nullptr)) {
+        WARN_PRINT("Unable to execute BehaviorTree without root!");
+        return;
+    }
+
     BehaviorTreeContext context = create_context();
     const BehaviorTreeNode::Result result = get_root()->execute(context);
     get_execution_blackboard()->set_entry_fast(_last_result_name(), result);
@@ -37,8 +43,16 @@ void BehaviorTree::execute() {
 
 void BehaviorTree::halt() {
     std::scoped_lock lock(*mutex());
+
+    const BehaviorTreeNode *root = get_root();
+    if (unlikely(root == nullptr)) {
+        WARN_PRINT("Unable to halt BehaviorTree without root!");
+        return;
+    }
+
     BehaviorTreeContext context = create_context();
     get_root()->halt(context);
+    clear_error();
     get_execution_blackboard()->set_entry_fast(_last_result_name(), BehaviorTreeNode::SUCCESS);
 }
 

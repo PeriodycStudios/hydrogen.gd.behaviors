@@ -86,10 +86,10 @@ public:
 		return false;
 	}
 
-	bool remove_child_node_at(int64_t p_index) override { return remove_child_at(p_index); }
+	void remove_child_node_at(int64_t p_index) override { remove_child_at(p_index); }
 
-	_FORCE_INLINE_ bool remove_child_at(int64_t p_index) {
-		return _children.remove_at(p_index);
+	_FORCE_INLINE_ void remove_child_at(int64_t p_index) {
+		_children.remove_at(p_index);
 	}
 
 	void clear() override {
@@ -106,7 +106,7 @@ public:
 		set_child(p_index, node);
 	}
 
-	_FORCE_INLINE_ T *get_child(int64_t p_index) const {
+	_FORCE_INLINE_ const T *get_child(int64_t p_index) const {
 		return _children.get(p_index);
 	}
 	_FORCE_INLINE_ void set_child(int64_t p_index, const T *&p_elem) {
@@ -122,13 +122,13 @@ public:
 		ERR_FAIL_INDEX(p_first_index, child_count);
 		ERR_FAIL_INDEX(p_second_index, child_count);
 
-		T *p = _children.ptrw();
+		const T **p = _children.ptrw();
 		SWAP(p[p_first_index], p[p_second_index]);
 	}
 
 	Error insert_child_node(int64_t p_pos, const IPipelineNode *p_node) override {
 		TRY_CONVERT_CHILD_V(Error::ERR_INVALID_PARAMETER);
-		return insert_child(p_pos, p_node);
+		return insert_child(p_pos, node);
 	}
 
 	_FORCE_INLINE_ Error insert_child(int64_t p_pos, const T* p_val) {

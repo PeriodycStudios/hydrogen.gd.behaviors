@@ -67,7 +67,7 @@ class BehaviorServer final : public Object {
 
 	static BehaviorServer *_singleton;
 
-	HashMap<StringName, PipelineRegistration> _pipeline_db = {};
+	HashMap<StringName, PipelineRegistration> _plugin_registry = {};
 	HashMap<RID, LocalVector<RID>> _blackboard_parents_to_children = {};
 	RID_PtrOwner<Blackboard> _blackboard_owner = {};
 	RID_PtrOwner<IPipelineGraph> _graph_owner = {};
@@ -172,10 +172,10 @@ public:
 	~BehaviorServer() override;
 
 	template<typename TGRAPH, typename TPIPELINE>
-	bool register_graph_group(const StringName &p_graph_group) {
+	bool register_plugin(const StringName &p_plugin_name) {
 		LOCK_TWO_V(_pipeline_mutex, _graph_mutex, false);
 
-		if (unlikely(_pipeline_db.has(p_graph_group))) {
+		if (unlikely(_plugin_registry.has(p_plugin_name))) {
 			return false;
 		}
 
@@ -186,14 +186,14 @@ public:
 			return _pipeline_create_helper<TPIPELINE, TGRAPH>(p_group_key, p_blackboard, p_graph, p_owns_source_blackboard);
 		};
 
-		_pipeline_db.insert(p_graph_group, PipelineRegistration(create_graph_func, create_pipeline_func));
+		_plugin_registry.insert(p_plugin_name, PipelineRegistration(create_graph_func, create_pipeline_func));
 		return true;
 	}
 
-	bool unregister_graph_group(const StringName &p_graph_group) {
+	bool unregister_plugin(const StringName &p_plugin_name) {
 		LOCK_TWO_V(_pipeline_mutex, _graph_mutex, false);
 
-		if (unlikely(!_pipeline_db.has(p_graph_group))) {
+		if (unlikely(!_plugin_registry.has(p_plugin_name))) {
 			return false;
 		}
 
@@ -207,7 +207,7 @@ public:
 		destroy_pipelines.reserve(pipeline_rid_count);
 		for (int32_t idx = 0; idx < pipeline_rid_count; ++idx) {
 			const IPipeline *pipeline = _pipeline_owner.get_or_null(pipeline_rids[idx]);
-			if (pipeline->group_key() == p_graph_group) {
+			if (pipeline->plugin_name() == p_plugin_name) {
 				destroy_pipelines.push_back(pipeline->get_id());
 				const IPipelineGraph *graph = pipeline->get_graph();
 				RID graph_rid = graph->get_id();
@@ -223,14 +223,14 @@ public:
 			free_rid(rid);
 		}
 
-		_pipeline_db.erase(p_graph_group);
+		_plugin_registry.erase(p_plugin_name);
 		return true;
 	}
 
 	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID graph_create(const StringName &p_graph_group);
+	RID graph_create(const StringName &p_plugin_name);
 	RID behavior_tree_graph_create() { return graph_create(BehaviorTree_name()); }
 	RID pipeline_create(RID p_graph, RID p_blackboard = {});
 	RID agent_create();
@@ -275,8 +275,8 @@ public:
 
 	// ---- Graphs ----
 
-	const StringName &graph_get_type(RID p_graph);
-	const StringName &graph_get_group_key(RID p_graph);
+	const StringName &graph_get_type_name(RID p_graph);
+	const StringName &graph_get_plugin_name(RID p_graph);
 	bool graph_is_bound(RID p_graph);
 	uint32_t graph_get_bind_count(RID p_graph);
 
@@ -328,7 +328,7 @@ public:
 
 	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
-	bool node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
+	void node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_clear(RID p_graph, RID p_node);
 	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
@@ -344,7 +344,7 @@ public:
 
 	// ---- Pipelines ----
 
-	const StringName &pipeline_get_group_key(RID p_pipeline);
+	const StringName &pipeline_get_plugin_name(RID p_pipeline);
 
 	void pipeline_execute(RID p_pipeline);
 	void pipeline_halt(RID p_pipeline);
@@ -352,7 +352,7 @@ public:
 	RID pipeline_get_execution_blackboard(RID p_pipeline);
 	RID pipeline_get_source_blackboard(RID p_pipeline);
 	RID pipeline_get_graph(RID p_pipeline);
-	String pipeline_get_error(RID p_pipeline);
+	const String &pipeline_get_error(RID p_pipeline);
 
 	// ---- Pipelines END ----
 };
@@ -426,7 +426,7 @@ public:
 	void free_rid(RID p);
 
 	RID blackboard_create();
-	RID graph_create(const StringName &p_registration_key);
+	RID graph_create(const StringName &p_plugin_name);
 	RID behavior_tree_graph_create();
 	RID pipeline_create(RID p_graph, RID p_blackboard = {});
 	RID agent_create();
@@ -470,7 +470,7 @@ public:
 	// ---- Graphs ----
 
 	const StringName &graph_get_type(RID p_graph);
-	const StringName &graph_get_group_key(RID p_graph);
+	const StringName &graph_get_plugin_name(RID p_graph);
 	bool graph_is_bound(RID p_graph);
 	uint32_t graph_get_bind_count(RID p_graph);
 
@@ -523,7 +523,7 @@ public:
 
 	bool node_composite_add_child(RID p_graph, RID p_node, RID p_child);
 	bool node_composite_remove_child(RID p_graph, RID p_node, RID p_child);
-	bool node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
+	void node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_clear(RID p_graph, RID p_node);
 	RID node_composite_get_child(RID p_graph, RID p_node, int64_t p_child_index);
 	void node_composite_set_child(RID p_graph, RID p_node, int64_t p_child_index, RID p_child);
@@ -539,7 +539,7 @@ public:
 
 	// ---- Pipelines ----
 
-	const StringName &pipeline_get_group_key(RID p_pipeline);
+	const StringName &pipeline_get_plugin_name(RID p_pipeline);
 
 	void pipeline_execute(RID p_pipeline);
 	void pipeline_halt(RID p_pipeline);

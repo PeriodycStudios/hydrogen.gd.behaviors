@@ -49,7 +49,7 @@ private:
 	std::mutex *_mutex;
 	std::atomic_uint32_t _bind_count = { 0 };
 
-	StringName _group_key;
+	StringName _plugin_name;
 
 protected:
 
@@ -59,7 +59,7 @@ protected:
 	RID_PtrOwner<TNODE> _nodes_owner = {};
 	ptr _root = nullptr;
 
-	PipelineGraph(const StringName &p_group_key) : _group_key(p_group_key), _mutex(memnew(std::mutex)) {}
+	PipelineGraph(const StringName &p_group_key) : _plugin_name(p_group_key), _mutex(memnew(std::mutex)) {}
 
 	_FORCE_INLINE_ static void _init() {
 		_register_mutex = memnew(std::mutex);
@@ -176,23 +176,40 @@ protected:
 		return true;
 	}
 
-	template<typename U, typename = void>
-	static void _register_node() {}
-
-	template<typename U,
-		std::enable_if_t<
-			std::is_base_of_v<TNODE, U> &&
-			!std::is_abstract_v<U>>
-	>
+	template<typename U>
 	static void _register_node() {
-		StringName node_type_name = U::get_node_name();
-		auto iter = _registered_nodes.find(node_type_name);
-		if (iter == _registered_nodes.end()) {
-			auto create_func = []() { return memnew(U); };
-			_registered_nodes[node_type_name] = create_func;
+		if constexpr (!std::is_base_of_v<TNODE, U>) {
+			ERR_PRINT("Unable to register invalid node type!");
+			return;
 		}
 		else {
-			WARN_PRINT_ED("Node type already registered");
+			StringName node_type_name = U::get_node_name();
+			auto iter = _registered_nodes.find(node_type_name);
+			if (likely(iter == _registered_nodes.end())) {
+				auto create_func = []() { return memnew(U); };
+				_registered_nodes[node_type_name] = create_func;
+			}
+			else {
+				WARN_PRINT_ED("Node type already registered");
+			}
+		}
+	}
+
+	template<typename U>
+	static void _unregister_node() {
+		if constexpr (!std::is_base_of_v<TNODE, U>) {
+			ERR_PRINT("Unable to unregister invalid node type!");
+			return;
+		}
+		else {
+			StringName node_type_name = U::get_node_name();
+			auto iter = _registered_nodes.find(node_type_name);
+			if (likely(iter != _registered_nodes.end())) {
+				_registered_nodes.erase(iter);
+			}
+			else {
+				WARN_PRINT_ED("Node type not registered!");
+			}
 		}
 	}
 
@@ -230,8 +247,8 @@ public:
 		memdelete(_mutex);
 	}
 
-	[[nodiscard]] const StringName &group_key() const override {
-		return _group_key;
+	[[nodiscard]] const StringName &plugin_name() const override {
+		return _plugin_name;
 	}
 
 	[[nodiscard]] RID get_id() const override { return get_self(); }
@@ -487,9 +504,14 @@ public:																				\
 		_finish();																	\
 	}																				\
 																					\
-	template<typename T>															\
+	template<typename U>															\
 	_FORCE_INLINE_ static void register_node() {									\
-		_register_node<T>();														\
+		_register_node<U>();														\
+	}																				\
+																					\
+	template<typename U>															\
+	_FORCE_INLINE_ static void unregister_node() {									\
+		_unregister_node<U>();														\
 	}																				\
 																					\
 	_FORCE_INLINE_ static LocalVector<StringName> get_registered_node_type_names() {\

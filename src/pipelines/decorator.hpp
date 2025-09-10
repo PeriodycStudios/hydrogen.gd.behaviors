@@ -13,7 +13,7 @@ class PipelineNodeDecorator {};
 template <typename T>
 class PipelineNodeDecorator<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeDecorator {
 protected:
-	T* _decorated_node = nullptr;
+	const T* _decorated_node = nullptr;
 
 	PipelineNodeDecorator() = default;
 
@@ -51,12 +51,12 @@ public:
 		_decorated_node = nullptr;
 	}
 
-	[[nodiscard]] IPipelineNode *get_child() const override { 
+	[[nodiscard]] const IPipelineNode *get_child() const override { 
 		return _decorated_node;
 	}
 	
 	void set_child(const IPipelineNode *p_node) override {
-		T * node = dynamic_cast<T *>(p_node);
+		const T * node = dynamic_cast<const T *>(p_node);
 		_decorated_node = node;
 	}
 };

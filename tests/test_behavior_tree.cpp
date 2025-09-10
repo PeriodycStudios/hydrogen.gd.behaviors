@@ -1,3 +1,4 @@
+#include "behavior_trees/behavior_tree_node.hpp"
 #define DOCTEST_CONFIG_IMPLEMENT_WITH_DLL
 #include <doctest.h>
 
@@ -5,6 +6,9 @@
 
 namespace hydrogen::test {
 using namespace godot;
+using namespace pipelines;
+using namespace behavior_trees;
+using BTNodeResult = BehaviorTreeNode::Result;
 
 TEST_CASE("[Hydrogen][Game AI][Behavior Trees] Simple Create and Destroy") {
     BehaviorServer *server = BehaviorServer::get_singleton()->get_singleton();
@@ -16,23 +20,63 @@ TEST_CASE("[Hydrogen][Game AI][Behavior Trees] Simple Create and Destroy") {
     RID graph = server->graph_create(BehaviorServer::BehaviorTree_name());
     CHECK(graph.is_valid());
     CHECK_FALSE(server->graph_is_bound(graph));
+    CHECK_EQ(server->graph_get_node_count(graph), 0);
     
     RID selector_node = server->graph_create_node(graph, "SelectorNode", {}, {});
     CHECK(selector_node.is_valid());
+    CHECK_EQ(server->graph_get_node_count(graph), 1);
 
     CHECK(server->node_is_composite(graph, selector_node));
+
+    server->graph_set_root(graph, selector_node);
+
+    CHECK_EQ(server->graph_get_root(graph), selector_node);
 
     RID behavior_tree = server->pipeline_create(graph, blackboard);
     RID bt2 = server->pipeline_create(graph);
 
     CHECK(server->graph_is_bound(graph));
+    CHECK_EQ(server->graph_get_bind_count(graph), 2);
+
+    RID exec_bb_1 = server->pipeline_get_execution_blackboard(behavior_tree);
+    RID exec_bb_2 = server->pipeline_get_execution_blackboard(bt2);
+
+    CHECK(exec_bb_1.is_valid());
+    CHECK(exec_bb_2.is_valid());
+
+    BTNodeResult result_1 = server->blackboard_get_entry<BTNodeResult>(exec_bb_1, behavior_trees::_last_result_name());
+    BTNodeResult result_2 = server->blackboard_get_entry<BTNodeResult>(exec_bb_2, behavior_trees::_last_result_name());
+
+    CHECK_EQ(result_1, BTNodeResult::SUCCESS);
+    CHECK_EQ(result_2, BTNodeResult::SUCCESS);
+
+    server->pipeline_execute(behavior_tree);
+    server->pipeline_execute(bt2);
+
+    result_1 = server->blackboard_get_entry<BTNodeResult>(exec_bb_1, behavior_trees::_last_result_name());
+    result_2 = server->blackboard_get_entry<BTNodeResult>(exec_bb_2, behavior_trees::_last_result_name());
+
+    CHECK_EQ(result_1, BTNodeResult::FAILURE);
+    CHECK_EQ(result_2, BTNodeResult::FAILURE);
+
+    server->pipeline_halt(behavior_tree);
+    server->pipeline_halt(bt2);
+
+    result_1 = server->blackboard_get_entry<BTNodeResult>(exec_bb_1, behavior_trees::_last_result_name());
+    result_2 = server->blackboard_get_entry<BTNodeResult>(exec_bb_2, behavior_trees::_last_result_name());
+
+    CHECK_EQ(result_1, BTNodeResult::SUCCESS);
+    CHECK_EQ(result_2, BTNodeResult::SUCCESS);
 
     server->free_rid(behavior_tree);
+
+    CHECK(server->graph_is_bound(graph));
+
+    server->free_rid(bt2);
 
     CHECK_FALSE(server->graph_is_bound(graph));
 
     server->free_rid(graph);
-    server->free_rid(bt2);
     server->free_rid(blackboard);
 }
 

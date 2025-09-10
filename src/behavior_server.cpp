@@ -124,13 +124,13 @@ RID BehaviorServer::blackboard_create() {
 	return rid;
 }
 
-RID BehaviorServer::graph_create(const StringName &p_registration_key) {
+RID BehaviorServer::graph_create(const StringName &p_plugin_name) {
 	LOCK_ONE_V(_graph_mutex, RID());
-	const auto iter = _pipeline_db.find(p_registration_key);
-	ERR_FAIL_COND_V(iter == _pipeline_db.end(), RID());
+	const auto iter = _plugin_registry.find(p_plugin_name);
+	ERR_FAIL_COND_V(iter == _plugin_registry.end(), RID());
 
 	const PipelineRegistration &reg = iter->value;
-	RID rid = reg.create_graph(p_registration_key);
+	RID rid = reg.create_graph(p_plugin_name);
 
 	if (likely(rid.is_valid())) {
 		_graph_emit_created(rid);
@@ -155,9 +155,9 @@ RID BehaviorServer::pipeline_create(RID p_graph, RID p_blackboard) {
 	IPipelineGraph *graph = _graph_owner.get_or_null(p_graph);
 	ERR_FAIL_NULL_V(graph, RID());
 
-	const StringName &reg_key = graph->group_key();
-	const auto iter = _pipeline_db.find(reg_key);
-	ERR_FAIL_COND_V(iter == _pipeline_db.end(), RID());
+	const StringName &reg_key = graph->plugin_name();
+	const auto iter = _plugin_registry.find(reg_key);
+	ERR_FAIL_COND_V(iter == _plugin_registry.end(), RID());
 
 	const PipelineRegistration &reg = iter->value;
 	RID rid = reg.create_pipeline(reg_key, blackboard, graph, owns_source_blackboard);
@@ -179,7 +179,7 @@ Error BehaviorServer::init() {
 	_pipeline_mutex = memnew(std::recursive_mutex);
 	_graph_mutex = memnew(std::recursive_mutex);
 
-	register_graph_group<BehaviorTreeGraph, BehaviorTree>(BehaviorTree_name());
+	register_plugin<BehaviorTreeGraph, BehaviorTree>(BehaviorTree_name());
 
  	return OK;
 }
@@ -199,7 +199,7 @@ void _cleanup_owned(RID_PtrOwner<T> &p_owner, std::function<void(T *)> p_cleanup
 
 void BehaviorServer::finish() {
 	_blackboard_parents_to_children.clear();
-	_pipeline_db.clear();
+	_plugin_registry.clear();
 
 	std::function<void(IPipeline *)> cleanup_pipeline = [this](IPipeline *p_pipeline) {
 		_pipeline_erase(p_pipeline, true);
@@ -268,7 +268,6 @@ void BehaviorServer::_blackboard_erase(Blackboard *blackboard, bool p_is_final_s
 			children.erase(self);
 
 			if (children.is_empty()) {
-
 				_blackboard_parents_to_children.remove(iter);
 			}
 		}
@@ -282,7 +281,6 @@ void BehaviorServer::_blackboard_erase(Blackboard *blackboard, bool p_is_final_s
 			Blackboard *child = _blackboard_owner.get_or_null(child_rid);
 			ERR_CONTINUE(child == nullptr);
 			child->set_parent(nullptr);
-
 		}
 		children.clear();
 		_blackboard_parents_to_children.remove(iter);
@@ -405,6 +403,8 @@ void BehaviorServer::_graph_erase(IPipelineGraph *p_graph, bool p_is_final_shutd
 }
 
 void BehaviorServer::_pipeline_erase(IPipeline *p_pipeline, bool p_is_final_shutdown) {
+
+	p_pipeline->halt();
 	
 	Blackboard * blackboard = p_pipeline->get_execution_blackboard();
 
@@ -562,16 +562,16 @@ void BehaviorServer::_pipeline_emit_destroyed(RID p_behavior_tree) {
 // ---- Graph ----
 
 
-const StringName &BehaviorServer::graph_get_type(RID p_graph) {
+const StringName &BehaviorServer::graph_get_type_name(RID p_graph) {
 	static const StringName empty = StringName();
 	TRY_GET_CONST_GRAPH_V(empty);
 	return graph->graph_type();
 }
 
-const StringName &BehaviorServer::graph_get_group_key(RID p_graph) {
+const StringName &BehaviorServer::graph_get_plugin_name(RID p_graph) {
 	static const StringName empty = StringName();
 	TRY_GET_CONST_GRAPH_V(empty);
-	return graph->group_key();
+	return graph->plugin_name();
 }
 
 bool BehaviorServer::graph_is_bound(RID p_graph) {
@@ -658,8 +658,7 @@ TypedArray<RID> BehaviorServer::graph_query_node(RID p_graph, RID p_node, Callab
 	ERR_FAIL_COND_V(p_predicate.is_null(), {});
 
 	IPipelineGraph::PipelineNodePredicate predicate_wrapper = [&p_predicate](const IPipelineNode *p_node) -> bool {
-		bool result = p_predicate.call(p_node->get_id());
-		return result;
+		return p_predicate.call(p_node->get_id());
 	};
 
 	Vector<const IPipelineNode *> nodes = {};
@@ -673,8 +672,7 @@ TypedArray<RID> BehaviorServer::graph_query_nodes(RID p_graph, Callable p_predic
 	ERR_FAIL_COND_V(p_predicate.is_null(), {});
 
 	IPipelineGraph::PipelineNodePredicate predicate_wrapper = [&p_predicate](const IPipelineNode *p_node) -> bool {
-		bool result = p_predicate.call(p_node->get_id());
-		return result;
+		return p_predicate.call(p_node->get_id());
 	};
 
 	Vector<const IPipelineNode *> nodes = {};
@@ -898,18 +896,15 @@ bool BehaviorServer::node_composite_remove_child(RID p_graph, RID p_node, RID p_
 	return false;
 }
 
-bool BehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
-	TRY_GET_GRAPH_AND_COMPOSITE_NODE_V(false);
+void BehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
+	TRY_GET_GRAPH_AND_COMPOSITE_NODE();
 
 	const IPipelineNode *child = composite->get_child_node(p_child_index);
-	ERR_FAIL_NULL_V(child, false);
-	bool result = composite->remove_child_node_at(p_child_index);
-	
-	if (likely(result)) {
-		graph->update_parent(child);
-	}
+	ERR_FAIL_NULL(child);
+	ERR_FAIL_INDEX(p_child_index, composite->child_count());
 
-	return result;
+	composite->remove_child_node_at(p_child_index);
+	graph->update_parent(child);
 }
 
 void BehaviorServer::node_composite_clear(RID p_graph, RID p_node) {
@@ -1051,13 +1046,13 @@ void BehaviorServer::node_decorator_set_child(RID p_graph, RID p_node, RID p_chi
 
 // Pipelines
 
-const StringName &BehaviorServer::pipeline_get_group_key(RID p_pipeline) {
+const StringName &BehaviorServer::pipeline_get_plugin_name(RID p_pipeline) {
 	static const StringName empty = StringName();
 	PIPELINES_LOCK_V(empty);
 	IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
 	ERR_FAIL_NULL_V(pipeline, empty);
 
-	return pipeline->group_key();
+	return pipeline->plugin_name();
 }
 
 void BehaviorServer::pipeline_execute(RID p_pipeline) {
@@ -1073,6 +1068,43 @@ void BehaviorServer::pipeline_halt(RID p_pipeline) {
 	ERR_FAIL_NULL(pipeline);
 	pipeline->halt();
 }
+
+RID BehaviorServer::pipeline_get_execution_blackboard(RID p_pipeline) {
+	LOCK_TWO_V(_blackboard_mutex, _pipeline_mutex, RID());
+	const IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL_V(pipeline, RID());
+	const Blackboard *blackboard = pipeline->get_execution_blackboard();
+	ERR_FAIL_NULL_V(blackboard, RID());
+	return blackboard->get_self();
+}
+
+RID BehaviorServer::pipeline_get_source_blackboard(RID p_pipeline) {
+	LOCK_TWO_V(_blackboard_mutex, _pipeline_mutex, RID());
+	const IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL_V(pipeline, RID());
+	const Blackboard *blackboard = pipeline->get_source_blackboard();
+	ERR_FAIL_NULL_V(blackboard, RID());
+	return blackboard->get_self();
+}
+
+RID BehaviorServer::pipeline_get_graph(RID p_pipeline) {
+	LOCK_TWO_V(_graph_mutex, _pipeline_mutex, RID());
+	const IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL_V(pipeline, RID());
+
+	const IPipelineGraph *graph = pipeline->get_graph();
+	ERR_FAIL_NULL_V(graph, RID());
+	return graph->get_id();
+}
+
+const String &BehaviorServer::pipeline_get_error(RID p_pipeline) {
+	static const String empty = "";
+	PIPELINES_LOCK_V(empty);
+	const IPipeline *pipeline = _pipeline_owner.get_or_null(p_pipeline);
+	ERR_FAIL_NULL_V(pipeline, empty);
+	return pipeline->get_error();
+}
+
 
 #undef PIPELINES_LOCK_V
 #undef PIPELINES_LOCK
@@ -1207,7 +1239,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 
 	
 	ClassDB::bind_method(D_METHOD("graph_get_type", "graph"), &HydrogenBehaviorServer::graph_get_type);
-	ClassDB::bind_method(D_METHOD("graph_get_group_key", "graph"), &HydrogenBehaviorServer::graph_get_group_key);
+	ClassDB::bind_method(D_METHOD("graph_get_plugin_name", "graph"), &HydrogenBehaviorServer::graph_get_plugin_name);
 	ClassDB::bind_method(D_METHOD("graph_is_bound", "graph"), &HydrogenBehaviorServer::graph_is_bound);
 	ClassDB::bind_method(D_METHOD("graph_get_bind_count", "graph"), &HydrogenBehaviorServer::graph_get_bind_count);
 	ClassDB::bind_method(D_METHOD("graph_create_node", "graph", "node_type_name", "input_aliases", "output_aliases"), &HydrogenBehaviorServer::graph_create_node, DEFVAL(PortAliases()), DEFVAL(PortAliases()));
@@ -1265,7 +1297,7 @@ void HydrogenBehaviorServer::_bind_methods() {
 	ADD_SIGNAL(MethodInfo("pipeline_created", PropertyInfo(Variant::RID, "tree")));
 	ADD_SIGNAL(MethodInfo("pipeline_destroyed", PropertyInfo(Variant::RID, "tree")));
 
-	ClassDB::bind_method(D_METHOD("pipeline_get_group_key", "pipeline"), &HydrogenBehaviorServer::pipeline_get_group_key);
+	ClassDB::bind_method(D_METHOD("pipeline_get_plugin_name ", "pipeline"), &HydrogenBehaviorServer::pipeline_get_plugin_name);
 
 	ClassDB::bind_method(D_METHOD("pipeline_execute", "pipeline"), &HydrogenBehaviorServer::pipeline_execute);
 	ClassDB::bind_method(D_METHOD("pipeline_halt", "pipeline"), &HydrogenBehaviorServer::pipeline_halt);
@@ -1373,11 +1405,11 @@ void HydrogenBehaviorServer::_graph_emit_destroyed(RID p_graph) {
 }
 
 const StringName &HydrogenBehaviorServer::graph_get_type(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_type(p_graph);
+	return BehaviorServer::get_singleton()->graph_get_type_name(p_graph);
 }
 
-const StringName &HydrogenBehaviorServer::graph_get_group_key(RID p_graph) {
-	return BehaviorServer::get_singleton()->graph_get_group_key(p_graph);
+const StringName &HydrogenBehaviorServer::graph_get_plugin_name(RID p_graph) {
+	return BehaviorServer::get_singleton()->graph_get_plugin_name(p_graph);
 }
 
 bool HydrogenBehaviorServer::graph_is_bound(RID p_graph) {
@@ -1528,7 +1560,7 @@ bool HydrogenBehaviorServer::node_composite_remove_child(RID p_graph, RID p_node
 	return BehaviorServer::get_singleton()->node_composite_remove_child(p_graph, p_node, p_child);
 }
 
-bool HydrogenBehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
+void HydrogenBehaviorServer::node_composite_remove_child_at(RID p_graph, RID p_node, int64_t p_child_index) {
 	return BehaviorServer::get_singleton()->node_composite_remove_child_at(p_graph, p_node, p_child_index);
 }
 
@@ -1580,8 +1612,8 @@ void HydrogenBehaviorServer::_pipeline_emit_destroyed(RID p_pipeline) {
 	emit_signal("pipeline_destroyed", p_pipeline);
 }
 
-const StringName &HydrogenBehaviorServer::pipeline_get_group_key(RID p_pipeline) {
-	return BehaviorServer::get_singleton()->pipeline_get_group_key(p_pipeline);
+const StringName &HydrogenBehaviorServer::pipeline_get_plugin_name(RID p_pipeline) {
+	return BehaviorServer::get_singleton()->pipeline_get_plugin_name(p_pipeline);
 }
 
 void HydrogenBehaviorServer::pipeline_execute(RID p_pipeline) {

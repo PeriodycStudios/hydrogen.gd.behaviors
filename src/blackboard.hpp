@@ -308,7 +308,6 @@ public:
 
 	bool set_parent(const Blackboard *p_parent);
 	[[nodiscard]] const Blackboard *get_parent() const;
-	[[nodiscard]] Blackboard *get_parent();
 	[[nodiscard]] bool is_ancestor(const Blackboard *p_candidate) const;
 
 	_FORCE_INLINE_ void lock() const {

@@ -47,7 +47,7 @@ protected:
 	}
 
 	virtual Result _execute(BehaviorTreeContext &p_context) const = 0;
-	virtual void _halt(BehaviorTreeContext &p_context) const = 0;
+	virtual void _halt(BehaviorTreeContext &p_context) const { }
 
 	static void unknown_result_handler(Result result) {
 		ERR_PRINT(vformat("Unimplemented result behavior: {}", static_cast<int>(result)));

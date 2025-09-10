@@ -30,7 +30,7 @@ class Pipeline<TGRAPH, TNODE, std::enable_if_t<
 	std::is_base_of_v<PipelineGraph<TNODE>, TGRAPH> 
 	&& std::is_base_of_v<PipelineNode, TNODE>>>
 	: public IPipeline, public RidData {
-	StringName _registration_key;
+	StringName _plugin_name;
 	Blackboard *_blackboard;
 	TGRAPH *_graph;
 	NodeStateMap _node_states = {};
@@ -42,7 +42,7 @@ protected:
 	_FORCE_INLINE_ NodeStateMap &node_states() { return _node_states; }
 
 	explicit Pipeline(const StringName &p_key, const Blackboard *p_source_blackboard, TGRAPH *p_graph, bool p_auto_delete_blackboard) 
-		: _registration_key(p_key), _blackboard(memnew(Blackboard)), _graph(p_graph), _mutex(memnew(std::recursive_mutex))  {
+		: _plugin_name(p_key), _blackboard(memnew(Blackboard)), _graph(p_graph), _mutex(memnew(std::recursive_mutex))  {
 		_graph->bind();
 
 		_blackboard->set_parent(p_source_blackboard);
@@ -90,7 +90,7 @@ public:
 	}
 
 	[[nodiscard]] RID get_id() const override { return get_self(); }
-	[[nodiscard]] const StringName &group_key() const override { return _registration_key; }
+	[[nodiscard]] const StringName &plugin_name() const override { return _plugin_name; }
 
 	[[nodiscard]] bool owns_source_blackboard() const override { return _owns_source_blackboard; }
 
@@ -99,7 +99,7 @@ public:
 
 	[[nodiscard]] const IPipelineGraph *get_graph() const override { return _graph; }
 
-	[[nodiscard]] const String get_error() const override {
+	[[nodiscard]] const String &get_error() const override {
 		return _blackboard->get_entry_fast<String>(_error_name(), "", false);
 	}
 

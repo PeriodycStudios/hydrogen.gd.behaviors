@@ -42,16 +42,17 @@ typedef std::function<void(const IPipelineNode *p_node, Blackboard *)> InputNode
 struct NodePortInfo {
 
 	enum PORT_KIND {
+		NONE = 0,
 		INPUT = 1 << 0,
 		OUTPUT = 1 << 1,
 		IN_OUT = INPUT | OUTPUT,                                                                                                                                                                                                                                                      
 	};
 
-	const StringName name;
-	const StringName type_name;
-	const Variant::Type variant_type;
-	const std::optional<InputNodeDefaultSetter> default_setter;
-	const PORT_KIND port_kind;
+	StringName name = "";
+	StringName type_name = "";
+	Variant::Type variant_type = Variant::NIL;
+	std::optional<InputNodeDefaultSetter> default_setter = nullptr;
+	PORT_KIND port_kind = NONE;
 
 	_FORCE_INLINE_ bool is_input() const { return (port_kind & INPUT) != 0; }
 	_FORCE_INLINE_ bool is_output() const { return (port_kind & OUTPUT) != 0; }
@@ -94,6 +95,8 @@ struct NodePortInfo {
 		return create<T>(p_name, IN_OUT, p_setter);
 	}
 
+	NodePortInfo() {}
+
 private:
 
 	template<typename T>
@@ -117,8 +120,8 @@ private:
 };
 
 struct NodeConnectionInfo {
-	const StringName name;
-	const StringName type_name;
+	StringName name = "";
+	StringName type_name = "";
 
 	template<typename T>
 	static NodeConnectionInfo create(const StringName &p_name) {
@@ -131,6 +134,8 @@ struct NodeConnectionInfo {
 		dict["type_name"] = type_name;
 		return dict;
 	}
+
+	NodeConnectionInfo() {}
 
 private:
 	NodeConnectionInfo(const StringName &p_name, const StringName &p_type_name) 
@@ -271,6 +276,10 @@ public:										    		\
 														\
 	typedef type_name self;								\
 	typedef parent_type parent;							\
+														\
+	static const StringName &get_node_name() {			\
+		return type_name##_name();						\
+	}													\
                                                 		\
 	const StringName & get_type_name() const override {	\
 		return type_name##_name();			    		\
@@ -368,7 +377,7 @@ struct IPipelineNodeComposite : public IPipelineNodeParent {
 
 	virtual bool add_child_node(const IPipelineNode *p_node) = 0;
 	virtual	bool remove_child_node(const IPipelineNode *p_node) = 0;
-	virtual bool remove_child_node_at(int64_t p_index) = 0;
+	virtual void remove_child_node_at(int64_t p_index) = 0;
 	virtual void clear() = 0;
 	[[nodiscard]] virtual bool is_empty() const = 0;
 	[[nodiscard]] virtual const IPipelineNode *get_child_node(int64_t p_index) const = 0;
@@ -396,7 +405,7 @@ struct IPipelineGraph {
 	virtual ~IPipelineGraph() = default;
 
 	virtual const StringName &graph_type() const = 0;
-	virtual const StringName &group_key() const = 0;
+	virtual const StringName &plugin_name() const = 0;
 
 	[[nodiscard]] virtual RID get_id() const = 0;
 	[[nodiscard]] virtual bool is_bound() const = 0;
@@ -452,7 +461,7 @@ struct IPipeline {
 	virtual ~IPipeline() = default;
 
 	virtual RID get_id() const = 0;
-	virtual const StringName &group_key() const = 0;
+	virtual const StringName &plugin_name() const = 0;
 
 	virtual void execute() = 0;
 	virtual void halt() = 0;
@@ -463,7 +472,7 @@ struct IPipeline {
 
 	virtual const IPipelineGraph *get_graph() const = 0;
 
-	virtual const String get_error() const = 0;
+	virtual const String &get_error() const = 0;
 	virtual void clear_error() const = 0;
 
 protected:

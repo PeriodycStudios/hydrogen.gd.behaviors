@@ -54,7 +54,7 @@ class PipelineNode : public RidData, public IPipelineNode {
     }
 
 protected:
-    PipelineNode();
+    PipelineNode() = default;
 
     static const Vector<NodePortInfo> &_get_ports() {
         static const Vector<NodePortInfo> empty = {};

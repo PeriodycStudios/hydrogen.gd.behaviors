@@ -44,19 +44,20 @@ public:
 		return iter->value;
 	}
 
-	template<typename T, typename = void>
-	_FORCE_INLINE_ T *get_state(RID p_state_key) const { return nullptr; }
-
-	template<typename T, std::enable_if_t<std::is_base_of_v<IPipelineNodeState, T>>>
+	template<typename T>
 	_FORCE_INLINE_ T *get_state(RID p_state_key) {
-		T *state = dynamic_cast<T *>(get_state(p_state_key));
-		ERR_FAIL_NULL_V(state, nullptr);
-		return state;
+		if constexpr (!std::is_base_of_v<IPipelineNodeState, T>) {
+			WARN_PRINT_ONCE("Unknown pipeline node state type!");
+			return nullptr;
+		}
+		else {
+			T *state = dynamic_cast<T *>(get_state(p_state_key));
+			ERR_FAIL_NULL_V(state, nullptr);
+			return state;
+		}
 	}
 
-	_FORCE_INLINE_ Blackboard *blackboard() const {
-		return _blackboard;
-	}
+	_FORCE_INLINE_ Blackboard *blackboard() const { return _blackboard; }
 };
 
 }
