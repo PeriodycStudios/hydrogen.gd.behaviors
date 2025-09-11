@@ -280,7 +280,7 @@ public:
 	bool graph_is_bound(RID p_graph);
 	uint32_t graph_get_bind_count(RID p_graph);
 
-	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases, const PortAliases &p_output_aliases);
+	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases = {}, const PortAliases &p_output_aliases = {});
 	bool graph_destroy_node(RID p_graph, RID p_node);
 	
 	uint64_t graph_get_node_count(RID p_graph);

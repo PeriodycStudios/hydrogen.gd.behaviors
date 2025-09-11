@@ -174,7 +174,7 @@ public:
 class WaitForRealtimeSeconds : public BehaviorTreeNode, public IPipelineNodeStateful {
     DECLARE_PIPELINE_NODE(WaitForRealtimeSeconds, BehaviorTreeNode);
 
-    DECLARE_INPUT_PORT(duration, double, 1.0);
+    DECLARE_CONSTEXPR_INPUT_PORT(duration, double, 1.0);
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(duration)

@@ -15,7 +15,7 @@ using namespace pipelines;
 class PerformInterruptionNode : public BehaviorTreeNode {
     DECLARE_PIPELINE_NODE(PerformInterruptionNode, BehaviorTreeNode);
     
-    DECLARE_INPUT_PORT(desiredResult, Result, Result::SUCCESS);
+    DECLARE_CONSTEXPR_INPUT_PORT(desiredResult, Result, Result::SUCCESS);
     DECLARE_CONNECTION(interrupter, InterrupterNode);
 
 protected:

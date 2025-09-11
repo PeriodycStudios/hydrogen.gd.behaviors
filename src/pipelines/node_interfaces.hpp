@@ -153,10 +153,15 @@ namespace _detail {
 	}
 }
 
-#define DECLARE_INPUT_PORT(port_name, port_type, default_value) 		\
+#define DECLARE_CONSTEXPR_INPUT_PORT(port_name, port_type, default_value) 		\
 	DEFINE_NAME_STATIC(port_name);										\
 	static constexpr port_type k_default_##port_name = default_value;	\
 	typedef port_type port_name##_type									\
+
+#define DECLARE_INPUT_PORT(port_name, port_type)	\
+	DEFINE_NAME_STATIC(port_name);					\
+	static const port_type k_default_##port_name;	\
+	typedef port_type port_name##_type				\
 
 #define DECLARE_OUTPUT_PORT(port_name, port_type)					\
 	DEFINE_NAME_STATIC(port_name);									\
