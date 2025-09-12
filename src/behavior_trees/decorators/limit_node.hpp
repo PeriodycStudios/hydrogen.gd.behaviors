@@ -4,7 +4,6 @@
 #include "../decorator_node.hpp"
 #include "../behavior_tree_context.hpp"
 #include "../behavior_tree_node.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "pipelines/pipeline_node.hpp"
 #include <cstdint>
@@ -31,9 +30,7 @@ protected:
 
     Result _execute(BehaviorTreeContext &p_context) const override {
         DECORATOR_FAILURE_IF_NULL();
-
-        LimitNodeState *state = p_context.get_state<LimitNodeState>(state_key());
-        ERR_FAIL_NULL_V(state, FAILURE);
+        GET_STATE_V(LimitNodeState, FAILURE);
 
         const uint32_t executeLimit = GET_PORT(executeLimit);
         while (state->execute_counter < executeLimit) {
@@ -51,8 +48,7 @@ protected:
     }
 
     void _halt(BehaviorTreeContext &p_context) const override {
-        LimitNodeState *state = p_context.get_state<LimitNodeState>(state_key());
-        ERR_FAIL_NULL(state);
+       GET_STATE(LimitNodeState);
         state->execute_counter = 0;
         DecoratorNode::_halt(p_context);
     }

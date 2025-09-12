@@ -5,8 +5,8 @@
 #include "behavior_trees/behavior_tree_context.hpp"
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline_node.hpp"
 #include <optional>
 
 namespace hydrogen::behavior_trees {
@@ -27,15 +27,10 @@ class InterrupterNode : public DecoratorNode, public IPipelineNodeStateful {
         p_state->override_result.reset();
     }
 
-    State *_get_state(BehaviorTreeContext &p_context) const {
-        return p_context.get_state<State>(state_key());
-    }
-
 protected:
 
     void _halt(BehaviorTreeContext &p_context) const override {
-        State *state = _get_state(p_context);
-        ERR_FAIL_NULL(state);
+        GET_STATE(State);
         if (likely(state->is_running)) {
             _decorated_node->halt(p_context);
         }
@@ -44,9 +39,7 @@ protected:
 
     Result _execute(BehaviorTreeContext &p_context) const override {
         DECORATOR_FAILURE_IF_NULL();
-
-        State *state = _get_state(p_context);
-        ERR_FAIL_NULL_V(state, FAILURE);
+        GET_STATE_V(State, FAILURE);
 
         if (state->override_result.has_value()) {
             Result result = state->override_result.value();
@@ -76,9 +69,7 @@ public:
     DEFINE_STATEFUL_FUNCS(State);
 
     void set_result(BehaviorTreeContext &p_context, Result p_override) const {
-        State *state = _get_state(p_context);
-        ERR_FAIL_NULL(state);
-
+        GET_STATE(State);
         state->override_result = p_override;
     }
 };

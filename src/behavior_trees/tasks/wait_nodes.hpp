@@ -3,9 +3,7 @@
 
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/core/math.hpp"
-#include "godot_cpp/core/memory.hpp"
 #include "name_helpers.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "behavior_trees/behavior_tree_context.hpp"
@@ -36,22 +34,11 @@ protected:
         std::enable_if_t<std::is_scalar_v<T>, T> time_remaining = {};
     };
 
-    WaitForNodeState *_get_state(BehaviorTreeContext &p_context) const {
-        WaitForNodeState *state = p_context.get_state<WaitForNodeState>(state_key());
-        ERR_FAIL_NULL_V(state, nullptr);
-        return nullptr;
-    }
-
-    void _reset_state(WaitForNodeState *p_state) const {
-        ERR_FAIL_NULL(p_state);
-        p_state->time_remaining = {};
-    }
-
     virtual T _get_duration_default() const { return {}; }
     virtual T _get_delta_default() const { return {}; }
 
     Result _execute(BehaviorTreeContext &p_context) const override {
-        WaitForNodeState *state = _get_state(p_context);
+        GET_STATE_V(WaitForNodeState, FAILURE);
 
         if (state->time_remaining == k_zero) {
             state->time_remaining = _get_port<T>(p_context.blackboard(), duration_name(), _get_duration_default());
@@ -66,13 +53,13 @@ protected:
             }
         }
         
-        _reset_state(state);
+        state->time_remaining = {};
         return SUCCESS;
     }
 
     void _halt(BehaviorTreeContext &p_context) const override {
-        WaitForNodeState *state = _get_state(p_context);
-        _reset_state(state);
+        GET_STATE(WaitForNodeState);
+        state->time_remaining = {};
     }
 
     WaitForNodeBase() = default;
@@ -81,8 +68,7 @@ public:
 
     ~WaitForNodeBase() override = default;
 
-    virtual IPipelineNodeState * create_state() const override { return memnew(WaitForNodeState); }
-    RID state_key() const override { return get_self(); }
+    DEFINE_STATEFUL_FUNCS(WaitForNodeState);
 };
 
 class WaitForSecondsNode : public WaitForNodeBase<real_t> {
@@ -152,7 +138,7 @@ class WaitForTicksNode : public WaitForNodeBase<uint64_t> {
 protected:
 
     Result _execute(BehaviorTreeContext &p_context) const override {
-        WaitForNodeState *state = _get_state(p_context);
+        GET_STATE_V(WaitForNodeState, FAILURE);
 
         if (unlikely(state->time_remaining == k_zero)) {
             state->time_remaining = GET_PORT(duration);
@@ -163,7 +149,7 @@ protected:
             return RUNNING;
         }
         
-        _reset_state(state);
+        state->time_remaining = 0;
         return SUCCESS;
     }
 
@@ -187,14 +173,12 @@ class WaitForRealtimeSeconds : public BehaviorTreeNode, public IPipelineNodeStat
 protected:
 
     void _halt(BehaviorTreeContext &p_context) const override {
-        State *state = p_context.get_state<State>(state_key());
-        ERR_FAIL_NULL(state);
+        GET_STATE(State);
         state->time_point = 0.0;
     }
 
     Result _execute(BehaviorTreeContext &p_context) const override {
-        State *state = p_context.get_state<State>(state_key());
-        ERR_FAIL_NULL_V(state, FAILURE);
+        GET_STATE_V(State, FAILURE);
 
         if (unlikely(state->time_point == 0.0)) {
             double duration = GET_PORT(duration);

@@ -4,7 +4,6 @@
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "behavior_trees/behavior_tree_context.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "pipelines/pipeline_node.hpp"
 #include <cstdint>
@@ -27,10 +26,10 @@ class CountDownNode : public BehaviorTreeNode, public IPipelineNodeStateful {
 
 protected:
     Result _execute(BehaviorTreeContext &p_context) const override {
-        State *state = p_context.get_state<State>(state_key());
-        ERR_FAIL_NULL_V(state, FAILURE);
+        GET_STATE_V(State, FAILURE);
         if (unlikely(state->count == 0)) {
             state->count = GET_PORT(count);
+            return RUNNING;
         }
 
         state->count--;
@@ -50,9 +49,7 @@ protected:
     }
 
     void _halt(BehaviorTreeContext &p_context) const override {
-        State *state = p_context.get_state<State>(state_key());
-        ERR_FAIL_NULL(state);
-
+        GET_STATE(State);
         state->count = 0;
     }
 

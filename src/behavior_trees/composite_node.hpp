@@ -8,9 +8,9 @@
 #include "behavior_tree_context.hpp"
 #include "../pipelines/composite.hpp"
 #include "godot_cpp/core/defs.hpp"
-#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline_node.hpp"
 #include <cstdint>
 
 namespace hydrogen::behavior_trees {
@@ -48,18 +48,9 @@ protected:
 		~CompositeNodeState() override = default;
 	};
 
-	CompositeNodeState *_get_state(BehaviorTreeContext &p_context) const {
-		return p_context.get_state<CompositeNodeState>(state_key());
-	}
-
-	void _reset_state(CompositeNodeState *state) const {
-		ERR_FAIL_NULL(state);
-		state->current_child_index = 0;
-	}
-
 	void _halt(BehaviorTreeContext &p_context) const override {
-		CompositeNodeState *state = _get_state(p_context);
-		_reset_state(state);
+		GET_STATE(CompositeNodeState);
+		state->current_child_index = 0;
 
 		for (const BehaviorTreeNode *child : _children) {
 			child->halt(p_context);

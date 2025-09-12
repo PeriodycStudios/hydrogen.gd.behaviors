@@ -6,8 +6,8 @@
 #define SEQUENCE_NODE_HPP
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
-#include "godot_cpp/core/defs.hpp"
 #include "pipelines/node_interfaces.hpp"
+#include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
 
@@ -18,10 +18,7 @@ class SequenceNode : public CompositeNode {
 
 protected:
 	Result _execute(BehaviorTreeContext &p_context) const override { 
-		CompositeNodeState * state = _get_state(p_context);
-		if (unlikely(state == nullptr)) {
-			return FAILURE;
-		}
+		GET_STATE_V(CompositeNodeState, FAILURE);
 
 		while (state->current_child_index < child_count()) {
 			
@@ -35,16 +32,16 @@ protected:
 					state->current_child_index++;
 					continue;
 				case BehaviorTreeNode::FAILURE:
-					_reset_state(state);
+					state->current_child_index = 0;
 					return FAILURE;
 				default:
-					_reset_state(state);
+					state->current_child_index = 0;
 					unknown_result_handler(result);
 					return FAILURE;
 			}
 		}
 
-		_reset_state(state);
+		state->current_child_index = 0;
 		return SUCCESS;
 	}
 };

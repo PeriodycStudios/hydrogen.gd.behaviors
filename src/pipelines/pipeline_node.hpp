@@ -155,4 +155,12 @@ public:
 #define SET_PORT(port_name, value) _set_port<port_name##_type>(p_context.blackboard(), port_name##_name(), value)
 #define SET_PORT_FAST(port_name, value) _set_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), value)
 
+#define GET_STATE(state_type)                                           \
+    state_type * state = p_context.get_state<state_type>(state_key());  \
+    ERR_FAIL_NULL(state)                                                \
+
+#define GET_STATE_V(state_type, fail_value)                             \
+    state_type *state = p_context.get_state<state_type>(state_key());   \
+    ERR_FAIL_NULL_V(state, fail_value)                                  \
+
 #endif
