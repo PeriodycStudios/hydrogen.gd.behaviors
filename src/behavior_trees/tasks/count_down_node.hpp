@@ -12,8 +12,8 @@ namespace hydrogen::behavior_trees {
 class CountDownNode : public BehaviorTreeNode, public IPipelineNodeStateful {
     DECLARE_PIPELINE_NODE(CountDownNode, BehaviorTreeNode);
 
-    DECLARE_CONSTEXPR_INPUT_PORT(should_succeed, bool, true);
-    DECLARE_CONSTEXPR_INPUT_PORT(count, uint32_t, 10);
+    DECLARE_INPUT_PORT(should_succeed, bool, true);
+    DECLARE_INPUT_PORT(count, uint32_t, 10);
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(should_succeed)
@@ -29,12 +29,14 @@ protected:
         GET_STATE_V(State, FAILURE);
         if (unlikely(state->count == 0)) {
             state->count = GET_PORT(count);
-            return RUNNING;
         }
 
         state->count--;
 
-        if (unlikely(state->count == 0)) {
+        if (unlikely(state->count > 0)) {
+            return RUNNING;
+        }
+        else {
             bool should_succeed = GET_PORT(should_succeed);
             if (likely(should_succeed)) {
                 return SUCCESS;
@@ -42,9 +44,6 @@ protected:
             else {
                 return FAILURE;
             }
-        }
-        else {
-            return RUNNING;
         }
     }
 

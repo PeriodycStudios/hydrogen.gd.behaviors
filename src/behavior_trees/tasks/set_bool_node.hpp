@@ -10,7 +10,7 @@ namespace hydrogen::behavior_trees {
 class SetBoolNode : public BehaviorTreeNode {
     DECLARE_PIPELINE_NODE(SetBoolNode, BehaviorTreeNode);
 
-    DECLARE_CONSTEXPR_INPUT_PORT(value, bool, true);
+    DECLARE_INPUT_PORT(value, bool, true);
     DECLARE_OUTPUT_PORT(target, bool);
 
     BEGIN_NODE_PORTS()

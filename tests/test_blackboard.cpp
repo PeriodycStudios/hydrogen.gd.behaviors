@@ -23,7 +23,7 @@ using namespace godot;
 
 template<typename T>
 void test_simple_get_set(BehaviorServer *server, RID p_blackboard_rid, const StringName &p_name, T p_value) {
-	server->blackboard_set_entry_fast(p_blackboard_rid, p_name, p_value);
+	server->blackboard_set_entry_fast<T>(p_blackboard_rid, p_name, p_value);
 	CHECK(server->blackboard_has_entry(p_blackboard_rid, p_name));
 
 	if constexpr (!std::is_const_v<T>) {
@@ -191,9 +191,9 @@ TEST_CASE("[Hydrogen][Behaviors][Blackboard] Simple Get and Set") {
 	REQUIRE(blackboard.is_valid());
 
 	TEST_SIMPLE_GET_SET(bool, true)
-	TEST_SIMPLE_GET_SET(const bool, false)
+	TEST_SIMPLE_GET_SET(bool, false)
 	TEST_SIMPLE_GET_SET(int8_t, std::numeric_limits<int8_t>::min())
-	TEST_SIMPLE_GET_SET(const int8_t, std::numeric_limits<int8_t>::max())
+	TEST_SIMPLE_GET_SET(int8_t, std::numeric_limits<int8_t>::max())
 	TEST_SIMPLE_GET_SET(uint8_t, std::numeric_limits<uint8_t>::max())
 	TEST_SIMPLE_GET_SET(int16_t, std::numeric_limits<int16_t>::min())
 	TEST_SIMPLE_GET_SET(uint16_t, std::numeric_limits<uint16_t>::max())

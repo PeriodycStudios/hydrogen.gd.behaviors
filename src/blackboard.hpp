@@ -596,9 +596,15 @@ bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
-		p_out_result = iter;
-		unlock();
-		return true;
+		if (likely(iter->value->get_type_key() == type_key)) {
+			p_out_result = iter;
+			unlock();
+			return true;
+		}
+		else {
+			unlock();
+			return false;
+		}
 	}
 
 	if (likely(p_check_parents)) {

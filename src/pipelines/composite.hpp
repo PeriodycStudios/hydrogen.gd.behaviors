@@ -39,24 +39,25 @@ public:
 		_children.clear();
 	}
 
-	bool has_child(const IPipelineNode *p_node) const override {
+	bool has_child_node(const IPipelineNode *p_node) const override {
 		const T *node = dynamic_cast<const T *>(p_node);
 		if (unlikely(node == nullptr)) {
 			return false;
 		}
 
-		return has_child(node);
+		return has_child_node(node);
 	}
 
 	bool has_child(const T *p_node) const {
 		return _children.has(p_node);
 	}
 
-	bool remove_child(const IPipelineNode *p_node) override {
-		return remove_child_node(p_node);
+	bool remove_child_node(const IPipelineNode *p_node) override {
+		TRY_CONVERT_CHILD_V(false);
+		return remove_child(node);
 	}
 
-	void remove_all_children() override { clear(); }
+	void remove_all_child_nodes() override { clear(); }
 
 	bool add_child_node(const IPipelineNode *p_node) override {
 		TRY_CONVERT_CHILD_V(false);
@@ -72,18 +73,9 @@ public:
 		return true;
 	}
 
-	bool remove_child_node(const IPipelineNode *p_node) override {
-		TRY_CONVERT_CHILD_V(false);
-		return remove_child(node);
-	}
-
-	_FORCE_INLINE_ bool remove_child(T *p_node) {
+	_FORCE_INLINE_ bool remove_child(const T *p_node) {
 		ERR_FAIL_NULL_V(p_node, false);
-		auto iter = _children.find(p_node);
-		if (likely(iter != _children.end())) {
-			return _children.erase(iter);
-		}
-		return false;
+		return _children.erase(p_node);
 	}
 
 	void remove_child_node_at(int64_t p_index) override { remove_child_at(p_index); }

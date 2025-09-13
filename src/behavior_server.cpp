@@ -701,6 +701,7 @@ TypedArray<Dictionary> BehaviorServer::graph_get_rooted_statuses(RID p_graph) {
 		auto pair = statuses[idx];
 		dict["node"] = pair.first->get_id();
 		dict["is_rooted"] = pair.second;
+		result[idx] = dict;
 	}
 	
 	return result;
@@ -873,7 +874,7 @@ bool BehaviorServer::node_parent_has_child(RID p_graph, RID p_node, RID p_child)
 	const IPipelineNodeParent *parent = dynamic_cast<const IPipelineNodeParent *>(node);
 	ERR_FAIL_NULL_V(parent, false);
 
-	return parent->has_child(child);
+	return parent->has_child_node(child);
 }
 
 bool BehaviorServer::node_composite_add_child(RID p_graph, RID p_node, RID p_child) {
@@ -891,6 +892,7 @@ bool BehaviorServer::node_composite_remove_child(RID p_graph, RID p_node, RID p_
 	bool result = composite->remove_child_node(child);
 	if (likely(result)) {
 		graph->update_parent(child);
+		return true;
 	}
 
 	return false;

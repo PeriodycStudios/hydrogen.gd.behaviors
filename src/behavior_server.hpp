@@ -361,31 +361,33 @@ public:
 template <typename T>
 bool BehaviorServer::blackboard_try_get_entry(RID p_blackboard, const StringName &p_name, T &p_out_result, bool p_check_parents) {
 	TRY_GET_BLACKBOARD_V(false);
-	return blackboard->try_get_entry(p_name, p_out_result, p_check_parents);
+	return blackboard->try_get_entry<T>(p_name, p_out_result, p_check_parents);
 }
 
 template <typename T>
 const T &BehaviorServer::blackboard_get_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_default, bool p_check_parents) {
 	TRY_GET_BLACKBOARD_V(p_default);
-	return blackboard->get_entry_fast(p_name, p_default, p_check_parents);
+	return blackboard->get_entry_fast<T>(p_name, p_default, p_check_parents);
 }
 
 template <typename T>
 T BehaviorServer::blackboard_get_entry(RID p_blackboard, const StringName &p_name, T p_default, bool p_check_parents) {
-	TRY_GET_BLACKBOARD_V(p_default);
-	return blackboard->get_entry(p_name, p_default, p_check_parents);
+	BLACKBOARDS_LOCK_V(p_default);
+    Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);
+    ERR_FAIL_NULL_V(blackboard, p_default);
+	return blackboard->get_entry<T>(p_name, p_default, p_check_parents);
 }
 
 template <typename T>
 void BehaviorServer::blackboard_set_entry_fast(RID p_blackboard, const StringName &p_name, const T &p_value) {
 	TRY_GET_BLACKBOARD();
-	blackboard->set_entry_fast(p_name, p_value);
+	blackboard->set_entry_fast<T>(p_name, p_value);
 }
 
 template <typename T>
 void BehaviorServer::blackboard_set_entry(RID p_blackboard, const StringName &p_name, T p_value) {
 	TRY_GET_BLACKBOARD();
-	blackboard->set_entry(p_name, p_value);
+	blackboard->set_entry<T>(p_name, p_value);
 }
 
 #undef BLACKBOARDS_LOCK

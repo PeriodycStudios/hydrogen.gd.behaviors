@@ -30,31 +30,30 @@ protected:
     static constexpr T k_zero = {};
     static constexpr T k_one = k_zero + 1;
 
+    virtual T _get_default_duration() const { return k_zero; }
+    virtual T _get_default_delta() const { return k_zero; }
+
     struct WaitForNodeState : public IPipelineNodeState {
         std::enable_if_t<std::is_scalar_v<T>, T> time_remaining = {};
     };
-
-    virtual T _get_duration_default() const { return {}; }
-    virtual T _get_delta_default() const { return {}; }
 
     Result _execute(BehaviorTreeContext &p_context) const override {
         GET_STATE_V(WaitForNodeState, FAILURE);
 
         if (state->time_remaining == k_zero) {
-            state->time_remaining = _get_port<T>(p_context.blackboard(), duration_name(), _get_duration_default());
+            state->time_remaining = _get_port<T>(p_context.blackboard(), duration_name(), _get_default_duration());
+        }
+
+        T delta = _get_port<T>(p_context.blackboard(), delta_name(), _get_default_delta());
+        state->time_remaining -= delta;
+        state->time_remaining = Math::max<T>(state->time_remaining, k_zero);
+        if (likely(state->time_remaining > k_zero)) {
             return RUNNING;
         }
-        else if (likely(state->time_remaining > k_zero)) {
-            T delta = _get_port<T>(p_context.blackboard(), delta_name(), _get_delta_default());
-            state->time_remaining -= delta;
-            state->time_remaining = Math::max<T>(state->time_remaining, k_zero);
-            if (likely(state->time_remaining > k_zero)) {
-                return RUNNING;
-            }
+        else {
+            state->time_remaining = {};
+            return SUCCESS;
         }
-        
-        state->time_remaining = {};
-        return SUCCESS;
     }
 
     void _halt(BehaviorTreeContext &p_context) const override {
@@ -82,12 +81,20 @@ protected:
     static constexpr real_t k_default_delta = 0.1;
     static constexpr real_t k_default_duration = 1.0;
 
-    real_t _get_duration_default() const override {
+    _FORCE_INLINE_ constexpr static real_t get_default_delta() {
+        return k_default_delta;
+    }
+
+    _FORCE_INLINE_ constexpr static real_t get_default_duration() {
         return k_default_duration;
     }
 
-    real_t _get_delta_default() const override {
-        return k_default_delta;
+    real_t _get_default_delta() const override {
+        return get_default_delta();
+    }
+
+    real_t _get_default_duration() const override {
+        return get_default_duration();
     }
 
     BEGIN_NODE_PORTS()
@@ -108,12 +115,20 @@ class WaitForMillisecondsNode : public WaitForNodeBase<uint64_t> {
     static constexpr uint64_t k_default_delta = 0;
     static constexpr uint64_t k_default_duration = 1000;
 
-    uint64_t _get_duration_default() const override {
+    _FORCE_INLINE_ constexpr static uint64_t get_default_duration() {
         return k_default_duration;
     }
 
-    uint64_t _get_delta_default() const override {
+    _FORCE_INLINE_ constexpr static uint64_t get_default_delta() {
         return k_default_delta;
+    }
+
+    uint64_t _get_default_duration() const override {
+        return get_default_duration();
+    }
+
+    uint64_t _get_default_delta() const override {
+        return get_default_delta();
     }
 
     BEGIN_NODE_PORTS()
@@ -131,6 +146,10 @@ class WaitForTicksNode : public WaitForNodeBase<uint64_t> {
     typedef uint64_t duration_type;
     static constexpr uint64_t k_default_duration = 30;
 
+    _FORCE_INLINE_ constexpr static uint64_t get_default_duration() {
+        return k_default_duration;
+    }
+
     BEGIN_NODE_PORTS()
         INPUT_PORT(duration)
     END_NODE_PORTS()
@@ -142,15 +161,17 @@ protected:
 
         if (unlikely(state->time_remaining == k_zero)) {
             state->time_remaining = GET_PORT(duration);
+        }
+
+        state->time_remaining--;
+
+        if (likely(state->time_remaining > k_one)) {    
             return RUNNING;
         }
-        else if (likely(state->time_remaining > k_one)) {
-            state->time_remaining--;
-            return RUNNING;
+        else {
+            state->time_remaining = 0;
+            return SUCCESS;
         }
-        
-        state->time_remaining = 0;
-        return SUCCESS;
     }
 
 public:
@@ -160,7 +181,7 @@ public:
 class WaitForRealtimeSeconds : public BehaviorTreeNode, public IPipelineNodeStateful {
     DECLARE_PIPELINE_NODE(WaitForRealtimeSeconds, BehaviorTreeNode);
 
-    DECLARE_CONSTEXPR_INPUT_PORT(duration, double, 1.0);
+    DECLARE_INPUT_PORT(duration, real_t, 1.0);
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(duration)
@@ -181,19 +202,18 @@ protected:
         GET_STATE_V(State, FAILURE);
 
         if (unlikely(state->time_point == 0.0)) {
-            double duration = GET_PORT(duration);
+            real_t duration = GET_PORT(duration);
             state->time_point = Time::get_singleton()->get_unix_time_from_system() + duration;
+        }
+
+        double current_time = Time::get_singleton()->get_unix_time_from_system();
+        if (likely(current_time < state->time_point)) {
             return RUNNING;
         }
         else {
-            double current_time = Time::get_singleton()->get_unix_time_from_system();
-            if (likely(current_time < state->time_point)) {
-                return RUNNING;
-            }
+            state->time_point = 0.0;
+            return SUCCESS;
         }
-
-        state->time_point = 0.0;
-        return SUCCESS;
     };
 
 public:

@@ -16,7 +16,7 @@ using namespace pipelines;
 class LimitNode : public DecoratorNode, public IPipelineNodeStateful {
     DECLARE_PIPELINE_NODE(LimitNode, DecoratorNode);
 
-    DECLARE_CONSTEXPR_INPUT_PORT(executeLimit, uint32_t, 1);
+    DECLARE_INPUT_PORT(executeLimit, uint32_t, 1);
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(executeLimit)

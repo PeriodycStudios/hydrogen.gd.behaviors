@@ -153,19 +153,17 @@ namespace _detail {
 	}
 }
 
-#define DECLARE_CONSTEXPR_INPUT_PORT(port_name, port_type, default_value) 		\
-	DEFINE_NAME_STATIC(port_name);										\
-	static constexpr port_type k_default_##port_name = default_value;	\
-	typedef port_type port_name##_type									\
+#define DECLARE_INPUT_PORT(port_name, port_type, default_value)	\
+	DEFINE_NAME_STATIC(port_name);								\
+	typedef port_type port_name##_type;							\
+	static port_type get_default_##port_name() {				\
+		static const port_type value = default_value;			\
+		return value; 											\
+	}															\
 
-#define DECLARE_INPUT_PORT(port_name, port_type)	\
+#define DECLARE_OUTPUT_PORT(port_name, port_type)	\
 	DEFINE_NAME_STATIC(port_name);					\
-	static const port_type k_default_##port_name;	\
 	typedef port_type port_name##_type				\
-
-#define DECLARE_OUTPUT_PORT(port_name, port_type)					\
-	DEFINE_NAME_STATIC(port_name);									\
-	typedef port_type port_name##_type								\
 
 #define PORT(port) port##_name()
 
@@ -178,14 +176,13 @@ namespace _detail {
 			NodePortInfo::func<port_name##_type>(PORT(port_name), [](const IPipelineNode *p_node, Blackboard *p_blackboard) {	\
 				const StringName &name = PORT(port_name);																		\
 				const StringName &alias = p_node->get_input_alias(name);														\
-				p_blackboard->set_entry_fast<port_name##_type>(alias, k_default_##port_name);									\
+				p_blackboard->set_entry_fast<port_name##_type>(alias, get_default_##port_name());								\
 			}),																													\
 
 #define INPUT_PORT(port_name) _IN_PORT(port_name, create_input)
-
 #define INPUT_OUTPUT_PORT(port_name) _IN_PORT(port_name, create_in_out)
 
-#define OUTPUT_PORT(port_name)							\
+#define OUTPUT_PORT(port_name)											\
 		NodePortInfo::create_output<port_name##_type>(PORT(port_name)),	\
 
 #define END_NODE_PORTS()	\
@@ -368,9 +365,9 @@ typedef HashMap<RID, IPipelineNodeState *> NodeStateMap;
 struct IPipelineNodeParent { 
 	virtual ~IPipelineNodeParent() = default;
 
-	virtual bool has_child(const IPipelineNode *p_node) const = 0;
-	virtual bool remove_child(const IPipelineNode *p_node) = 0;
-	virtual void remove_all_children() = 0;
+	virtual bool has_child_node(const IPipelineNode *p_node) const = 0;
+	virtual bool remove_child_node(const IPipelineNode *p_node) = 0;
+	virtual void remove_all_child_nodes() = 0;
 
 protected:
 	IPipelineNodeParent() = default;
@@ -381,7 +378,6 @@ struct IPipelineNodeComposite : public IPipelineNodeParent {
 	~IPipelineNodeComposite() override = default;
 
 	virtual bool add_child_node(const IPipelineNode *p_node) = 0;
-	virtual	bool remove_child_node(const IPipelineNode *p_node) = 0;
 	virtual void remove_child_node_at(int64_t p_index) = 0;
 	virtual void clear() = 0;
 	[[nodiscard]] virtual bool is_empty() const = 0;

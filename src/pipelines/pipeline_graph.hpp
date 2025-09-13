@@ -148,14 +148,14 @@ protected:
 			for (const TNODE *child : children) {
 				_parent_lookup.erase(child->get_id());
 			}
-			parent->remove_all_children();
+			parent->remove_all_child_nodes();
 		}
 
 		RID rid = p_node->get_id();
 		auto iter = _parent_lookup.find(rid);
 		if (likely(iter != _parent_lookup.end())) {
 			IPipelineNodeParent *parent = iter->value;
-			parent->remove_child(p_node);
+			parent->remove_child_node(p_node);
 			_parent_lookup.erase(rid);
 		}
 	}
@@ -471,7 +471,7 @@ public:
 		if (likely(iter != _parent_lookup.end())) {
 			IPipelineNodeParent *previous = iter->value;
 			if (unlikely(needs_removal)) {
-				previous->remove_child(p_node);
+				previous->remove_child_node(p_node);
 			}
 
 			if (unlikely(p_parent == nullptr)) {

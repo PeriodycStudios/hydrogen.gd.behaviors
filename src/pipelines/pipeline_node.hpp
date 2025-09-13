@@ -146,11 +146,11 @@ public:
 
 }
 
-#define GET_PORT_LOCAL(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name, false)
-#define GET_PORT_LOCAL_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name, false)
+#define GET_PORT_LOCAL(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), get_default_##port_name(), false)
+#define GET_PORT_LOCAL_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), get_default_##port_name(), false)
 
-#define GET_PORT(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name)
-#define GET_PORT_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), k_default_##port_name)
+#define GET_PORT(port_name) _get_port<port_name##_type>(p_context.blackboard(), port_name##_name(), get_default_##port_name())
+#define GET_PORT_FAST(port_name) _get_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), get_default_##port_name())
 
 #define SET_PORT(port_name, value) _set_port<port_name##_type>(p_context.blackboard(), port_name##_name(), value)
 #define SET_PORT_FAST(port_name, value) _set_port_fast<port_name##_type>(p_context.blackboard(), port_name##_name(), value)

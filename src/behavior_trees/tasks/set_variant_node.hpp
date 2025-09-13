@@ -10,7 +10,7 @@ namespace hydrogen::behavior_trees {
 class SetVariantNode : public BehaviorTreeNode {
     DECLARE_PIPELINE_NODE(SetVariantNode, BehaviorTreeNode);
 
-    DECLARE_INPUT_PORT(value, Variant);
+    DECLARE_INPUT_PORT(value, Variant, Variant());
     DECLARE_OUTPUT_PORT(target, Variant);
 
     BEGIN_NODE_PORTS()

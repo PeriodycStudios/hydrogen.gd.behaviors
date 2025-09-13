@@ -13,7 +13,7 @@ namespace hydrogen::behavior_trees {
 class PrintMessageNode : public BehaviorTreeNode {
     DECLARE_PIPELINE_NODE(PrintMessageNode, BehaviorTreeNode);
 
-    DECLARE_INPUT_PORT(message, String);
+    DECLARE_INPUT_PORT(message, String, "");
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(message)
@@ -34,7 +34,7 @@ public:
 class PrintVariantNode : public BehaviorTreeNode {
     DECLARE_PIPELINE_NODE(PrintVariantNode, BehaviorTreeNode);
 
-    DECLARE_INPUT_PORT(value, Variant);
+    DECLARE_INPUT_PORT(value, Variant, Variant());
 
     BEGIN_NODE_PORTS()
         INPUT_PORT(value)
