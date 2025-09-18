@@ -56,15 +56,15 @@ class PipelineNode : public RidData, public IPipelineNode {
 protected:
     PipelineNode() = default;
 
-    static const Vector<NodePortInfo> &_get_ports() {
-        static const Vector<NodePortInfo> empty = {};
-        return empty;
-    }
+    // static const Vector<NodePortInfo> &_get_ports() {
+    //     static const Vector<NodePortInfo> empty = {};
+    //     return empty;
+    // }
 
-    static const Vector<NodeConnectionInfo> &_get_connections() {
-        static const Vector<NodeConnectionInfo> empty = {};
-        return empty;
-    }
+    // static const Vector<NodeConnectionInfo> &_get_connections() {
+    //     static const Vector<NodeConnectionInfo> empty = {};
+    //     return empty;
+    // }
 
     template<typename T>
     _FORCE_INLINE_ T _get_port(const Blackboard *p_blackboard, const StringName &p_port_name, T p_default, bool p_check_parents = true) const {
@@ -95,16 +95,16 @@ public:
 
     RID get_id() const override { return get_self(); }
 
-    DEFINE_GET_PORTS();
-    DEFINE_GET_CONNECTIONS();
+    // DEFINE_GET_PORTS();
+    // DEFINE_GET_CONNECTIONS();
 
-    bool set_connection(const StringName &p_name, const IPipelineNode *p_node) override {
-        return false;
-    }
+    // bool set_connection(const StringName &p_name, const IPipelineNode *p_node) override {
+    //     return false;
+    // }
 
-    const IPipelineNode *get_connection(const StringName &p_name) const override {
-        return nullptr;
-    }
+    // const IPipelineNode *get_connection(const StringName &p_name) const override {
+    //     return nullptr;
+    // }
 
     void set_name(const String &p_name) override { _name = p_name; }
     

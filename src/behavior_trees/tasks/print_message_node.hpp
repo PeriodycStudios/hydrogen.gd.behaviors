@@ -15,9 +15,9 @@ class PrintMessageNode : public BehaviorTreeNode {
 
     DECLARE_INPUT_PORT(message, String, "");
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(message)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(message)
+    // END_NODE_PORTS()
 
 protected:
 
@@ -28,7 +28,7 @@ protected:
     }
 
 public:
-    DEFINE_GET_PORTS()
+    // DEFINE_GET_PORTS()
 };
 
 class PrintVariantNode : public BehaviorTreeNode {
@@ -36,9 +36,9 @@ class PrintVariantNode : public BehaviorTreeNode {
 
     DECLARE_INPUT_PORT(value, Variant, Variant());
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(value)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(value)
+    // END_NODE_PORTS()
 
 protected:
 
@@ -49,7 +49,7 @@ protected:
     }
 
 public:
-    DEFINE_GET_PORTS()
+    // DEFINE_GET_PORTS()
 };
 
 }

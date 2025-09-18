@@ -15,10 +15,10 @@ class CountDownNode : public BehaviorTreeNode, public IPipelineNodeStateful {
     DECLARE_INPUT_PORT(should_succeed, bool, true);
     DECLARE_INPUT_PORT(count, uint32_t, 10);
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(should_succeed)
-        INPUT_PORT(count)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(should_succeed)
+    //     INPUT_PORT(count)
+    // END_NODE_PORTS()
 
     struct State : public IPipelineNodeState {
         uint32_t count = 0;
@@ -53,7 +53,7 @@ protected:
     }
 
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
     DEFINE_STATEFUL_FUNCS(State);
 };
 }

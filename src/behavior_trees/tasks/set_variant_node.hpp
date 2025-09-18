@@ -13,10 +13,10 @@ class SetVariantNode : public BehaviorTreeNode {
     DECLARE_INPUT_PORT(value, Variant, Variant());
     DECLARE_OUTPUT_PORT(target, Variant);
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(value)
-        OUTPUT_PORT(target)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(value)
+    //     OUTPUT_PORT(target)
+    // END_NODE_PORTS()
 
 protected:
     Result _execute(BehaviorTreeContext &p_context) const override {
@@ -25,7 +25,7 @@ protected:
         return SUCCESS;
     }
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 };
 }
 

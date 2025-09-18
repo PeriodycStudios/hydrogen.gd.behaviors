@@ -13,10 +13,10 @@ class SetBoolNode : public BehaviorTreeNode {
     DECLARE_INPUT_PORT(value, bool, true);
     DECLARE_OUTPUT_PORT(target, bool);
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(value)
-        OUTPUT_PORT(target)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(value)
+    //     OUTPUT_PORT(target)
+    // END_NODE_PORTS()
 
 protected:
 
@@ -27,7 +27,7 @@ protected:
     }
 
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 };
 }
 

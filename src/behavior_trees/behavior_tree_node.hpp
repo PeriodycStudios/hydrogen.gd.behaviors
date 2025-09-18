@@ -38,13 +38,13 @@ public:
 protected:
 	friend class BehaviorTree;
 
-	static const Vector<NodePortInfo> &_get_ports() {
-		return parent::_get_ports();
-	}
+	// static const Vector<NodePortInfo> &_get_ports() {
+	// 	return parent::_get_ports();
+	// }
 
-	static const Vector<NodeConnectionInfo> &_get_connections() {
-		return parent::_get_connections();
-	}
+	// static const Vector<NodeConnectionInfo> &_get_connections() {
+	// 	return parent::_get_connections();
+	// }
 
 	virtual Result _execute(BehaviorTreeContext &p_context) const = 0;
 	virtual void _halt(BehaviorTreeContext &p_context) const { }
@@ -55,8 +55,8 @@ protected:
 
 public:
 
-	DEFINE_GET_PORTS();
-	DEFINE_GET_CONNECTIONS();
+	// DEFINE_GET_PORTS();
+	// DEFINE_GET_CONNECTIONS();
 	
 	Result execute(BehaviorTreeContext &p_context) const;
 

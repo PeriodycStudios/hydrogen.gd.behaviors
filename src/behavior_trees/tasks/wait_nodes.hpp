@@ -97,13 +97,13 @@ protected:
         return get_default_duration();
     }
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(delta)
-        INPUT_PORT(duration)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(delta)
+    //     INPUT_PORT(duration)
+    // END_NODE_PORTS()
     
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 };
 
 class WaitForMillisecondsNode : public WaitForNodeBase<uint64_t> {
@@ -131,13 +131,13 @@ class WaitForMillisecondsNode : public WaitForNodeBase<uint64_t> {
         return get_default_delta();
     }
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(delta)
-        INPUT_PORT(duration)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(delta)
+    //     INPUT_PORT(duration)
+    // END_NODE_PORTS()
 
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 };
 
 class WaitForTicksNode : public WaitForNodeBase<uint64_t> {
@@ -150,9 +150,9 @@ class WaitForTicksNode : public WaitForNodeBase<uint64_t> {
         return k_default_duration;
     }
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(duration)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(duration)
+    // END_NODE_PORTS()
 
 protected:
 
@@ -175,7 +175,7 @@ protected:
     }
 
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 };
 
 class WaitForRealtimeSeconds : public BehaviorTreeNode, public IPipelineNodeStateful {
@@ -183,9 +183,9 @@ class WaitForRealtimeSeconds : public BehaviorTreeNode, public IPipelineNodeStat
 
     DECLARE_INPUT_PORT(duration, real_t, 1.0);
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(duration)
-    END_NODE_PORTS()
+    // BEGIN_NODE_PORTS()
+    //     INPUT_PORT(duration)
+    // END_NODE_PORTS()
 
     struct State : public IPipelineNodeState {
         double time_point = 0.0;
@@ -217,7 +217,7 @@ protected:
     };
 
 public:
-    DEFINE_GET_PORTS();
+    // DEFINE_GET_PORTS();
 
     DEFINE_STATEFUL_FUNCS(State);
 };

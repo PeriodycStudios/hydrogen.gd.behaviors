@@ -38,8 +38,8 @@ class CompositeNode : public BehaviorTreeNode, public PipelineNodeComposite<Beha
 protected:
 	CompositeNode() = default;
 
-	EMPTY_CONNECTION_LIST();
-	EMPTY_PORT_LIST();
+	// EMPTY_CONNECTION_LIST();
+	// EMPTY_PORT_LIST();
 
 	struct CompositeNodeState : IPipelineNodeState {
 		int64_t current_child_index = 0;
