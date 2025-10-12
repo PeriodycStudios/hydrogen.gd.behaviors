@@ -37,11 +37,12 @@ DEFINE_NAME_STATIC(_error);
 
 class IPipelineNode;
 
-typedef std::function<void(const IPipelineNode *p_node, Blackboard *)> InputNodeDefaultSetter;
+typedef std::function<void(const IPipelineNode *p_node, Blackboard *)> NodePortDefaultSetter;
+typedef std::function<Variant()> NodePortDefaultGetter;
 
 struct NodePortInfo {
 
-	enum PORT_KIND {
+	enum PORT_DIRECTION {
 		NONE = 0,
 		INPUT = 1 << 0,
 		OUTPUT = 1 << 1,
@@ -51,48 +52,39 @@ struct NodePortInfo {
 	StringName name = "";
 	StringName type_name = "";
 	Variant::Type variant_type = Variant::NIL;
-	std::optional<InputNodeDefaultSetter> default_setter = nullptr;
-	PORT_KIND port_kind = NONE;
+	std::optional<NodePortDefaultSetter> default_setter = nullptr;
+	std::optional<NodePortDefaultGetter> default_getter = nullptr;
+	PORT_DIRECTION direction = NONE;
+	bool is_graph_port = false;
 
-	_FORCE_INLINE_ bool is_input() const { return (port_kind & INPUT) != 0; }
-	_FORCE_INLINE_ bool is_output() const { return (port_kind & OUTPUT) != 0; }
+	_FORCE_INLINE_ bool is_input() const { return (direction & INPUT) != 0; }
+	_FORCE_INLINE_ bool is_output() const { return (direction & OUTPUT) != 0; }
 
 	constexpr static bool is_true() { return true; }
 	constexpr static bool is_false() { return false; }
 
-	Dictionary to_dictionary(const IPipelineNode *p_node, Blackboard *_blackboard) const {
-		Dictionary dict = {};
+	Dictionary to_dictionary(const IPipelineNode *p_node, Blackboard *_blackboard) const;
 
-		dict["name"] = name;
-		dict["type_name"] = type_name;
-		dict["variant_type"] = variant_type;
-		
-		if (default_setter.has_value() && variant_type != Variant::NIL) {
-			default_setter.value()(p_node, _blackboard);
-			Variant default_value = _blackboard->get_entry<Variant>(name);
-			dict["default_value"] = default_value;
-		}
-
-		dict["port_kind"] = port_kind;
-		dict["is_input"] = is_input();
-		dict["is_output"] = is_output();
-
-		return dict;
-	}
+	void from_dictionary(Dictionary p_dict);
 
 	template<typename T> 
-	static NodePortInfo create_input(const StringName &p_name, const InputNodeDefaultSetter p_setter) {
+	_FORCE_INLINE_ static NodePortInfo create_input(const StringName &p_name, const NodePortDefaultSetter p_setter) {
 		return create<T>(p_name, INPUT, p_setter);
 	}
 
 	template<typename T>
-	static NodePortInfo create_output(const StringName &p_name) {
+	_FORCE_INLINE_ static NodePortInfo create_output(const StringName &p_name) {
 		return create<T>(p_name, OUTPUT);
 	}
 
 	template<typename T>
-	static NodePortInfo create_in_out(const StringName &p_name, const InputNodeDefaultSetter p_setter) {
+	_FORCE_INLINE_ static NodePortInfo create_in_out(const StringName &p_name, const NodePortDefaultSetter p_setter) {
 		return create<T>(p_name, IN_OUT, p_setter);
+	}
+
+	template<typename T>
+	_FORCE_INLINE_ static NodePortInfo create_graph_port(const StringName &p_name, const NodePortDefaultSetter p_setter) {
+		return create<T>(p_name, INPUT, p_setter, true);
 	}
 
 	NodePortInfo() {}
@@ -100,7 +92,7 @@ struct NodePortInfo {
 private:
 
 	template<typename T>
-	static NodePortInfo create(const StringName &p_name, PORT_KIND p_kind, std::optional<InputNodeDefaultSetter> p_setter = nullptr) {
+	static NodePortInfo create(const StringName &p_name, PORT_DIRECTION p_kind, std::optional<NodePortDefaultSetter> p_setter = nullptr, bool p_is_graph_port = false) {
 
 		Variant::Type variant_type;
 		if constexpr(traits::is_variant_type_v<T>) {
@@ -112,11 +104,11 @@ private:
 
 		const StringName &type_name = get_type_name_static<T>();
 
-		return NodePortInfo(p_name, type_name, variant_type, p_setter, p_kind);
+		return NodePortInfo(p_name, type_name, variant_type, p_setter, p_kind, p_is_graph_port);
 	}
 
-	NodePortInfo(const StringName &p_name, const StringName &p_type_name, const Variant::Type p_variant_type, const std::optional<InputNodeDefaultSetter> p_setter, PORT_KIND p_kind) 
-	: name(p_name), type_name(p_type_name), variant_type(p_variant_type), default_setter(p_setter), port_kind(p_kind) {}
+	NodePortInfo(const StringName &p_name, const StringName &p_type_name, const Variant::Type p_variant_type, const std::optional<NodePortDefaultSetter> p_setter, PORT_DIRECTION p_kind, bool p_is_graph_port) 
+	: name(p_name), type_name(p_type_name), variant_type(p_variant_type), default_setter(p_setter), direction(p_kind), is_graph_port(p_is_graph_port) {}
 };
 
 struct NodeConnectionInfo {
@@ -159,6 +151,15 @@ namespace _detail {
 	static port_type get_default_##port_name() {				\
 		static const port_type value = default_value;			\
 		return value; 											\
+	}															\
+																\
+	static Variant get_default_variant_##port_name() {			\
+		if constexpr (traits::is_variant_type_v<port_type>) {	\
+			return get_default_##port_name();					\
+		}														\
+		else {													\
+			return Variant();									\
+		}														\
 	}															\
 
 #define DECLARE_OUTPUT_PORT(port_name, port_type)	\
@@ -482,6 +483,6 @@ protected:
 
 } // hydrogen
 
-VARIANT_BITFIELD_CAST(hydrogen::pipelines::NodePortInfo::PORT_KIND);
+VARIANT_BITFIELD_CAST(hydrogen::pipelines::NodePortInfo::PORT_DIRECTION);
 
 #endif //BEHAVIORS_NODE_BASE_HPP
