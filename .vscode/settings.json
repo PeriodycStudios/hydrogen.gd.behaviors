@@ -18,4 +18,5 @@
         "**/*.out": true,
         "**/*.dll": true
     },
+    "godotTools.editorPath.godot4": "${env:GODOT_EDITOR_DEV}",
 }
