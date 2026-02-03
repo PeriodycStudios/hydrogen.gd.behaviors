@@ -1,8 +1,5 @@
-#ifndef AGENTS_HPP
-#define AGENTS_HPP
+#pragma once
 
 namespace hydrogen {
 class Agent {};
 }
-
-#endif

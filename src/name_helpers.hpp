@@ -1,5 +1,4 @@
-#ifndef BLACKBOARD_NAME_HPP
-#define BLACKBOARD_NAME_HPP
+#pragma once
 
 #include "type_name.hpp"
 #include <godot_cpp/variant/string_name.hpp>
@@ -17,5 +16,3 @@ godot::StringName get_type_name_static() {
     static const godot::StringName type_name = godot::StringName(std::string(::type_name<T>()).c_str(), true);
     return type_name;
 }
-
-#endif

@@ -1,5 +1,4 @@
-#ifndef MUTEX_HELPERS_HPP
-#define MUTEX_HELPERS_HPP
+#pragma once
 
 #define LOCK_ONE(mtx)					\
 	ERR_FAIL_NULL(mtx);					\
@@ -30,6 +29,3 @@
 	ERR_FAIL_NULL_V(second, fail_result);				\
 	ERR_FAIL_NULL_V(third, fail_result);				\
     std::scoped_lock lock(*first, *second, *third)      \
-
-
-#endif

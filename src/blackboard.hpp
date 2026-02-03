@@ -2,8 +2,7 @@
 // Created by tkey on 4/2/25.
 //
 
-#ifndef BLACKBOARD_HPP
-#define BLACKBOARD_HPP
+#pragma once
 
 #include <godot_cpp/classes/ref_counted.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
@@ -736,5 +735,3 @@ MAKE_VARIANT_CONVERTIBLE_TYPE(char32_t, int64_t, return static_cast<char32_t>(x)
 MAKE_VARIANT_CONVERTIBLE_TYPE(ObjectID, uint64_t, return ObjectID(x);, return x.operator uint64_t();)
 
 } //namespace hydrogen
-
-#endif //BLACKBOARD_HPP

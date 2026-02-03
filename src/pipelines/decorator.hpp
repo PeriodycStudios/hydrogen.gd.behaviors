@@ -1,5 +1,4 @@
-#ifndef NODE_WRAPPER_HPP
-#define NODE_WRAPPER_HPP
+#pragma once
 
 #include "node_interfaces.hpp"
 #include <godot_cpp/core/defs.hpp>
@@ -61,5 +60,3 @@ public:
 	}
 };
 }
-
-#endif

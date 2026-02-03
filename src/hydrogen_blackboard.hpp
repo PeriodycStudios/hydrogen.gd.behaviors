@@ -1,5 +1,5 @@
-#ifndef HYDROGEN_BLACKBOARD_HPP
-#define HYDROGEN_BLACKBOARD_HPP
+
+#pragma once
 
 #include <godot_cpp/variant/rid.hpp>
 #include <godot_cpp/classes/resource.hpp>
@@ -93,5 +93,3 @@ template <typename T>
 void HydrogenBlackboard::set_entry(const StringName &p_name, T p_value) {
 	hydrogen::BehaviorServer::get_singleton()->blackboard_set_entry(blackboard, p_name, p_value);
 }
-
-#endif //HYDROGEN_BLACKBOARD_HPP

@@ -1,7 +1,5 @@
 
-#ifndef VARIANT_TYPE_TRAITS_HPP
-#define VARIANT_TYPE_TRAITS_HPP
-
+#pragma once
 
 #include <godot_cpp/classes/object.hpp>
 #include <godot_cpp/classes/ref_counted.hpp>
@@ -120,5 +118,3 @@ using resolve_object_ptr_type_t = typename resolve_object_ptr_type<T>::type;
 
 
 } //namespace hydrogen::traits
-
-#endif //VARIANT_TYPE_TRAITS_HPP

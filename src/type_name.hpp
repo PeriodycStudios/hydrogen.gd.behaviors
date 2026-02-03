@@ -1,5 +1,4 @@
-#ifndef TYPE_NAME_HPP
-#define TYPE_NAME_HPP
+#pragma once
 
 // TODO: twk250701 - look into making this use a minimal string_view replacement
 // to stick closer to the Godot C++ guidelines
@@ -57,5 +56,3 @@ constexpr std::string_view type_name() {
 	constexpr auto type_name_length = wrapped_name.length() - prefix_length - suffix_length;
 	return wrapped_name.substr(prefix_length, type_name_length);
 }
-
-#endif // TYPE_NAME_HPP

@@ -1,10 +1,7 @@
 //
 // Created by tkey on 7/31/25.
 //
-
-#ifndef PIPELINE_GRAPH_HPP
-#define PIPELINE_GRAPH_HPP
-
+#pragma once
 
 #include "mutex_helpers.hpp"
 #include "node_interfaces.hpp"
@@ -520,7 +517,3 @@ public:																				\
 private:																			\
 
 } // hydrogen
-
-
-
-#endif //PIPELINE_GRAPH_HPP

@@ -2,8 +2,7 @@
 // Created by tkey on 7/20/25.
 //
 
-#ifndef PIPELINE_HPP
-#define PIPELINE_HPP
+#pragma once
 
 #include "../blackboard.hpp"
 #include "../rid_data.hpp"
@@ -108,5 +107,3 @@ public:
 	}
 };
 }
-
-#endif //PIPELINE_HPP

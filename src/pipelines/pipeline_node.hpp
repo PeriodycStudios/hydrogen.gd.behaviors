@@ -1,5 +1,4 @@
-#ifndef PIPELINE_NODE_HPP
-#define PIPELINE_NODE_HPP
+#pragma once
 
 #include "blackboard.hpp"
 #include "godot_cpp/templates/hash_map.hpp"
@@ -162,5 +161,3 @@ public:
 #define GET_STATE_V(state_type, fail_value)                             \
     state_type *state = p_context.get_state<state_type>(state_key());   \
     ERR_FAIL_NULL_V(state, fail_value)                                  \
-
-#endif

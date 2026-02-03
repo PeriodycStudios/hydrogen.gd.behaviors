@@ -2,8 +2,7 @@
 // Created by tkey on 4/2/25.
 //
 
-#ifndef BEHAVIOR_SERVER_HPP
-#define BEHAVIOR_SERVER_HPP
+#pragma once
 
 #include "blackboard.hpp"
 #include "godot_cpp/templates/hash_set.hpp"
@@ -591,6 +590,3 @@ void HydrogenBehaviorServer::blackboard_set_entry(RID p_blackboard, const String
 }
 
 }
-
-
-#endif //BEHAVIOR_SERVER_HPP

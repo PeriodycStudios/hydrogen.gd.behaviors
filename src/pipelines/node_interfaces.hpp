@@ -2,8 +2,7 @@
 // Created by tkey on 7/18/25.
 //
 
-#ifndef BEHAVIORS_NODE_BASE_HPP
-#define BEHAVIORS_NODE_BASE_HPP
+#pragma once
 
 #include "../name_helpers.hpp"
 #include "blackboard.hpp"
@@ -483,5 +482,3 @@ protected:
 } // hydrogen
 
 VARIANT_BITFIELD_CAST(hydrogen::pipelines::NodePortInfo::PORT_KIND);
-
-#endif //BEHAVIORS_NODE_BASE_HPP

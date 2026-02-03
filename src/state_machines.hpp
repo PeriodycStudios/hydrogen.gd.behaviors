@@ -1,8 +1,5 @@
-#ifndef STATE_MACHINES_HPP
-#define STATE_MACHINES_HPP
+#pragma once
 
 namespace hydrogen {
 class StateMachine {};
 }
-
-#endif

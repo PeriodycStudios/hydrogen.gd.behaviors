@@ -1,5 +1,4 @@
-#ifndef NODE_CONTAINER_HPP
-#define NODE_CONTAINER_HPP
+#pragma once
 
 #include "node_interfaces.hpp"
 
@@ -145,6 +144,3 @@ public:
 #undef TRY_CONVERT_CHILD_V
 
 }
-
-
-#endif
