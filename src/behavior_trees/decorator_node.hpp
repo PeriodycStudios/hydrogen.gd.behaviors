@@ -2,10 +2,10 @@
 // Created by tkey on 7/29/25.
 //
 
-#ifndef DECORATOR_NODE_HPP
-#define DECORATOR_NODE_HPP
-#include "behavior_tree_node.hpp"
+#pragma once
+
 #include "../pipelines/decorator.hpp"
+#include "behavior_tree_node.hpp"
 #include "behavior_trees/behavior_tree_context.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/templates/vector.hpp"
@@ -18,14 +18,14 @@ using namespace pipelines;
 class DecoratorNode : public BehaviorTreeNode, public PipelineNodeDecorator<BehaviorTreeNode> {
 	ABSTRACT_PIPELINE_NODE(DecoratorNode, BehaviorTreeNode);
 
-	template<typename T>
+	template <typename T>
 	void _get_children(Vector<const T *> &p_nodes) const {
 		if (likely(_decorated_node != nullptr)) {
 			p_nodes.push_back(_decorated_node);
 		}
 	}
 
-	template<typename T>
+	template <typename T>
 	void _get_descendents(Vector<const T *> &p_nodes) const {
 		if (likely(_decorated_node != nullptr)) {
 			const T *node = _decorated_node;
@@ -90,8 +90,7 @@ public:
 
 		if (likely(_decorated_node != nullptr)) {
 			return _decorated_node->has_descendant(p_node);
-		}
-		else {
+		} else {
 			return false;
 		}
 	}
@@ -109,8 +108,6 @@ public:
 #define DECORATOR_FAILURE_IF_NULL()					\
 		if (unlikely(_decorated_node == nullptr)) {	\
 			return FAILURE;							\
-		}											\
+		}
 
-} // hydrogen
-
-#endif //DECORATOR_NODE_HPP
+} //namespace hydrogen::behavior_trees

@@ -3,9 +3,9 @@
 #include "node_interfaces.hpp"
 
 #include <godot_cpp/classes/global_constants.hpp>
+#include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/templates/vector.hpp>
-#include <godot_cpp/core/defs.hpp>
 
 #include <cstdint>
 #include <type_traits>
@@ -17,19 +17,18 @@ using namespace godot;
 template <typename T, typename = void>
 class PipelineNodeComposite {};
 
-#define TRY_CONVERT_CHILD()								\
+#define TRY_CONVERT_CHILD()													\
 	const T* node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_NULL(node)									\
+	ERR_FAIL_NULL(node)
 
-#define TRY_CONVERT_CHILD_V(fail_result)				\
+#define TRY_CONVERT_CHILD_V(fail_result)						\
 	const T *node = dynamic_cast<const T *>(p_node);	\
-	ERR_FAIL_NULL_V(node, fail_result)					\
-	
+	ERR_FAIL_NULL_V(node, fail_result)
+
 template <typename T>
 class PipelineNodeComposite<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeComposite {
 protected:
-
-	Vector<const T*> _children = {};
+	Vector<const T *> _children = {};
 
 	PipelineNodeComposite() = default;
 
@@ -66,7 +65,7 @@ public:
 	_FORCE_INLINE_ bool add_child(const T *p_node) {
 		ERR_FAIL_NULL_V(p_node, false);
 		if (unlikely(_children.has(p_node))) {
-			return false;	
+			return false;
 		}
 		_children.push_back(p_node);
 		return true;
@@ -88,7 +87,7 @@ public:
 	}
 
 	bool is_empty() const override {
-		return _children.is_empty(); 
+		return _children.is_empty();
 	}
 
 	const IPipelineNode *get_child_node(int64_t p_index) const override { return get_child(p_index); }
@@ -122,20 +121,20 @@ public:
 		return insert_child(p_pos, node);
 	}
 
-	_FORCE_INLINE_ Error insert_child(int64_t p_pos, const T* p_val) {
+	_FORCE_INLINE_ Error insert_child(int64_t p_pos, const T *p_val) {
 		return _children.insert(p_pos, p_val);
 	}
 
 	void append_child_nodes(const Vector<const IPipelineNode *> &p_nodes) override {
 		Vector<const T *> nodes = {};
-		for(const IPipelineNode *node : p_nodes) {
+		for (const IPipelineNode *node : p_nodes) {
 			const T *typed_node = dynamic_cast<const T *>(node);
 			ERR_CONTINUE(typed_node == nullptr);
 			_children.append(typed_node);
 		}
 	}
 
-	_FORCE_INLINE_ void append_children(const Vector<const T*> &p_to_append) {
+	_FORCE_INLINE_ void append_children(const Vector<const T *> &p_to_append) {
 		_children.append_array(p_to_append);
 	}
 };
@@ -143,4 +142,4 @@ public:
 #undef TRY_CONVERT_CHILD
 #undef TRY_CONVERT_CHILD_V
 
-}
+} //namespace hydrogen::pipelines

@@ -8,34 +8,34 @@
 #include "pipeline_node.hpp"
 #include "rid_data.hpp"
 
-#include <godot_cpp/variant/string_name.hpp>
-#include <godot_cpp/core/memory.hpp>
-#include <godot_cpp/templates/hash_set.hpp>
-#include <godot_cpp/core/error_macros.hpp>
-#include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/core/defs.hpp>
+#include <godot_cpp/core/error_macros.hpp>
+#include <godot_cpp/core/memory.hpp>
 #include <godot_cpp/templates/hash_map.hpp>
-#include <godot_cpp/templates/vector.hpp>
-#include <godot_cpp/variant/rid.hpp>
+#include <godot_cpp/templates/hash_set.hpp>
 #include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/templates/pair.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
+#include <godot_cpp/templates/vector.hpp>
+#include <godot_cpp/variant/rid.hpp>
+#include <godot_cpp/variant/string_name.hpp>
 
-#include <cstdint>
-#include <type_traits>
 #include <atomic>
-#include <mutex>
+#include <cstdint>
 #include <functional>
+#include <mutex>
+#include <type_traits>
 
 namespace hydrogen::pipelines {
 
-template<typename TNODE, typename = void>
+template <typename TNODE, typename = void>
 class PipelineGraph {};
 
 template <typename TNODE>
 class PipelineGraph<TNODE, std::enable_if_t<std::is_base_of_v<PipelineNode, TNODE>>> : public RidData, public IPipelineGraph {
 public:
-	typedef const TNODE * c_ptr;
-	typedef TNODE * ptr;
+	typedef const TNODE *c_ptr;
+	typedef TNODE *ptr;
 
 	typedef std::function<bool(c_ptr)> NodePredicate;
 
@@ -49,7 +49,6 @@ private:
 	StringName _plugin_name;
 
 protected:
-
 	HashMap<RID, ptr> _nodes = {};
 	HashMap<RID, IPipelineNodeParent *> _parent_lookup = {};
 	Vector<TNODE *> _connectors = {};
@@ -71,8 +70,7 @@ protected:
 		auto iter = _nodes.find(p_node);
 		if (likely(iter != _nodes.end())) {
 			return iter->value;
-		}
-		else {
+		} else {
 			return nullptr;
 		}
 	}
@@ -81,8 +79,7 @@ protected:
 		auto iter = _nodes.find(p_node);
 		if (likely(iter != _nodes.end())) {
 			return iter->value;
-		}
-		else {
+		} else {
 			return nullptr;
 		}
 	}
@@ -107,7 +104,7 @@ protected:
 		LOCK_TWO_V(_mutex, _register_mutex, RID());
 
 		const auto iter = _registered_nodes.find(p_node_type_name);
-        ERR_FAIL_COND_V(iter == _registered_nodes.end(), RID());
+		ERR_FAIL_COND_V(iter == _registered_nodes.end(), RID());
 
 		ptr node = iter->value();
 		ERR_FAIL_NULL_V(node, RID());
@@ -121,8 +118,8 @@ protected:
 		if (unlikely(!connections.is_empty())) {
 			_connectors.push_back(node);
 		}
-		
-        return rid;
+
+		return rid;
 	}
 
 	void _clear_connections(TNODE *p_node) {
@@ -159,13 +156,13 @@ protected:
 
 	bool _destroy_node(RID p_node) override {
 		LOCK_ONE_V(_mutex, false);
-		
+
 		ptr node = _get_node(p_node);
 		ERR_FAIL_NULL_V(node, false);
 
 		_clear_connections(node);
 		_clear_parentage(node);
-		
+
 		RID rid = node->get_id();
 		_nodes.erase(rid);
 		_nodes_owner.free(rid);
@@ -173,38 +170,34 @@ protected:
 		return true;
 	}
 
-	template<typename U>
+	template <typename U>
 	static void _register_node() {
 		if constexpr (!std::is_base_of_v<TNODE, U>) {
 			ERR_PRINT("Unable to register invalid node type!");
 			return;
-		}
-		else {
+		} else {
 			StringName node_type_name = U::get_node_name();
 			auto iter = _registered_nodes.find(node_type_name);
 			if (likely(iter == _registered_nodes.end())) {
 				auto create_func = []() { return memnew(U); };
 				_registered_nodes[node_type_name] = create_func;
-			}
-			else {
+			} else {
 				WARN_PRINT_ED("Node type already registered");
 			}
 		}
 	}
 
-	template<typename U>
+	template <typename U>
 	static void _unregister_node() {
 		if constexpr (!std::is_base_of_v<TNODE, U>) {
 			ERR_PRINT("Unable to unregister invalid node type!");
 			return;
-		}
-		else {
+		} else {
 			StringName node_type_name = U::get_node_name();
 			auto iter = _registered_nodes.find(node_type_name);
 			if (likely(iter != _registered_nodes.end())) {
 				_registered_nodes.erase(iter);
-			}
-			else {
+			} else {
 				WARN_PRINT_ED("Node type not registered!");
 			}
 		}
@@ -212,7 +205,7 @@ protected:
 
 	static LocalVector<StringName> _get_registered_node_type_names() {
 		LOCK_ONE_V(_register_mutex, {});
-		
+
 		LocalVector<StringName> type_names = {};
 		type_names.resize(_registered_nodes.size());
 		int32_t idx = 0;
@@ -223,7 +216,6 @@ protected:
 	}
 
 public:
-
 	_FORCE_INLINE_ void bind() { ++_bind_count; }
 	_FORCE_INLINE_ void unbind() {
 		CRASH_COND(_bind_count == 0);
@@ -249,7 +241,7 @@ public:
 	}
 
 	[[nodiscard]] RID get_id() const override { return get_self(); }
-	
+
 	[[nodiscard]] bool is_bound() const override { return _bind_count > 0; }
 	[[nodiscard]] uint32_t bind_count() const override { return _bind_count; }
 
@@ -301,7 +293,7 @@ public:
 		return _get_node(p_node);
 	}
 
-	[[nodiscard]] const IPipelineNode* get_node(RID p_node) const override {
+	[[nodiscard]] const IPipelineNode *get_node(RID p_node) const override {
 		return get_node_typed(p_node);
 	}
 
@@ -357,7 +349,7 @@ public:
 				p_nodes.push_back(n);
 			}
 		};
-		
+
 		_visit(node, visitor);
 	}
 
@@ -378,7 +370,7 @@ public:
 
 	void query_nodes(Vector<const IPipelineNode *> &p_nodes, PipelineNodePredicate p_predicate) const override {
 		LOCK_ONE(_mutex);
-		
+
 		auto visitor = [&p_nodes, &p_predicate](const TNODE *node) {
 			if (unlikely(p_predicate(node))) {
 				p_nodes.push_back(node);
@@ -416,14 +408,14 @@ public:
 		}
 
 		HashSet<RID> rooted_ids = {};
-		
-		auto visitor = [&rooted_ids](const TNODE * node) {
+
+		auto visitor = [&rooted_ids](const TNODE *node) {
 			rooted_ids.insert(node->get_id());
 		};
 
 		_visit(_root, visitor);
 
-		for(const auto &kvp : _nodes) {
+		for (const auto &kvp : _nodes) {
 			const IPipelineNode *node = kvp.value;
 			p_statuses.push_back(Pair(node, rooted_ids.has(node->get_id())));
 		}
@@ -450,7 +442,7 @@ public:
 		return _parent_lookup.has(p_node->get_id());
 	}
 
-	void update_parent(const IPipelineNode *p_node, IPipelineNodeParent* p_parent = nullptr) override {
+	void update_parent(const IPipelineNode *p_node, IPipelineNodeParent *p_parent = nullptr) override {
 		c_ptr node = dynamic_cast<c_ptr>(p_node);
 		ERR_FAIL_NULL(node);
 
@@ -473,47 +465,45 @@ public:
 
 			if (unlikely(p_parent == nullptr)) {
 				_parent_lookup.remove(iter);
-			}
-			else {
+			} else {
 				iter->value = p_parent;
 			}
-		}
-		else if (likely(p_parent != nullptr)) {
+		} else if (likely(p_parent != nullptr)) {
 			_parent_lookup.insert(rid, p_parent);
 		}
 	}
 };
 
-template<typename T>
+template <typename T>
 HashMap<StringName, std::function<T *()>> PipelineGraph<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>>::_registered_nodes = {};
 
-template<typename T>
+template <typename T>
 std::mutex *PipelineGraph<T, std::enable_if_t<std::is_base_of_v<PipelineNode, T>>>::_register_mutex = nullptr;
 
-#define DECLARE_PIPELINE_GRAPH()													\
-public:																				\
-	_FORCE_INLINE_ static void init() {												\
-		_init();																	\
-		register_core_nodes();														\
-	}																				\
-																					\
-	_FORCE_INLINE_ static void finish() {											\
-		_finish();																	\
-	}																				\
-																					\
-	template<typename U>															\
-	_FORCE_INLINE_ static void register_node() {									\
-		_register_node<U>();														\
-	}																				\
-																					\
-	template<typename U>															\
-	_FORCE_INLINE_ static void unregister_node() {									\
-		_unregister_node<U>();														\
-	}																				\
-																					\
+#define DECLARE_PIPELINE_GRAPH()																									\
+public:																																						\
+	_FORCE_INLINE_ static void init() {																							\
+		_init();																																			\
+		register_core_nodes();																												\
+	}																																								\
+																																									\
+	_FORCE_INLINE_ static void finish() {																						\
+		_finish();																																		\
+	}																																								\
+																																									\
+	template<typename U>																														\
+	_FORCE_INLINE_ static void register_node() {																		\
+		_register_node<U>();																													\
+	}																																								\
+																																									\
+	template<typename U>																														\
+	_FORCE_INLINE_ static void unregister_node() {																	\
+		_unregister_node<U>();																												\
+	}																																								\
+																																									\
 	_FORCE_INLINE_ static LocalVector<StringName> get_registered_node_type_names() {\
-		return _get_registered_node_type_names();									\
-	}																				\
-private:																			\
+		return _get_registered_node_type_names();																			\
+	}																																								\
+private:
 
-} // hydrogen
+} //namespace hydrogen::pipelines

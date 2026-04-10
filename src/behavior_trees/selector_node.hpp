@@ -2,11 +2,11 @@
 // Created by tkey on 7/29/25.
 //
 
-#ifndef SELECTOR_NODES_HPP
-#define SELECTOR_NODES_HPP
+#pragma once
+
+#include "behavior_tree_context.hpp"
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
-#include "behavior_tree_context.hpp"
 #include "pipelines/pipeline_node.hpp"
 
 namespace hydrogen::behavior_trees {
@@ -15,7 +15,6 @@ class SelectorNode : public CompositeNode {
 	DECLARE_PIPELINE_NODE(SelectorNode, CompositeNode);
 
 protected:
-
 	Result _execute(BehaviorTreeContext &p_context) const override {
 		GET_STATE_V(CompositeNodeState, FAILURE);
 
@@ -45,6 +44,4 @@ protected:
 
 // TODO: Nondeterministic selector
 
-} // hydrogen
-
-#endif //SELECTOR_NODES_HPP
+} //namespace hydrogen::behavior_trees

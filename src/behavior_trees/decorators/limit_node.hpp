@@ -1,9 +1,8 @@
-#ifndef LIMIT_NODE_HPP
-#define LIMIT_NODE_HPP
+#pragma once
 
-#include "../decorator_node.hpp"
 #include "../behavior_tree_context.hpp"
 #include "../behavior_tree_node.hpp"
+#include "../decorator_node.hpp"
 #include "pipelines/node_interfaces.hpp"
 #include "pipelines/pipeline_node.hpp"
 #include <cstdint>
@@ -14,50 +13,47 @@ using namespace godot;
 using namespace pipelines;
 
 class LimitNode : public DecoratorNode, public IPipelineNodeStateful {
-    DECLARE_PIPELINE_NODE(LimitNode, DecoratorNode);
+	DECLARE_PIPELINE_NODE(LimitNode, DecoratorNode);
 
-    DECLARE_INPUT_PORT(executeLimit, uint32_t, 1);
+	DECLARE_INPUT_PORT(executeLimit, uint32_t, 1);
 
-    BEGIN_NODE_PORTS()
-        INPUT_PORT(executeLimit)
-    END_NODE_PORTS()
+	BEGIN_NODE_PORTS()
+	INPUT_PORT(executeLimit)
+	END_NODE_PORTS()
 
-    struct LimitNodeState : public IPipelineNodeState {
-        uint32_t execute_counter = 0;
-    };
+	struct LimitNodeState : public IPipelineNodeState {
+		uint32_t execute_counter = 0;
+	};
 
 protected:
+	Result _execute(BehaviorTreeContext &p_context) const override {
+		DECORATOR_FAILURE_IF_NULL();
+		GET_STATE_V(LimitNodeState, FAILURE);
 
-    Result _execute(BehaviorTreeContext &p_context) const override {
-        DECORATOR_FAILURE_IF_NULL();
-        GET_STATE_V(LimitNodeState, FAILURE);
+		const uint32_t executeLimit = GET_PORT(executeLimit);
+		while (state->execute_counter < executeLimit) {
+			Result result = _decorated_node->execute(p_context);
+			switch (result) {
+				case BehaviorTreeNode::RUNNING:
+					return RUNNING;
+				default:
+					state->execute_counter++;
+					return result;
+			}
+		}
 
-        const uint32_t executeLimit = GET_PORT(executeLimit);
-        while (state->execute_counter < executeLimit) {
-            Result result = _decorated_node->execute(p_context);
-            switch (result) {
-            case BehaviorTreeNode::RUNNING:
-                return RUNNING;
-            default:
-                state->execute_counter++;
-                return result;
-            }
-        }
+		return FAILURE;
+	}
 
-        return FAILURE;
-    }
-
-    void _halt(BehaviorTreeContext &p_context) const override {
-       GET_STATE(LimitNodeState);
-        state->execute_counter = 0;
-        DecoratorNode::_halt(p_context);
-    }
+	void _halt(BehaviorTreeContext &p_context) const override {
+		GET_STATE(LimitNodeState);
+		state->execute_counter = 0;
+		DecoratorNode::_halt(p_context);
+	}
 
 public:
-    DEFINE_GET_PORTS();
+	DEFINE_GET_PORTS();
 
-    DEFINE_STATEFUL_FUNCS(LimitNodeState);
+	DEFINE_STATEFUL_FUNCS(LimitNodeState);
 };
-}
-
-#endif
+} //namespace hydrogen::behavior_trees

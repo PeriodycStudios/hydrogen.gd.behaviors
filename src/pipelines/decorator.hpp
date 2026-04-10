@@ -1,3 +1,4 @@
+
 #pragma once
 
 #include "node_interfaces.hpp"
@@ -12,12 +13,11 @@ class PipelineNodeDecorator {};
 template <typename T>
 class PipelineNodeDecorator<T, std::enable_if_t<std::is_base_of_v<IPipelineNode, T>>> : public IPipelineNodeDecorator {
 protected:
-	const T* _decorated_node = nullptr;
+	const T *_decorated_node = nullptr;
 
 	PipelineNodeDecorator() = default;
 
 public:
-
 	~PipelineNodeDecorator() override {
 		_decorated_node = nullptr;
 	}
@@ -40,8 +40,7 @@ public:
 		if (likely(node == _decorated_node)) {
 			_decorated_node = nullptr;
 			return true;
-		}
-		else {
+		} else {
 			return false;
 		}
 	}
@@ -50,13 +49,13 @@ public:
 		_decorated_node = nullptr;
 	}
 
-	[[nodiscard]] const IPipelineNode *get_child() const override { 
+	[[nodiscard]] const IPipelineNode *get_child() const override {
 		return _decorated_node;
 	}
-	
+
 	void set_child(const IPipelineNode *p_node) override {
-		const T * node = dynamic_cast<const T *>(p_node);
+		const T *node = dynamic_cast<const T *>(p_node);
 		_decorated_node = node;
 	}
 };
-}
+} //namespace hydrogen::pipelines

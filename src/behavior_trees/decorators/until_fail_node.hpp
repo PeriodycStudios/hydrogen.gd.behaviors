@@ -1,5 +1,5 @@
-#ifndef UNTIL_FAIL_HPP
-#define UNTIL_FAIL_HPP
+
+#pragma once
 
 #include "../decorator_node.hpp"
 #include "behavior_trees/behavior_tree_context.hpp"
@@ -8,22 +8,18 @@
 
 namespace hydrogen::behavior_trees {
 class UntilFailNode : public DecoratorNode {
-    DECLARE_PIPELINE_NODE(UntilFailNode, DecoratorNode);
+	DECLARE_PIPELINE_NODE(UntilFailNode, DecoratorNode);
 
 protected:
+	Result _execute(BehaviorTreeContext &p_context) const override {
+		DECORATOR_FAILURE_IF_NULL();
 
-    Result _execute(BehaviorTreeContext &p_context) const override {
-        DECORATOR_FAILURE_IF_NULL();
-
-        Result result = _decorated_node->execute(p_context);
-        if (unlikely(result == FAILURE)) {
-            return SUCCESS;
-        }
-        else {
-            return RUNNING;
-        }
-    }
+		Result result = _decorated_node->execute(p_context);
+		if (unlikely(result == FAILURE)) {
+			return SUCCESS;
+		} else {
+			return RUNNING;
+		}
+	}
 };
-}
-
-#endif
+} //namespace hydrogen::behavior_trees

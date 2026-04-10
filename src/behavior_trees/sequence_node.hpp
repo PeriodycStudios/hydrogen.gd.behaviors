@@ -2,8 +2,8 @@
 // Created by tkey on 7/29/25.
 //
 
-#ifndef SEQUENCE_NODE_HPP
-#define SEQUENCE_NODE_HPP
+#pragma once
+
 #include "behavior_trees/behavior_tree_node.hpp"
 #include "composite_node.hpp"
 #include "pipelines/node_interfaces.hpp"
@@ -17,11 +17,10 @@ class SequenceNode : public CompositeNode {
 	DECLARE_PIPELINE_NODE(SequenceNode, CompositeNode);
 
 protected:
-	Result _execute(BehaviorTreeContext &p_context) const override { 
+	Result _execute(BehaviorTreeContext &p_context) const override {
 		GET_STATE_V(CompositeNodeState, FAILURE);
 
 		while (state->current_child_index < child_count()) {
-			
 			const BehaviorTreeNode *child = _children.get(state->current_child_index);
 
 			Result result = child->execute(p_context);
@@ -48,6 +47,4 @@ protected:
 
 // TODO: NonDeterministic Selector
 
-} // hydrogen
-
-#endif //SEQUENCE_NODE_HPP
+} //namespace hydrogen::behavior_trees

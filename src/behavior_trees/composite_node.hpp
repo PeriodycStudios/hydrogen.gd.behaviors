@@ -2,11 +2,11 @@
 // Created by tkey on 7/29/25.
 //
 
-#ifndef CONTAINER_NODE_HPP
-#define CONTAINER_NODE_HPP
-#include "behavior_tree_node.hpp"
-#include "behavior_tree_context.hpp"
+#pragma once
+
 #include "../pipelines/composite.hpp"
+#include "behavior_tree_context.hpp"
+#include "behavior_tree_node.hpp"
 #include "godot_cpp/core/defs.hpp"
 #include "godot_cpp/templates/vector.hpp"
 #include "pipelines/node_interfaces.hpp"
@@ -27,7 +27,7 @@ class CompositeNode : public BehaviorTreeNode, public PipelineNodeComposite<Beha
 		}
 	}
 
-	template<typename T>
+	template <typename T>
 	void _get_descendants(Vector<const T *> &p_nodes) const {
 		for (const T *node : _children) {
 			p_nodes.push_back(node);
@@ -85,7 +85,7 @@ public:
 		return _children.has(p_node);
 	}
 
-	bool has_child(const IPipelineNode *p_node) const override { 
+	bool has_child(const IPipelineNode *p_node) const override {
 		const BehaviorTreeNode *node = dynamic_cast<const BehaviorTreeNode *>(p_node);
 		if (unlikely(node == nullptr)) {
 			return false;
@@ -118,6 +118,4 @@ public:
 	}
 };
 
-} // hydrogen
-
-#endif //CONTAINER_NODE_HPP
+} //namespace hydrogen::behavior_trees
