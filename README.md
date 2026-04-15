@@ -20,20 +20,20 @@
   - [ ] Perform Interruption Node (TEST)
   - [ ] Print Message Node (TEST)
   - [ ] Set Bool Node
-  - [ ] Wait Nodes
-    - [ ] Wait For Seconds Node (TEST)
-    - [ ] Wait For Milliseconds Node (TEST)
-    - [ ] Wait For Ticks Node (TEST)
-    - [ ] Wait For Realtime Seconds Node (TEST)
+  - [x] Wait Nodes
+    - [x] Wait For Seconds Node
+    - [x] Wait For Milliseconds Node
+    - [x] Wait For Ticks Node
+    - [x] Wait For Realtime Seconds Node
 - [x] Decorator Node
   - [ ] Interrupter Node (TEST)
   - [ ] Inverter Node (TEST)
   - [ ] Limit Node (TEST)
   - [ ] Until Fail Node (TEST)
-- [x] Parallel Node
-- [x] Composite Node
+- [ ] Parallel Node
+- [ ] Composite Node (NEEDS TEST)
 - [x] Sequence Node
-- [x] Selector Node
+- [ ] Selector Node (NEEDS TEST)
 
 ## Library Compatibility
 
@@ -44,15 +44,15 @@ Compiles:
 
 - [x] Linux/BSD
 - [x] Windows 64-bit
-- [X] Mac OSX
+- [x] Mac OSX
 - [ ] iOS
-- [X] Android
+- [x] Android
 
 Platforms tested against:
 
 - [x] Linux/BSD
 - [x] Windows 64-bit
-- [X] Mac OSX
+- [x] Mac OSX
 - [ ] iOS
 - [ ] Android
 
