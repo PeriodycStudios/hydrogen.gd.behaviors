@@ -38,6 +38,10 @@
 - [x] Sequence Node
 - [ ] Selector Node (NEEDS TEST)
 
+## Developer Note
+
+I'm working on this myself until I have a graphical interface and example usage ready to roll. I've chosen C++ as it's fairly portable for GDExtension, consistent with the underlying Godot source code, and it's performant if applied correctly.
+
 ## Library Compatibility
 
 Currently this is built against the `godot-4.6.2-stable` tagged commit in the `godot-cpp`
