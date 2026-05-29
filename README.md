@@ -1,16 +1,19 @@
 # Hydrogen Godot Behaviors
 
 - [x] TODO: Blackboard
-- [ ] TODO: Pipelines - IN PROGRESS
+- [ ] TODO: Graphical editing UI
+- [ ] TODO: Graph execution Pipelines - IN PROGRESS
   - [ ] TODO: Node Binding Code generator
   - [ ] TODO: Graph Nodes - IN PROGRESS
 - [ ] TODO: Behavior Trees - IN PROGRESS
 - [ ] TODO: Hierarchical FSMs
 - [ ] TODO: Agents
-- [ ] TODO: Steering
-  - [ ] TODO: Navigation-integration
+- [ ] TODO: Steering Behaviors
+  - [ ] TODO: Godot Navigation-integration
+  - [ ] TODO: General Navigation adapter
 - [ ] TODO: Generator Pipelines
-- [ ] TODO: Scheduling Pipelines
+- [ ] TODO: Scheduling and Execution flow managemnt
+
 
 ## Behavior Tree Nodes
 
@@ -45,7 +48,7 @@ Compiles:
 - [x] Linux/BSD
 - [x] Windows 64-bit
 - [x] Mac OSX
-- [ ] iOS
+- [ ] iOS - Need a new iDevice with Apple silicon before I call this done and dusted
 - [x] Android
 
 Platforms tested against:
@@ -53,8 +56,8 @@ Platforms tested against:
 - [x] Linux/BSD
 - [x] Windows 64-bit
 - [x] Mac OSX
-- [ ] iOS
-- [ ] Android
+- [ ] iOS - See above note on iOS compilation
+- [ ] Android - Wierd packaging issue with the APK that needs fixing
 
 ## Building
 
