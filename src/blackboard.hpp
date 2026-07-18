@@ -12,8 +12,11 @@
 #include <godot_cpp/variant/variant.hpp>
 
 #include <functional>
+#include <mutex>
 
+#include "godot_cpp/core/error_macros.hpp"
 #include "godot_cpp/variant/typed_dictionary.hpp"
+#include "mutex_helpers.hpp"
 #include "name_helpers.hpp"
 #include "rid_data.hpp"
 #include "variant_type_traits.hpp"
@@ -243,12 +246,12 @@ class Blackboard final : public RidData {
 	static FallbackTable variant_fallbacks;
 	static const TypeInfo *ref_fallback_type_info;
 	static bool is_registration_ready;
-	static Ref<Mutex> register_mutex;
+	static std::recursive_mutex *register_mutex;
 
 	EntryOwner entries_owner = {};
 	EntryMap entries = {};
 	const Blackboard *parent = nullptr;
-	Ref<Mutex> mutex = {};
+	std::recursive_mutex *mutex = nullptr;
 
 	template <typename T>
 	static EntryBase *create_entry(const StringName &p_name, EntryOwner &p_owner, EntryMap &p_entries, EntryBase *previous = nullptr) {
@@ -276,16 +279,6 @@ class Blackboard final : public RidData {
 	static void register_core_variant_types();
 	static void registration_clear();
 
-	_FORCE_INLINE_ static void registration_lock() {
-		ERR_FAIL_COND(register_mutex.is_null());
-		register_mutex->lock();
-	}
-
-	_FORCE_INLINE_ static void registration_unlock() {
-		ERR_FAIL_COND(register_mutex.is_null());
-		register_mutex->unlock();
-	}
-
 public:
 	static void registration_init();
 	static void registration_finish();
@@ -302,16 +295,6 @@ public:
 	bool set_parent(const Blackboard *p_parent);
 	[[nodiscard]] const Blackboard *get_parent() const;
 	[[nodiscard]] bool is_ancestor(const Blackboard *p_candidate) const;
-
-	_FORCE_INLINE_ void lock() const {
-		ERR_FAIL_COND(mutex.is_null());
-		mutex->lock();
-	}
-
-	_FORCE_INLINE_ void unlock() const {
-		ERR_FAIL_COND(mutex.is_null());
-		mutex->unlock();
-	}
 
 	template <typename T>
 	bool try_get_entry(const StringName &p_name, T &p_out_result, bool p_check_parents = true) const;
@@ -341,25 +324,22 @@ public:
 
 template <typename T>
 void Blackboard::register_type() {
-	registration_lock();
+	LOCK_ONE(register_mutex);
 
 	typedef traits::resolved_type_t<T> type;
 	static_assert(!std::is_same_v<type, Variant>, "Cannot register Variant type itself.");
 	if (RegisteredTypeInfo<type>::is_registered()) {
-		registration_unlock();
 		return;
 	}
 
 	typedef std::remove_pointer_t<type> without_ptr;
 	if constexpr (traits::is_ref_counted_v<without_ptr>) {
 		register_type<Ref<without_ptr>>();
-		registration_unlock();
 		return;
 	}
 
 	if constexpr (!std::is_pointer_v<type> && traits::is_gd_object_type_v<type>) {
 		register_type<type *>();
-		registration_unlock();
 		return;
 	}
 
@@ -418,12 +398,11 @@ void Blackboard::register_type() {
 	if (type_info.object_class_key != 0) {
 		object_class_infos[type_info.object_class_key] = RegisteredTypeInfo<type>::get_info_ptr();
 	}
-
-	registration_unlock();
 }
 
 template <>
 inline bool Blackboard::find_entry<Variant>(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
+	LOCK_ONE_V(mutex, false);
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		p_out_result = iter;
@@ -433,17 +412,15 @@ inline bool Blackboard::find_entry<Variant>(const StringName &p_name, EntryMap::
 	if (likely(p_check_parents)) {
 		const Blackboard *current = parent;
 		while (current != nullptr) {
-			current->lock();
+			LOCK_ONE_V(current->mutex, false);
 
 			iter = current->entries.find(p_name);
 			if (iter != current->entries.end()) {
 				p_out_result = iter;
-				current->unlock();
 				return true;
 			}
 
 			const Blackboard *next = current->parent;
-			current->unlock();
 			current = next;
 		}
 	}
@@ -458,35 +435,32 @@ inline bool Blackboard::find_entry<const Variant>(const StringName &p_name, Entr
 
 template <>
 inline bool Blackboard::try_get_entry<Variant>(const StringName &p_name, Variant &p_out_result, const bool p_check_parents) const {
-	lock();
+	LOCK_ONE_V(mutex, false);
 
 	EntryMap::ConstIterator iter;
 	if (unlikely(!find_entry<Variant>(p_name, iter, p_check_parents))) {
-		unlock();
 		return false;
 	}
 
 	const EntryBase *entry = iter->value;
 	p_out_result = entry->as_variant();
 
-	unlock();
 	return true;
 }
 
 template <>
 inline const Variant &Blackboard::get_entry_fast<Variant>(const StringName &p_name, const Variant &p_default, const bool p_check_parents) const {
-	lock();
+	LOCK_ONE_V(mutex, p_default);
 
 	thread_local Variant result;
 	result = p_default;
 	try_get_entry<Variant>(p_name, result, p_check_parents);
 
-	unlock();
 	return result;
 }
 
 inline void Blackboard::create_new_variant_entry(const StringName &p_name, const Variant &p_value, const Variant::Type variant_type, EntryBase *previous) {
-	registration_lock();
+	LOCK_ONE(register_mutex);
 
 	const TypeInfo *type_info;
 	if (unlikely(variant_type == Variant::Type::OBJECT)) {
@@ -505,22 +479,19 @@ inline void Blackboard::create_new_variant_entry(const StringName &p_name, const
 		type_info = variant_fallbacks[variant_type];
 	}
 
-	registration_unlock();
-
 	EntryBase *entry = type_info->create(p_name, entries_owner, entries, previous);
 	entry->set_from(p_value);
 }
 
 template <>
 inline void Blackboard::set_entry_fast<Variant>(const StringName &p_name, const Variant &p_value) {
-	lock();
+	LOCK_ONE(mutex);
 
 	const Variant::Type variant_type = p_value.get_type();
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		if (unlikely(p_value.get_type() == Variant::NIL)) {
 			free_entry(iter);
-			unlock();
 			return;
 		}
 
@@ -534,29 +505,24 @@ inline void Blackboard::set_entry_fast<Variant>(const StringName &p_name, const 
 
 			if (likely(existing_type_key == incoming_class_key)) {
 				existing_entry->set_from(p_value);
-				unlock();
 				return;
 			}
 			// else regenerate entry with fallback
 		} else if (likely(existing_entry->get_variant_type() == variant_type)) {
 			existing_entry->set_from(p_value);
-			unlock();
 			return;
 		}
 
 		create_new_variant_entry(p_name, p_value, variant_type, existing_entry);
 
-		unlock();
 		return;
 	}
 
 	if (unlikely(variant_type == Variant::Type::NIL)) {
-		unlock();
 		return;
 	}
 
 	create_new_variant_entry(p_name, p_value, variant_type);
-	unlock();
 }
 
 template <>
@@ -566,28 +532,22 @@ inline void Blackboard::set_entry<Variant>(const StringName &p_name, Variant p_v
 
 template <typename T>
 bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p_out_result, const bool p_check_parents) const {
-	registration_lock();
+	LOCK_TWO_V(register_mutex, mutex, false);
 
 	typedef traits::resolved_type_t<T> type;
 	const TypeInfo &type_info = RegisteredTypeInfo<type>::get_info();
 	if (unlikely(!type_info.is_registered())) {
-		registration_unlock();
 		return false;
 	}
 
 	const auto type_key = type_info.type_key;
-	registration_unlock();
-
-	lock();
 
 	auto iter = entries.find(p_name);
 	if (likely(iter != entries.end())) {
 		if (likely(iter->value->get_type_key() == type_key)) {
 			p_out_result = iter;
-			unlock();
 			return true;
 		} else {
-			unlock();
 			return false;
 		}
 	}
@@ -595,30 +555,24 @@ bool Blackboard::find_entry(const StringName &p_name, EntryMap::ConstIterator &p
 	if (likely(p_check_parents)) {
 		const Blackboard *current = parent;
 		while (current != nullptr) {
-			current->lock();
+			LOCK_ONE_V(current->mutex, false);
 			iter = current->entries.find(p_name);
 			if (iter != current->entries.end()) {
 				const auto entry_type_key = iter->value->get_type_key();
 
 				if (entry_type_key != type_key) {
-					current->unlock();
-					unlock();
 					return false;
 				}
 
 				p_out_result = iter;
-				current->unlock();
-				unlock();
 				return true;
 			}
 
 			const Blackboard *next = current->parent;
-			current->unlock();
 			current = next;
 		}
 	}
 
-	unlock();
 	return false;
 }
 
@@ -626,11 +580,10 @@ template <typename T>
 bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const bool p_check_parents) const {
 	static_assert(!std::is_const_v<T>, "Can't use const types with try_get_entry.");
 	if constexpr (!std::is_const_v<T>) {
-		lock();
+		LOCK_ONE_V(mutex, false);
 
 		EntryMap::ConstIterator iter;
 		if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
-			unlock();
 			return false;
 		}
 
@@ -638,7 +591,6 @@ bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const 
 		auto *entry = dynamic_cast<EntryData<type> *>(iter->value);
 		p_out_result = entry->value;
 
-		unlock();
 		return true;
 	} else {
 		return false;
@@ -647,17 +599,15 @@ bool Blackboard::try_get_entry(const StringName &p_name, T &p_out_result, const 
 
 template <typename T>
 const T &Blackboard::get_entry_fast(const StringName &p_name, const T &p_default, const bool p_check_parents) const {
-	lock();
+	LOCK_ONE_V(mutex, p_default);
 
 	EntryMap::ConstIterator iter;
 	if (unlikely(!find_entry<T>(p_name, iter, p_check_parents))) {
-		unlock();
 		return p_default;
 	}
 
 	const EntryData<T> *entry = dynamic_cast<const EntryData<T> *>(iter->value);
 	const T &result = entry->value;
-	unlock();
 	return result;
 }
 
@@ -668,15 +618,12 @@ T Blackboard::get_entry(const StringName &p_name, T p_default, const bool p_chec
 
 template <typename T>
 void Blackboard::set_entry_fast(const StringName &p_name, const T &p_value) {
-	registration_lock();
+	LOCK_TWO(register_mutex, mutex);
 	if (unlikely(!RegisteredTypeInfo<T>::is_registered())) {
 		register_type<T>();
 	}
 
 	const TypeInfo &type_info = RegisteredTypeInfo<T>::get_info();
-	registration_unlock();
-
-	lock();
 
 	auto iter = entries.find(p_name);
 	EntryBase *existing_entry = nullptr;
@@ -691,8 +638,6 @@ void Blackboard::set_entry_fast(const StringName &p_name, const T &p_value) {
 
 	EntryData<T> *new_entry = dynamic_cast<EntryData<T> *>(type_info.create(p_name, entries_owner, entries, existing_entry));
 	new_entry->value = p_value;
-
-	unlock();
 }
 
 template <typename T>

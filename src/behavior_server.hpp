@@ -12,23 +12,23 @@
 #include "pipelines/node_interfaces.hpp"
 
 #include <functional>
-#include <godot_cpp/templates/rid_owner.hpp>
-#include <godot_cpp/templates/hash_map.hpp>
-#include <godot_cpp/templates/local_vector.hpp>
 #include <godot_cpp/classes/global_constants.hpp>
 #include <godot_cpp/core/binder_common.hpp>
 #include <godot_cpp/core/defs.hpp>
 #include <godot_cpp/core/error_macros.hpp>
 #include <godot_cpp/core/memory.hpp>
+#include <godot_cpp/templates/hash_map.hpp>
+#include <godot_cpp/templates/local_vector.hpp>
+#include <godot_cpp/templates/rid_owner.hpp>
 #include <godot_cpp/templates/vector.hpp>
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/string_name.hpp>
 #include <godot_cpp/variant/typed_array.hpp>
 #include <godot_cpp/variant/typed_dictionary.hpp>
 
+#include "mutex_helpers.hpp"
 #include <cstdint>
 #include <mutex>
-#include "mutex_helpers.hpp"
 
 namespace hydrogen {
 
@@ -38,15 +38,15 @@ using namespace pipelines;
 #define BLACKBOARDS_LOCK() LOCK_ONE(_blackboard_mutex)
 #define BLACKBOARDS_LOCK_V(fail_result)	LOCK_ONE_V(_blackboard_mutex, fail_result)
 
-#define TRY_GET_BLACKBOARD_V(fail_result)									\
-	BLACKBOARDS_LOCK_V(fail_result);										\
+#define TRY_GET_BLACKBOARD_V(fail_result)																\
+	BLACKBOARDS_LOCK_V(fail_result);																			\
 	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
-	ERR_FAIL_NULL_V(blackboard, fail_result)								\
+	ERR_FAIL_NULL_V(blackboard, fail_result)
 
-#define TRY_GET_BLACKBOARD()												\
-	BLACKBOARDS_LOCK();														\
+#define TRY_GET_BLACKBOARD()																						\
+	BLACKBOARDS_LOCK();																										\
 	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);	\
-	ERR_FAIL_NULL(blackboard)												\
+	ERR_FAIL_NULL(blackboard)
 
 class BehaviorServer final : public Object {
 	GDCLASS(BehaviorServer, Object);
@@ -76,7 +76,7 @@ class BehaviorServer final : public Object {
 	std::recursive_mutex *_pipeline_mutex = nullptr;
 
 	template <typename T>
-	void _free_ptr_resource(RID_PtrOwner<T> &p_owner, std::recursive_mutex *p_mutex, RID p, std::function<void(T*)> p_cleanup = nullptr) {
+	void _free_ptr_resource(RID_PtrOwner<T> &p_owner, std::recursive_mutex *p_mutex, RID p, std::function<void(T *)> p_cleanup = nullptr) {
 		ERR_FAIL_NULL(p_mutex);
 		ERR_FAIL_COND(!p.is_valid());
 		std::scoped_lock lock(*p_mutex);
@@ -97,7 +97,7 @@ class BehaviorServer final : public Object {
 		return rid;
 	}
 
-	template<typename TGRAPH>
+	template <typename TGRAPH>
 	RID _graph_create_helper(const StringName &p_name_key) {
 		TGRAPH *graph = memnew(TGRAPH(p_name_key));
 		RID rid = _graph_owner.make_rid(graph);
@@ -108,8 +108,8 @@ class BehaviorServer final : public Object {
 		return rid;
 	}
 
-	template<typename TPIPELINE, typename TGRAPH> 
-	RID _pipeline_create_helper(const StringName &p_name_key, const Blackboard * p_blackboard, IPipelineGraph *p_graph, bool p_owns_source_blackboard) {
+	template <typename TPIPELINE, typename TGRAPH>
+	RID _pipeline_create_helper(const StringName &p_name_key, const Blackboard *p_blackboard, IPipelineGraph *p_graph, bool p_owns_source_blackboard) {
 		ERR_FAIL_NULL_V(p_blackboard, RID());
 		ERR_FAIL_NULL_V(p_graph, RID());
 
@@ -143,7 +143,7 @@ class BehaviorServer final : public Object {
 	// ---- Blackboard END ----
 
 	// ---- Graphs ----
-	
+
 	void _graph_erase(IPipelineGraph *p_graph, bool p_is_final_shutdown = false);
 	void _graph_emit_created(RID p_behavior_tree_graph);
 	void _graph_emit_destroyed(RID p_behavior_tree_graph);
@@ -151,18 +151,17 @@ class BehaviorServer final : public Object {
 	// ---- Graphs END ----
 
 	// ---- Pipelines ----
-	
+
 	void _pipeline_erase(IPipeline *p_pipeline, bool p_is_final_shutdown = false);
 	void _pipeline_emit_created(RID p_behavior_tree);
 	void _pipeline_emit_destroyed(RID p_behavior_tree);
-	
+
 	// ---- Pipelines END ----
 
 protected:
 	static void _bind_methods();
 
 public:
-
 	DEFINE_NAME_STATIC(BehaviorTree);
 
 	static BehaviorServer *get_singleton();
@@ -170,7 +169,7 @@ public:
 	BehaviorServer();
 	~BehaviorServer() override;
 
-	template<typename TGRAPH, typename TPIPELINE>
+	template <typename TGRAPH, typename TPIPELINE>
 	bool register_plugin(const StringName &p_plugin_name) {
 		LOCK_TWO_V(_pipeline_mutex, _graph_mutex, false);
 
@@ -214,7 +213,7 @@ public:
 			}
 		}
 
-		for(RID rid : pipeline_rids) {
+		for (RID rid : pipeline_rids) {
 			free_rid(rid);
 		}
 
@@ -246,16 +245,16 @@ public:
 	RID blackboard_get_parent(RID p);
 	bool blackboard_is_ancestor(RID p, RID p_candidate);
 
-	template<typename T>
+	template <typename T>
 	bool blackboard_try_get_entry(RID p, const StringName &p_name, T &p_out_result, bool p_check_parents = true);
 
-	template<typename T>
-	const T &blackboard_get_entry_fast(RID p, const StringName &p_name, const T& p_default = {}, bool p_check_parents = true);
+	template <typename T>
+	const T &blackboard_get_entry_fast(RID p, const StringName &p_name, const T &p_default = {}, bool p_check_parents = true);
 
 	template <typename T>
 	T blackboard_get_entry(RID p, const StringName &p_name, T p_default = {}, bool p_check_parents = true);
 
-	template<typename T>
+	template <typename T>
 	void blackboard_set_entry_fast(RID p, const StringName &p_name, const T &p_value);
 
 	template <typename T>
@@ -281,7 +280,7 @@ public:
 
 	RID graph_create_node(RID p_graph, const StringName &p_node_type_name, const PortAliases &p_input_aliases = {}, const PortAliases &p_output_aliases = {});
 	bool graph_destroy_node(RID p_graph, RID p_node);
-	
+
 	uint64_t graph_get_node_count(RID p_graph);
 	TypedArray<RID> graph_get_sub_graphs(RID p_graph);
 	TypedArray<RID> graph_get_nodes(RID p_graph);
@@ -309,7 +308,7 @@ public:
 
 	void node_set_name(RID p_graph, RID p_node, const String &p_name);
 	const String &node_get_name(RID p_graph, RID p_node);
-	
+
 	void node_set_input_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases get_input_aliases(RID p_graph, RID p_node);
 
@@ -335,7 +334,7 @@ public:
 	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
 	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
 	void node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_children);
-	
+
 	RID node_decorator_get_child(RID p_graph, RID p_node);
 	void node_decorator_set_child(RID p_graph, RID p_node, RID p_child);
 
@@ -356,7 +355,6 @@ public:
 	// ---- Pipelines END ----
 };
 
-
 template <typename T>
 bool BehaviorServer::blackboard_try_get_entry(RID p_blackboard, const StringName &p_name, T &p_out_result, bool p_check_parents) {
 	TRY_GET_BLACKBOARD_V(false);
@@ -372,8 +370,8 @@ const T &BehaviorServer::blackboard_get_entry_fast(RID p_blackboard, const Strin
 template <typename T>
 T BehaviorServer::blackboard_get_entry(RID p_blackboard, const StringName &p_name, T p_default, bool p_check_parents) {
 	BLACKBOARDS_LOCK_V(p_default);
-    Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);
-    ERR_FAIL_NULL_V(blackboard, p_default);
+	Blackboard *blackboard = _blackboard_owner.get_or_null(p_blackboard);
+	ERR_FAIL_NULL_V(blackboard, p_default);
 	return blackboard->get_entry<T>(p_name, p_default, p_check_parents);
 }
 
@@ -506,7 +504,7 @@ public:
 
 	void node_set_name(RID p_graph, RID p_node, const String &p_name);
 	const String &node_get_name(RID p_graph, RID p_node);
-	
+
 	void node_set_input_aliases(RID p_graph, RID p_node, const PortAliases &p_aliases);
 	PortAliases node_get_input_aliases(RID p_graph, RID p_node);
 
@@ -532,7 +530,7 @@ public:
 	void node_composite_swap_children(RID p_graph, RID p_node, uint64_t p_first_index, uint64_t p_second_index);
 	Error node_composite_insert_child(RID p_graph, RID p_node, int64_t p_pos, RID p_child);
 	void node_composite_append_children(RID p_graph, RID p_node, const TypedArray<RID> &p_childs);
-	
+
 	RID node_decorator_get_child(RID p_graph, RID p_node);
 	void node_decorator_set_child(RID p_graph, RID p_node, RID p_child);
 
@@ -555,7 +553,6 @@ public:
 #if TESTS_ENABLED
 	void run_tests();
 #endif
-
 };
 
 template <typename T>
@@ -589,4 +586,4 @@ void HydrogenBehaviorServer::blackboard_set_entry(RID p_blackboard, const String
 	BehaviorServer::get_singleton()->blackboard_set_entry<T>(p_blackboard, p_name, p_default);
 }
 
-}
+} //namespace hydrogen

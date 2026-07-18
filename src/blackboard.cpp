@@ -3,48 +3,50 @@
 //
 
 #include "blackboard.hpp"
+#include "godot_cpp/core/error_macros.hpp"
+#include "godot_cpp/core/memory.hpp"
+#include "mutex_helpers.hpp"
+#include <mutex>
 
 namespace hydrogen {
 
 // TODO: tkey250628 - need a custom allocator so the Entries aren't fragmented.
 
-Ref<Mutex> Blackboard::register_mutex = {};
+std::recursive_mutex *Blackboard::register_mutex = nullptr;
 HashMap<int64_t, StringName> Blackboard::TypeInfo::type_names = {};
 Blackboard::TypeInfoMap Blackboard::type_infos = {};
 Blackboard::TypeInfoMap Blackboard::object_class_infos = {};
-Blackboard::FallbackTable Blackboard::variant_fallbacks = {nullptr};
+Blackboard::FallbackTable Blackboard::variant_fallbacks = { nullptr };
 const Blackboard::TypeInfo *Blackboard::ref_fallback_type_info = nullptr;
 bool Blackboard::is_registration_ready = false;
 
 void Blackboard::registration_init() {
-
 	if (is_registration_ready) {
 		return;
 	}
 
-	register_mutex.instantiate();
+	register_mutex = memnew(std::recursive_mutex);
 
 	register_core_variant_types();
 	is_registration_ready = true;
 }
 
 void Blackboard::registration_finish() {
-
 	if (!is_registration_ready) {
 		return;
 	}
 
 	registration_clear();
 
-	register_mutex.unref();
+	memdelete(register_mutex);
 	is_registration_ready = false;
 }
 
 void Blackboard::registration_clear() {
-	registration_lock();
+	LOCK_ONE(register_mutex);
 
-	for (auto& kvp : type_infos) {
-		TypeInfo* type_info = const_cast<TypeInfo *>(kvp.value);
+	for (auto &kvp : type_infos) {
+		TypeInfo *type_info = const_cast<TypeInfo *>(kvp.value);
 		*type_info = TypeInfo();
 	}
 
@@ -55,13 +57,10 @@ void Blackboard::registration_clear() {
 		variant_fallbacks[i] = nullptr;
 	}
 	ref_fallback_type_info = nullptr;
-
-	registration_unlock();
 }
 
 void Blackboard::register_core_variant_types() {
-
-	registration_lock();
+	LOCK_ONE(register_mutex);
 
 	register_type<bool>();
 	register_type<uint8_t>();
@@ -99,7 +98,7 @@ void Blackboard::register_core_variant_types() {
 	register_type<StringName>();
 	register_type<NodePath>();
 	register_type<RID>();
-	register_type<Object*>();
+	register_type<Object *>();
 	register_type<Callable>();
 	register_type<Signal>();
 	register_type<Dictionary>();
@@ -144,7 +143,7 @@ void Blackboard::register_core_variant_types() {
 	SET_VARIANT_FALLBACK(StringName)
 	SET_VARIANT_FALLBACK(NodePath)
 	SET_VARIANT_FALLBACK(RID)
-	SET_VARIANT_FALLBACK(Object*)
+	SET_VARIANT_FALLBACK(Object *)
 	SET_VARIANT_FALLBACK(Callable)
 	SET_VARIANT_FALLBACK(Signal)
 	SET_VARIANT_FALLBACK(Dictionary)
@@ -163,33 +162,29 @@ void Blackboard::register_core_variant_types() {
 #undef SET_VARIANT_FALLBACK
 
 	ref_fallback_type_info = RegisteredTypeInfo<Ref<RefCounted>>::get_info_ptr();
-
-	registration_unlock();
 }
 
 Blackboard::Blackboard() {
-	mutex.instantiate();
+	mutex = memnew(std::recursive_mutex);
 }
 
 Blackboard::~Blackboard() {
-	lock();
-
-	for (const auto& entry_kvp : entries) {
-		const auto entry = entry_kvp.value;
-		const RID rid = entry->get_self();
-		entries_owner.free(rid);
-		memdelete(entry);
+	{
+		LOCK_ONE(mutex);
+		for (const auto &entry_kvp : entries) {
+			const auto entry = entry_kvp.value;
+			const RID rid = entry->get_self();
+			entries_owner.free(rid);
+			memdelete(entry);
+		}
+		entries.clear();
+		parent = nullptr;
 	}
-	entries.clear();
-	parent = nullptr;
 
-	unlock();
-
-	mutex.unref();
+	memdelete(mutex);
 }
 
 bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const {
-
 	if (p_candidate == nullptr) {
 		return true;
 	}
@@ -198,19 +193,16 @@ bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const 
 		return false;
 	}
 
-	const Blackboard * current = p_candidate->parent;
+	const Blackboard *current = p_candidate->parent;
 
 	while (current) {
-		current->lock();
+		LOCK_ONE_V(current->mutex, false);
 
 		if (unlikely(current == this)) {
-			current->unlock();
-			unlock();
 			return false;
 		}
 
-		const Blackboard * next = current->parent;
-		current->unlock();
+		const Blackboard *next = current->parent;
 
 		current = next;
 	}
@@ -219,52 +211,44 @@ bool Blackboard::validate_candidate_parent(const Blackboard *p_candidate) const 
 }
 
 bool Blackboard::set_parent(const Blackboard *p_parent) {
-
-	lock();
+	LOCK_ONE_V(mutex, false);
 
 	if (likely(p_parent != parent && validate_candidate_parent(p_parent))) {
 		parent = p_parent;
 
-		unlock();
 		return true;
 	}
 
-	unlock();
 	return false;
 }
 
 const Blackboard *Blackboard::get_parent() const {
-	lock();
+	LOCK_ONE_V(mutex, nullptr);
 	const Blackboard *p = parent;
-	unlock();
 	return p;
 }
 
 bool Blackboard::is_ancestor(const Blackboard *p_candidate) const {
-
-	lock();
+	LOCK_ONE_V(mutex, false);
 	const Blackboard *current = parent;
 
 	while (current != nullptr) {
-		current->lock();
+		LOCK_ONE_V(current->mutex, false);
 
 		if (current == p_candidate) {
-			current->unlock();
-			unlock();
 			return true;
 		}
 
-		const Blackboard * next = current->parent;
-		current->unlock();
+		const Blackboard *next = current->parent;
 
 		current = next;
 	}
 
-	unlock();
 	return false;
 }
 
 void Blackboard::free_entry(const EntryMap::Iterator &iter) {
+	LOCK_ONE(mutex);
 	EntryBase *entry = iter->value;
 
 	const RID rid = entry->get_self();
@@ -276,90 +260,78 @@ void Blackboard::free_entry(const EntryMap::Iterator &iter) {
 }
 
 bool Blackboard::import_entries(const TypedDictionary<StringName, Variant> &p_data) {
-
 	if (unlikely(p_data.is_empty())) {
 		return false;
 	}
 
-	lock();
+	LOCK_ONE_V(mutex, false);
 
 	const TypedArray<StringName> keys(p_data.keys());
 	const Array values = p_data.values();
 
 	for (int i = 0; i < p_data.size(); ++i) {
 		const StringName key = keys[i];
-		const Variant& value = values[i];
+		const Variant &value = values[i];
 		set_entry_fast<Variant>(key, value);
 	}
-
-	unlock();
 
 	return true;
 }
 
 bool Blackboard::erase_entry(const StringName &p_name) {
-
-	lock();
+	LOCK_ONE_V(mutex, false);
 
 	auto iter = entries.find(p_name);
 	if (unlikely(iter == entries.end())) {
-		unlock();
 		return false;
 	}
 
 	free_entry(iter);
 
-	unlock();
 	return true;
 }
 
 bool Blackboard::has_entry(const StringName &p_name, const bool p_check_parents) const {
-	lock();
+	LOCK_ONE_V(mutex, false);
 	bool result = entries.has(p_name);
 
 	if (!result && p_check_parents) {
 		const Blackboard *current = parent;
 		while (current != nullptr) {
-			current->lock();
+			LOCK_ONE_V(current->mutex, false);
 
 			if (current->entries.has(p_name)) {
-				current->unlock();
-				unlock();
 				return true;
 			}
 
 			const Blackboard *next = current->parent;
-			current->unlock();
 
 			current = next;
 		}
 	}
 
-	unlock();
 	return result;
 }
 
 Dictionary Blackboard::export_entries(const bool p_include_parents) const {
-
 	Dictionary dict = {};
 
+	LOCK_ONE_V(mutex, dict);
+
 	if (likely(p_include_parents)) {
-		const Blackboard* current = parent;
+		const Blackboard *current = parent;
 		while (current != nullptr) {
-			current->lock();
+			LOCK_ONE_V(current->mutex, dict);
 			for (const auto &kvp : current->entries) {
 				dict[kvp.key] = kvp.value->as_variant();
 			}
-			current->unlock();
 			current = current->parent;
 		}
 	}
 
-	lock();
 	for (const auto &kvp : entries) {
 		dict[kvp.key] = kvp.value->as_variant();
 	}
-	unlock();
 
 	return dict;
 }
@@ -367,9 +339,9 @@ Dictionary Blackboard::export_entries(const bool p_include_parents) const {
 Dictionary Blackboard::export_type_infos() {
 	Dictionary results = {};
 
-	registration_lock();
+	LOCK_ONE_V(register_mutex, results);
 	for (const auto &kvp : type_infos) {
-		const TypeInfo * info = kvp.value;
+		const TypeInfo *info = kvp.value;
 		Dictionary dict = {};
 		const StringName &type_name = info->get_name();
 		dict["type_key"] = kvp.key;
@@ -385,9 +357,8 @@ Dictionary Blackboard::export_type_infos() {
 
 		results[type_name] = dict;
 	}
-	registration_unlock();
 
 	return results;
 }
 
-} //namespace Hydrogen
+} //namespace hydrogen
